@@ -32,7 +32,7 @@
  *
  * WALLET SESSION routes (proof of WalletConnect ownership — closes curl attack vector):
  *   POST /wallet/register     Register wallet session after WC connect → returns token
- *   POST /wallet/disconnect   Destroy wallet session (cleanup on disconnect)
+ *   POST /wallet/disconnect   Destroy wallet session (requires X-Wallet-Session — DoS prevention)
  *
  * VOTE routes (wallet session + rate-limited + mirror-node verified + ED25519 signature verified):
  *   POST /vote/battle         Cast/update token-weighted vote (requires X-Wallet-Session + ED25519 sig)
@@ -376,7 +376,7 @@ setInterval(() => {
 //   3. Server: verify wallet on mirror node → issue token → store in KV
 //   4. Frontend: stores token in React state, sends as X-Wallet-Session header
 //   5. Server: vote/chat endpoints validate token matches request wallet
-//   6. Frontend: on disconnect → POST /wallet/disconnect (cleanup)
+//   6. Frontend: on disconnect → POST /wallet/disconnect + X-Wallet-Session (auth required)
 //
 // KV keys:
 //   wsession:{token}          → { wallet, wcTopic, createdAt, expiresAt }
@@ -491,6 +491,12 @@ app.post(`${PREFIX}/wallet/register`, async (c) => {
 // ---------------------------------------------------------------------------
 // POST /wallet/disconnect — Destroy wallet session (cleanup)
 // ---------------------------------------------------------------------------
+// SECURITY: Requires X-Wallet-Session header matching the wallet being
+// disconnected. Without this check, any attacker could POST any wallet
+// address to destroy another user's session (denial-of-service).
+// The token must exist in KV AND session.wallet must match the request wallet.
+// If the token is already expired/missing, we return success (idempotent).
+// ---------------------------------------------------------------------------
 app.post(`${PREFIX}/wallet/disconnect`, async (c) => {
   try {
     const body = await c.req.json();
@@ -500,14 +506,45 @@ app.post(`${PREFIX}/wallet/disconnect`, async (c) => {
       return c.json({ success: true, data: { message: "No session to destroy" } });
     }
 
-    // Find and delete session by wallet reverse lookup
-    const ref = await kv.get(`wsession-wallet:${wallet}`);
-    if (ref && (ref as any).token) {
-      await kv.del(`wsession:${(ref as any).token}`).catch(() => {});
+    // ── WALLET SESSION AUTH CHECK (fixes DoS vulnerability) ──
+    // The caller must present the X-Wallet-Session token that belongs to
+    // the wallet they want to disconnect. This proves ownership.
+    const token = c.req.header("X-Wallet-Session");
+    if (!token || typeof token !== "string" || token.length < 10) {
+      console.log(`[WALLET-SESSION] Disconnect REJECTED for ${wallet} — no X-Wallet-Session header (DoS prevention)`);
+      return c.json({
+        success: false,
+        error: "Wallet session required to disconnect. Provide X-Wallet-Session header.",
+        code: "SESSION_REQUIRED",
+      }, 401);
     }
+
+    // Look up the session in KV
+    const session = await kv.get(`wsession:${token}`);
+
+    if (!session) {
+      // Token not in KV — already expired or never existed.
+      // Still try to clean up the reverse-lookup key (idempotent cleanup).
+      await kv.del(`wsession-wallet:${wallet}`).catch(() => {});
+      console.log(`[WALLET-SESSION] Disconnect for ${wallet} — token not in KV (already expired/cleaned). Idempotent cleanup done.`);
+      return c.json({ success: true, data: { message: "Session already expired or destroyed" } });
+    }
+
+    // Verify the token belongs to the wallet being disconnected
+    if ((session as any).wallet !== wallet) {
+      console.log(`[WALLET-SESSION] Disconnect REJECTED for ${wallet} — token belongs to ${(session as any).wallet} (wallet mismatch, possible attack)`);
+      return c.json({
+        success: false,
+        error: "Session token does not match wallet. Cannot disconnect another user's session.",
+        code: "SESSION_REQUIRED",
+      }, 401);
+    }
+
+    // ── Authorized: destroy the session ──
+    await kv.del(`wsession:${token}`).catch(() => {});
     await kv.del(`wsession-wallet:${wallet}`).catch(() => {});
 
-    console.log(`[WALLET-SESSION] Destroyed session for ${wallet}`);
+    console.log(`[WALLET-SESSION] Destroyed session for ${wallet} (authorized via matching X-Wallet-Session)`);
     return c.json({ success: true, data: { message: "Session destroyed" } });
   } catch (error) {
     console.log(`[WALLET-SESSION] Error destroying session: ${error}`);

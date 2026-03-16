@@ -503,8 +503,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     console.log("[BOTB Wallet Context] Disconnecting...");
     try {
       // Clean up server-side wallet session (best-effort, don't block)
+      // Must send X-Wallet-Session to prove we own the session (DoS prevention)
       if (accountId) {
-        api.disconnectWalletSession(accountId).catch(() => {});
+        api.disconnectWalletSession(accountId, walletSessionToken || undefined).catch(() => {});
       }
       await disconnectWallet();
     } catch (err) {
@@ -513,7 +514,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setWalletSessionToken(null);
     clearConnectedState();
     setError(null);
-  }, [clearConnectedState, accountId]);
+  }, [clearConnectedState, accountId, walletSessionToken]);
 
   // ------------------------------------------------------------------
   // Manual Refresh

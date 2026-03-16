@@ -169,10 +169,11 @@ export const api = {
       body: { wallet, wcTopic },
     }),
 
-  disconnectWalletSession: (wallet: string) =>
+  disconnectWalletSession: (wallet: string, walletSessionToken?: string) =>
     request<{ message: string }>("/wallet/disconnect", {
       method: "POST",
       body: { wallet },
+      walletSessionToken: walletSessionToken || undefined,
     }),
 
   // Config
