@@ -12,6 +12,7 @@ import { TermsPage } from "./pages/terms";
 import { WhitepaperPage } from "./pages/whitepaper";
 import { RouteErrorPage, NotFoundPage } from "./components/error-boundary";
 import { SecurityAuditPage } from "./pages/security-audit";
+import { UserPenTestPage } from "./pages/security-pentest-user";
 
 export const router = createBrowserRouter([
   {
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { path: "terms", Component: TermsPage },
       { path: "whitepaper", Component: WhitepaperPage },
       { path: "security-audit", Component: SecurityAuditPage },
+      { path: "security-pentest", Component: UserPenTestPage },
       { path: "*", Component: NotFoundPage },
     ],
   },

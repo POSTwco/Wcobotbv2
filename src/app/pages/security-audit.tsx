@@ -23,6 +23,7 @@
 import { useState, useCallback } from "react";
 import { api } from "../lib/api";
 import { Shield, AlertTriangle, CheckCircle, XCircle, Play, RotateCcw } from "lucide-react";
+import { useWallet } from "../components/wallet-context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -384,9 +385,27 @@ async function runTest(test: TestResult, index: number): Promise<TestResult> {
 // ---------------------------------------------------------------------------
 
 export function SecurityAuditPage() {
+  const { isAdmin, connected } = useWallet();
   const [tests, setTests] = useState<TestResult[]>(createTests());
   const [running, setRunning] = useState(false);
   const [completedAt, setCompletedAt] = useState<string | null>(null);
+
+  // --- Admin Gate ---
+  if (!connected || !isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
+        <div className="max-w-md w-full text-center space-y-4">
+          <Shield className="w-16 h-16 text-red-500 mx-auto" />
+          <h1 className="text-2xl font-bold text-white">Access Restricted</h1>
+          <p className="text-gray-400">
+            {!connected
+              ? "Connect an admin wallet to access the Security Audit dashboard."
+              : "This page is restricted to authorized admin wallets only."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const runAllTests = useCallback(async () => {
     setRunning(true);
