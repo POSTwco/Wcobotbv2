@@ -132,7 +132,7 @@ export function Section16_SecurityArchitecture() {
         </div>
         <div className="divide-y divide-[#4274B9]/5 text-xs">
           {([
-            ["Global API", "120 req/min", "Per IP (x-forwarded-for or x-real-ip)", "All routes under /make-server-f75faf6c/*"],
+            ["Global API", "120 req/min", "Per IP (x-forwarded-for or x-real-ip)", "All routes under /make-server-57fcb0ee/*"],
             ["Battle votes", "10 req/min", "Per wallet address", "POST /vote/battle"],
             ["Proposal votes", "10 req/min", "Per wallet address", "POST /vote/proposal"],
             ["Skill votes", "10 req/min", "Per wallet address", "POST /vote/skill (removed — skills admin-only)"],

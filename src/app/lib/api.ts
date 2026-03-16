@@ -26,7 +26,7 @@ import type {
 // ---------------------------------------------------------------------------
 // Base URL
 // ---------------------------------------------------------------------------
-const BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-f75faf6c`;
+const BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-57fcb0ee`;
 
 // ---------------------------------------------------------------------------
 // Request Timeout (20 seconds default — Web3 calls can be slow)

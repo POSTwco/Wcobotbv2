@@ -3,7 +3,7 @@
  * ======================
  * Production API for Battle of the Bars.
  *
- * Route prefix: /make-server-f75faf6c
+ * Route prefix: /make-server-57fcb0ee
  *
  * SECURITY LAYERS:
  *   - Global rate limit: 120 req/min per IP
@@ -223,7 +223,7 @@ function safeErrorMsg(operation: string): string {
 // ---------------------------------------------------------------------------
 // Global Rate Limiting — 120 requests per minute per IP
 // ---------------------------------------------------------------------------
-const PREFIX = "/make-server-f75faf6c";
+const PREFIX = "/make-server-57fcb0ee";
 
 app.use(`${PREFIX}/*`, rateLimit({
   keyFn: (c) => {
