@@ -4077,15 +4077,34 @@ app.post(`${PREFIX}/admin/applications/:id/reject`, requireAdminSession, async (
 // ===========================================================================
 // NOTIFICATION ROUTES
 // ===========================================================================
+// SECURITY: All notification endpoints require X-Wallet-Session verification.
+// Without this, any attacker could read, mark-read, or delete another user's
+// notifications by guessing wallet addresses — enabling silent suppression of
+// governance alerts, battle results, and application status updates.
+// ===========================================================================
 
 // ---------------------------------------------------------------------------
 // GET /notifications/:wallet — Get all notifications for a wallet
+// ---------------------------------------------------------------------------
+// Requires X-Wallet-Session: notifications may contain private info
+// (application status, governance outcomes, reward details).
 // ---------------------------------------------------------------------------
 app.get(`${PREFIX}/notifications/:wallet`, async (c) => {
   try {
     const wallet = c.req.param("wallet");
     if (!isValidHederaAccountId(wallet)) {
       return c.json({ success: false, error: "Invalid wallet address" }, 400);
+    }
+
+    // ── WALLET SESSION AUTH ──
+    const hasSession = await validateWalletSession(c, wallet);
+    if (!hasSession) {
+      console.log(`[NOTIFICATIONS] GET REJECTED for ${wallet} — no valid wallet session`);
+      return c.json({
+        success: false,
+        error: "Wallet session required to access notifications.",
+        code: "SESSION_REQUIRED",
+      }, 401);
     }
 
     const notifications = await kv.getByPrefix(`notification:${wallet}:`);
@@ -4102,6 +4121,9 @@ app.get(`${PREFIX}/notifications/:wallet`, async (c) => {
 // ---------------------------------------------------------------------------
 // POST /notifications/:wallet/read — Mark a notification as read
 // ---------------------------------------------------------------------------
+// Requires X-Wallet-Session: prevents attacker from marking another user's
+// notifications as read (silent suppression attack).
+// ---------------------------------------------------------------------------
 app.post(`${PREFIX}/notifications/:wallet/read`, async (c) => {
   try {
     const wallet = c.req.param("wallet");
@@ -4110,6 +4132,17 @@ app.post(`${PREFIX}/notifications/:wallet/read`, async (c) => {
 
     if (!isValidHederaAccountId(wallet) || !notificationId) {
       return c.json({ success: false, error: "Invalid wallet or notification ID" }, 400);
+    }
+
+    // ── WALLET SESSION AUTH ──
+    const hasSession = await validateWalletSession(c, wallet);
+    if (!hasSession) {
+      console.log(`[NOTIFICATIONS] Mark-read REJECTED for ${wallet} — no valid wallet session`);
+      return c.json({
+        success: false,
+        error: "Wallet session required to modify notifications.",
+        code: "SESSION_REQUIRED",
+      }, 401);
     }
 
     const key = `notification:${wallet}:${notificationId}`;
@@ -4131,11 +4164,25 @@ app.post(`${PREFIX}/notifications/:wallet/read`, async (c) => {
 // ---------------------------------------------------------------------------
 // POST /notifications/:wallet/read-all — Mark all notifications as read
 // ---------------------------------------------------------------------------
+// Requires X-Wallet-Session: prevents mass silent-suppression of all
+// notifications for any wallet (attacker could hide governance alerts).
+// ---------------------------------------------------------------------------
 app.post(`${PREFIX}/notifications/:wallet/read-all`, async (c) => {
   try {
     const wallet = c.req.param("wallet");
     if (!isValidHederaAccountId(wallet)) {
       return c.json({ success: false, error: "Invalid wallet address" }, 400);
+    }
+
+    // ── WALLET SESSION AUTH ──
+    const hasSession = await validateWalletSession(c, wallet);
+    if (!hasSession) {
+      console.log(`[NOTIFICATIONS] Read-all REJECTED for ${wallet} — no valid wallet session`);
+      return c.json({
+        success: false,
+        error: "Wallet session required to modify notifications.",
+        code: "SESSION_REQUIRED",
+      }, 401);
     }
 
     const notifications = await kv.getByPrefix(`notification:${wallet}:`);
@@ -4155,6 +4202,9 @@ app.post(`${PREFIX}/notifications/:wallet/read-all`, async (c) => {
 // ---------------------------------------------------------------------------
 // POST /notifications/:wallet/dismiss/:id — Delete a notification
 // ---------------------------------------------------------------------------
+// Requires X-Wallet-Session: prevents attacker from permanently deleting
+// another user's notifications (irreversible data destruction).
+// ---------------------------------------------------------------------------
 app.post(`${PREFIX}/notifications/:wallet/dismiss/:id`, async (c) => {
   try {
     const wallet = c.req.param("wallet");
@@ -4162,6 +4212,17 @@ app.post(`${PREFIX}/notifications/:wallet/dismiss/:id`, async (c) => {
 
     if (!isValidHederaAccountId(wallet)) {
       return c.json({ success: false, error: "Invalid wallet address" }, 400);
+    }
+
+    // ── WALLET SESSION AUTH ──
+    const hasSession = await validateWalletSession(c, wallet);
+    if (!hasSession) {
+      console.log(`[NOTIFICATIONS] Dismiss REJECTED for ${wallet}:${notifId} — no valid wallet session`);
+      return c.json({
+        success: false,
+        error: "Wallet session required to dismiss notifications.",
+        code: "SESSION_REQUIRED",
+      }, 401);
     }
 
     await kv.del(`notification:${wallet}:${notifId}`);

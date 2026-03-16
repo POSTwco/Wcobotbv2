@@ -66,7 +66,7 @@ function timeAgo(date: string): string {
 // Component
 // ---------------------------------------------------------------------------
 export function NotificationBell() {
-  const { connected, accountId } = useWallet();
+  const { connected, accountId, walletSessionToken } = useWallet();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -81,7 +81,7 @@ export function NotificationBell() {
   const fetchNotifications = useCallback(async () => {
     if (!accountId) return;
     try {
-      const res = await api.getNotifications(accountId);
+      const res = await api.getNotifications(accountId, walletSessionToken || undefined);
       if (res.success && res.data) {
         setNotifications(res.data);
         // Toast for newly received notifications
@@ -97,7 +97,7 @@ export function NotificationBell() {
     } catch (err) {
       console.error("[Notifications] Fetch error:", err);
     }
-  }, [accountId]);
+  }, [accountId, walletSessionToken]);
 
   // ── Poll on interval ─────────────────────────────────────────────────
   useEffect(() => {
@@ -143,21 +143,21 @@ export function NotificationBell() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
     );
-    await api.markNotificationRead(accountId, notifId);
+    await api.markNotificationRead(accountId, notifId, walletSessionToken || undefined);
   };
 
   const markAllRead = async () => {
     if (!accountId) return;
     setMarkingAll(true);
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    await api.markAllNotificationsRead(accountId);
+    await api.markAllNotificationsRead(accountId, walletSessionToken || undefined);
     setMarkingAll(false);
   };
 
   const dismiss = async (notifId: string) => {
     if (!accountId) return;
     setNotifications((prev) => prev.filter((n) => n.id !== notifId));
-    await api.dismissNotification(accountId, notifId);
+    await api.dismissNotification(accountId, notifId, walletSessionToken || undefined);
   };
 
   // Don't render if not connected

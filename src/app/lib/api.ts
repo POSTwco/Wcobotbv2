@@ -522,21 +522,28 @@ export const api = {
   }) =>
     request<{ id: string }>("/sponsor-inquiry", { method: "POST", body: data }),
 
-  // Notifications
-  getNotifications: (wallet: string) =>
-    request<any[]>(`/notifications/${wallet}`),
-
-  markNotificationRead: (wallet: string, notificationId: string) =>
-    request<{ id: string; read: boolean }>(`/notifications/${wallet}/read`, {
-      method: "POST", body: { notificationId },
+  // Notifications (all require X-Wallet-Session — prevents cross-wallet manipulation)
+  getNotifications: (wallet: string, walletSessionToken?: string) =>
+    request<any[]>(`/notifications/${wallet}`, {
+      walletSessionToken: walletSessionToken || undefined,
     }),
 
-  markAllNotificationsRead: (wallet: string) =>
-    request<{ markedRead: number }>(`/notifications/${wallet}/read-all`, { method: "POST", body: {} }),
+  markNotificationRead: (wallet: string, notificationId: string, walletSessionToken?: string) =>
+    request<{ id: string; read: boolean }>(`/notifications/${wallet}/read`, {
+      method: "POST", body: { notificationId },
+      walletSessionToken: walletSessionToken || undefined,
+    }),
 
-  dismissNotification: (wallet: string, notificationId: string) =>
+  markAllNotificationsRead: (wallet: string, walletSessionToken?: string) =>
+    request<{ markedRead: number }>(`/notifications/${wallet}/read-all`, {
+      method: "POST", body: {},
+      walletSessionToken: walletSessionToken || undefined,
+    }),
+
+  dismissNotification: (wallet: string, notificationId: string, walletSessionToken?: string) =>
     request<{ dismissed: string }>(`/notifications/${wallet}/dismiss/${notificationId}`, {
       method: "POST", body: {},
+      walletSessionToken: walletSessionToken || undefined,
     }),
 
   // ---------------------------------------------------------------------------
