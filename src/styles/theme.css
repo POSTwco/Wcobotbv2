@@ -1,0 +1,224 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #0B1120;
+  --foreground: #E8ECF0;
+  --card: #111827;
+  --card-foreground: #E8ECF0;
+  --popover: #111827;
+  --popover-foreground: #E8ECF0;
+  --primary: #4274B9;
+  --primary-foreground: #FFFFFF;
+  --secondary: #162033;
+  --secondary-foreground: #E8ECF0;
+  --muted: #162033;
+  --muted-foreground: #8494A7;
+  --accent: #6AA3E0;
+  --accent-foreground: #FFFFFF;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(66, 116, 185, 0.15);
+  --input: transparent;
+  --input-background: #162033;
+  --switch-background: #1E3A5F;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #4274B9;
+  --chart-1: #4274B9;
+  --chart-2: #6AA3E0;
+  --chart-3: #f59e0b;
+  --chart-4: #10b981;
+  --chart-5: #ef4444;
+  --radius: 0.625rem;
+  --sidebar: #0A0F1A;
+  --sidebar-foreground: #E8ECF0;
+  --sidebar-primary: #4274B9;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #162033;
+  --sidebar-accent-foreground: #E8ECF0;
+  --sidebar-border: rgba(66, 116, 185, 0.1);
+  --sidebar-ring: #4274B9;
+
+  /* ── BOTB Dynamic Theme Engine ── */
+  --botb-a1: #4274B9;
+  --botb-a1-sec: #3563A0;
+  --botb-a1-glow: rgba(66,116,185,0.15);
+  --botb-a1-glow-strong: rgba(66,116,185,0.30);
+  --botb-a1-bg: rgba(66,116,185,0.05);
+  --botb-a2: #6AA3E0;
+  --botb-a2-sec: #5B8CC4;
+  --botb-a2-glow: rgba(106,163,224,0.15);
+  --botb-a2-glow-strong: rgba(106,163,224,0.30);
+  --botb-a2-bg: rgba(106,163,224,0.05);
+  --botb-transition: 300ms ease;
+}
+
+/* NOTE: The .dark {} block from shadcn/ui scaffolding was removed intentionally.
+   BOTB uses :root as its dark theme (the app is always dark). The oklch-based
+   .dark overrides conflicted with the BOTB brand palette and are not needed.
+   If a light-mode theme is ever added, define .light {} overrides instead. */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /**
+  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
+  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
+  */
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+}
+
+/* Thin scrollbar for TOC sidebar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(66, 116, 185, 0.2) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(66, 116, 185, 0.2);
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(66, 116, 185, 0.4);
+}
+
+/* Hide scrollbar for NFT gallery */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Shimmer animation for NFT thumbnail loading */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Short viewport fix (13" MacBook ~800px viewport height) ──
+   Scales down title sponsor logos/images so they don't clip in the
+   banner area. Only fires on short screens — larger monitors unaffected. */
+@media (max-height: 900px) and (min-width: 640px) {
+  .sponsor-banner-compact .sponsor-logo-primary {
+    height: 70px !important;
+    max-width: 280px !important;
+  }
+  .sponsor-banner-compact .sponsor-logo-secondary {
+    height: 55px !important;
+    max-width: 200px !important;
+  }
+  .sponsor-banner-compact .sponsor-product-img {
+    height: 70px !important;
+    max-width: 160px !important;
+  }
+  .sponsor-banner-compact .sponsor-text-name {
+    font-size: 1rem !important;
+    line-height: 1.2 !important;
+  }
+  .sponsor-banner-compact .sponsor-text-tagline {
+    font-size: 0.8rem !important;
+  }
+  .sponsor-banner-compact .sponsor-separator {
+    height: 2rem !important;
+  }
+}

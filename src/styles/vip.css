@@ -1,0 +1,270 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIP GOVERNOR THEME — Gold + Glassmorphism + Iridescent Radiance
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Gold Color Tokens ─────────────────────────────────────────────────── */
+:root {
+  --vip-gold: #D4A843;
+  --vip-gold-light: #F0D078;
+  --vip-gold-dark: #B8860B;
+  --vip-gold-pale: #FCEABB;
+  --vip-gold-shine: #FFF8DC;
+  --vip-amber: #FF9F1C;
+  --vip-rose-gold: #E8B4B8;
+  --vip-champagne: #F7E7CE;
+  --vip-glass-bg: rgba(212, 168, 67, 0.06);
+  --vip-glass-border: rgba(212, 168, 67, 0.18);
+  --vip-glass-glow: rgba(212, 168, 67, 0.12);
+  --vip-iridescent-1: #D4A843;
+  --vip-iridescent-2: #E8B4B8;
+  --vip-iridescent-3: #A8D8EA;
+  --vip-iridescent-4: #C4B5FD;
+}
+
+/* ─── Global VIP Body Effects ───────────────────────────────────────────── */
+.vip-governor {
+  --vip-active: 1;
+}
+
+/* Subtle gold tint on the entire page background */
+.vip-governor body {
+  background: radial-gradient(ellipse at 50% 0%, rgba(212, 168, 67, 0.04) 0%, transparent 60%),
+              #0B1120;
+}
+
+/* ─── Keyframe Animations ───────────────────────────────────────────────── */
+
+@keyframes vip-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes vip-glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(212, 168, 67, 0.15), 0 0 60px rgba(212, 168, 67, 0.05); }
+  50% { box-shadow: 0 0 30px rgba(212, 168, 67, 0.3), 0 0 80px rgba(212, 168, 67, 0.1); }
+}
+
+@keyframes vip-border-glow {
+  0%, 100% { border-color: rgba(212, 168, 67, 0.2); }
+  50% { border-color: rgba(212, 168, 67, 0.5); }
+}
+
+@keyframes vip-iridescent-shift {
+  0% { filter: hue-rotate(0deg); }
+  25% { filter: hue-rotate(15deg); }
+  50% { filter: hue-rotate(-10deg); }
+  75% { filter: hue-rotate(8deg); }
+  100% { filter: hue-rotate(0deg); }
+}
+
+@keyframes vip-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes vip-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+
+@keyframes vip-crown-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-3px) rotate(2deg); }
+}
+
+@keyframes vip-particle-rise {
+  0% { transform: translateY(0) translateX(0) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-100vh) translateX(var(--drift, 20px)) scale(0); opacity: 0; }
+}
+
+@keyframes vip-shine-sweep {
+  0% { transform: translateX(-100%) rotate(25deg); }
+  100% { transform: translateX(300%) rotate(25deg); }
+}
+
+@keyframes vip-radiance {
+  0% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+  100% { opacity: 0.3; transform: scale(1); }
+}
+
+@keyframes vip-text-shine {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes vip-ring-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── VIP Utility Classes ───────────────────────────────────────────────── */
+
+/* Gold text with animated shine */
+.vip-gold-text {
+  background: linear-gradient(
+    90deg,
+    var(--vip-gold-dark) 0%,
+    var(--vip-gold) 20%,
+    var(--vip-gold-light) 40%,
+    var(--vip-gold-shine) 50%,
+    var(--vip-gold-light) 60%,
+    var(--vip-gold) 80%,
+    var(--vip-gold-dark) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: vip-text-shine 4s linear infinite;
+}
+
+/* Glassmorphic card */
+.vip-glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(212, 168, 67, 0.08) 0%,
+    rgba(212, 168, 67, 0.03) 40%,
+    rgba(184, 134, 11, 0.06) 100%
+  );
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid rgba(212, 168, 67, 0.15);
+  box-shadow:
+    0 0 20px rgba(212, 168, 67, 0.08),
+    inset 0 1px 0 rgba(255, 248, 220, 0.1);
+}
+
+.vip-glass-card:hover {
+  border-color: rgba(212, 168, 67, 0.35);
+  box-shadow:
+    0 0 30px rgba(212, 168, 67, 0.15),
+    0 0 60px rgba(212, 168, 67, 0.05),
+    inset 0 1px 0 rgba(255, 248, 220, 0.15);
+}
+
+/* Gold glow border */
+.vip-glow-border {
+  border: 1px solid rgba(212, 168, 67, 0.25);
+  animation: vip-border-glow 3s ease-in-out infinite;
+}
+
+/* Floating effect */
+.vip-float {
+  animation: vip-float 4s ease-in-out infinite;
+}
+
+/* Shimmer overlay — add to any element */
+.vip-shimmer-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.vip-shimmer-overlay::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 248, 220, 0.06) 45%,
+    rgba(212, 168, 67, 0.12) 50%,
+    rgba(255, 248, 220, 0.06) 55%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: vip-shimmer 4s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Iridescent glow — cycles through gold/rose/blue/purple */
+.vip-iridescent {
+  animation: vip-iridescent-shift 8s ease-in-out infinite;
+}
+
+/* Gold shine sweep — a light band sweeps across */
+.vip-shine-sweep {
+  position: relative;
+  overflow: hidden;
+}
+
+.vip-shine-sweep::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 30%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 248, 220, 0.08),
+    transparent
+  );
+  animation: vip-shine-sweep 5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Glowing pulse shadow */
+.vip-glow-pulse {
+  animation: vip-glow-pulse 3s ease-in-out infinite;
+}
+
+/* Crown badge */
+.vip-crown {
+  animation: vip-crown-bob 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(212, 168, 67, 0.5));
+}
+
+/* Gold gradient background for sections */
+.vip-section-bg {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(212, 168, 67, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(232, 180, 184, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(196, 181, 253, 0.03) 0%, transparent 50%);
+}
+
+/* VIP button styling */
+.vip-button {
+  background: linear-gradient(135deg, var(--vip-gold-dark) 0%, var(--vip-gold) 50%, var(--vip-gold-light) 100%);
+  color: #0B1120;
+  font-weight: 700;
+  border: none;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.vip-button:hover {
+  box-shadow: 0 0 25px rgba(212, 168, 67, 0.4), 0 0 60px rgba(212, 168, 67, 0.15);
+  transform: translateY(-1px);
+}
+
+.vip-button::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 30%;
+  height: 200%;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: vip-shine-sweep 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Navbar gold accent for VIP */
+.vip-governor nav {
+  border-bottom-color: rgba(212, 168, 67, 0.15) !important;
+  background: rgba(11, 17, 32, 0.92) !important;
+  box-shadow: 0 2px 20px rgba(212, 168, 67, 0.08);
+}
+
+/* Footer gold accent for VIP */
+.vip-governor footer {
+  border-top-color: rgba(212, 168, 67, 0.15) !important;
+}
