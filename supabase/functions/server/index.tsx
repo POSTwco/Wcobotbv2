@@ -72,8 +72,8 @@
  *   POST   /admin/sponsors           Create or update sponsor
  *   DELETE /admin/sponsors/:id       Delete sponsor
  *   POST   /admin/sponsors/:id/toggle Toggle active state
- *   POST   /sponsors/:id/impression  Track impression (IP rate-limited: 3/min per sponsor, 30/min global)
- *   POST   /sponsors/:id/click       Track click (IP rate-limited: 3/min per sponsor, 15/min global)
+ *   POST   /sponsors/:id/impression  Track impression (KV-backed IP rate limit: 3/min per sponsor, 30/min global)
+ *   POST   /sponsors/:id/click       Track click (KV-backed IP rate limit: 3/min per sponsor, 15/min global)
  *   POST   /sponsor-inquiry          Submit sponsor inquiry (public)
  *   GET    /admin/sponsor-inquiries  List inquiries (admin)
  *   DELETE /admin/sponsor-inquiries/:id  Delete inquiry (admin)
@@ -2540,17 +2540,21 @@ app.post(`${PREFIX}/admin/sponsors/:id/toggle`, requireAdminSession, async (c) =
 });
 
 // ---------------------------------------------------------------------------
-// SPONSOR ANALYTICS — Impression & Click Tracking (rate-limited + deduped)
+// SPONSOR ANALYTICS — Impression & Click Tracking
 // ---------------------------------------------------------------------------
-// SECURITY: IP-based rate limiting prevents click/impression fraud.
-// An attacker script could inflate sponsor analytics to defraud advertisers.
-// No wallet auth required (anonymous visitors should be tracked), but strict
-// per-IP + per-sponsor limits ensure each IP can only register a realistic
-// number of impressions/clicks per time window.
+// SECURITY: KV-backed rate limiting prevents click/impression fraud.
+// In-memory rate limiters lose state between edge function invocations, so we
+// use persistent KV counters with fixed 60-second windows. Each counter key
+// includes the minute bucket so expired windows are automatically orphaned.
 //
-// Limits:
-//   Impressions: 3/min per IP per sponsor, 30/min per IP global
-//   Clicks:      3/min per IP per sponsor, 15/min per IP global
+// Architecture:
+//   Key format: rl:sponsor-{imp|click}:{ip}:{sponsorId}:{minuteBucket}
+//   Value:      { count: number, windowStart: number }
+//   Limits:     Impressions 3/min per-IP-per-sponsor, Clicks 3/min per-IP-per-sponsor
+//   Also:       Global per-IP caps: 30 impressions/min, 15 clicks/min
+//
+// No wallet auth required (anonymous visitors are tracked), but the KV-backed
+// rate limiter makes script-based inflation detectable and blockable.
 // ---------------------------------------------------------------------------
 
 function getClientIP(c: any): string {
@@ -2559,35 +2563,61 @@ function getClientIP(c: any): string {
     || "unknown";
 }
 
+/**
+ * KV-backed fixed-window rate limiter.
+ * Persists across edge function invocations (unlike in-memory Maps).
+ * Returns { limited: boolean, count: number, retryAfter: number }.
+ */
+async function kvRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): Promise<{ limited: boolean; count: number; retryAfter: number }> {
+  const windowBucket = Math.floor(Date.now() / windowMs);
+  const kvKey = `rl:${key}:${windowBucket}`;
+
+  const existing: any = await kv.get(kvKey);
+  const count = existing?.count || 0;
+
+  if (count >= maxRequests) {
+    // Calculate seconds until next window
+    const windowEnd = (windowBucket + 1) * windowMs;
+    const retryAfter = Math.max(1, Math.ceil((windowEnd - Date.now()) / 1000));
+    return { limited: true, count, retryAfter };
+  }
+
+  // Increment counter — store in KV so it persists across invocations
+  await kv.set(kvKey, { count: count + 1, windowStart: windowBucket * windowMs });
+  return { limited: false, count: count + 1, retryAfter: 0 };
+}
+
 app.post(`${PREFIX}/sponsors/:id/impression`, async (c) => {
   try {
     const id = c.req.param("id");
     const ip = getClientIP(c);
 
-    // ── RATE LIMIT: per-IP per-sponsor (3/min) ──
-    const perSponsorKey = `sponsor-imp:${ip}:${id}`;
-    if (isRateLimited(perSponsorKey, 3, 60_000)) {
-      const retryAfter = rateLimitCooldown(perSponsorKey, 3, 60_000);
-      console.log(`[SPONSOR-FRAUD] Impression rate-limited: IP=${ip} sponsor=${id}`);
+    // ── KV RATE LIMIT: per-IP per-sponsor (3/min) ──
+    const perSponsor = await kvRateLimit(`sponsor-imp:${ip}:${id}`, 3, 60_000);
+    if (perSponsor.limited) {
+      console.log(`[SPONSOR-FRAUD] Impression rate-limited: IP=${ip} sponsor=${id} count=${perSponsor.count}`);
       return c.json({
         success: false,
-        error: "Impression rate limit exceeded.",
+        error: "Impression rate limit exceeded for this sponsor.",
         code: "RATE_LIMITED",
-        retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        retryAfter: perSponsor.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(perSponsor.retryAfter) } });
     }
 
-    // ── RATE LIMIT: per-IP global across all sponsors (30/min) ──
-    const globalKey = `sponsor-imp-global:${ip}`;
-    if (isRateLimited(globalKey, 30, 60_000)) {
-      const retryAfter = rateLimitCooldown(globalKey, 30, 60_000);
-      console.log(`[SPONSOR-FRAUD] Global impression rate-limited: IP=${ip}`);
+    // ── KV RATE LIMIT: per-IP global across all sponsors (30/min) ──
+    const global = await kvRateLimit(`sponsor-imp-global:${ip}`, 30, 60_000);
+    if (global.limited) {
+      console.log(`[SPONSOR-FRAUD] Global impression rate-limited: IP=${ip} count=${global.count}`);
       return c.json({
         success: false,
         error: "Global impression rate limit exceeded.",
         code: "RATE_LIMITED",
-        retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        retryAfter: global.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(global.retryAfter) } });
     }
 
     const s: any = await kv.get(`sponsor:${id}`);
@@ -2595,7 +2625,10 @@ app.post(`${PREFIX}/sponsors/:id/impression`, async (c) => {
     s.impressions = (s.impressions || 0) + 1;
     await kv.set(`sponsor:${id}`, s);
     return c.json({ success: true });
-  } catch { return c.json({ success: false }, 500); }
+  } catch (error) {
+    console.log(`[SPONSOR] Impression error: ${error}`);
+    return c.json({ success: false }, 500);
+  }
 });
 
 app.post(`${PREFIX}/sponsors/:id/click`, async (c) => {
@@ -2603,30 +2636,28 @@ app.post(`${PREFIX}/sponsors/:id/click`, async (c) => {
     const id = c.req.param("id");
     const ip = getClientIP(c);
 
-    // ── RATE LIMIT: per-IP per-sponsor (3/min) ──
-    const perSponsorKey = `sponsor-click:${ip}:${id}`;
-    if (isRateLimited(perSponsorKey, 3, 60_000)) {
-      const retryAfter = rateLimitCooldown(perSponsorKey, 3, 60_000);
-      console.log(`[SPONSOR-FRAUD] Click rate-limited: IP=${ip} sponsor=${id}`);
+    // ── KV RATE LIMIT: per-IP per-sponsor (3/min) ──
+    const perSponsor = await kvRateLimit(`sponsor-click:${ip}:${id}`, 3, 60_000);
+    if (perSponsor.limited) {
+      console.log(`[SPONSOR-FRAUD] Click rate-limited: IP=${ip} sponsor=${id} count=${perSponsor.count}`);
       return c.json({
         success: false,
-        error: "Click rate limit exceeded.",
+        error: "Click rate limit exceeded for this sponsor.",
         code: "RATE_LIMITED",
-        retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        retryAfter: perSponsor.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(perSponsor.retryAfter) } });
     }
 
-    // ── RATE LIMIT: per-IP global across all sponsors (15/min) ──
-    const globalKey = `sponsor-click-global:${ip}`;
-    if (isRateLimited(globalKey, 15, 60_000)) {
-      const retryAfter = rateLimitCooldown(globalKey, 15, 60_000);
-      console.log(`[SPONSOR-FRAUD] Global click rate-limited: IP=${ip}`);
+    // ── KV RATE LIMIT: per-IP global across all sponsors (15/min) ──
+    const global = await kvRateLimit(`sponsor-click-global:${ip}`, 15, 60_000);
+    if (global.limited) {
+      console.log(`[SPONSOR-FRAUD] Global click rate-limited: IP=${ip} count=${global.count}`);
       return c.json({
         success: false,
         error: "Global click rate limit exceeded.",
         code: "RATE_LIMITED",
-        retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        retryAfter: global.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(global.retryAfter) } });
     }
 
     const s: any = await kv.get(`sponsor:${id}`);
@@ -2634,7 +2665,10 @@ app.post(`${PREFIX}/sponsors/:id/click`, async (c) => {
     s.clicks = (s.clicks || 0) + 1;
     await kv.set(`sponsor:${id}`, s);
     return c.json({ success: true });
-  } catch { return c.json({ success: false }, 500); }
+  } catch (error) {
+    console.log(`[SPONSOR] Click error: ${error}`);
+    return c.json({ success: false }, 500);
+  }
 });
 
 app.post(`${PREFIX}/sponsor-inquiry`, async (c) => {
