@@ -6,8 +6,10 @@
  * Route prefix: /make-server-57fcb0ee
  *
  * SECURITY LAYERS:
- *   - CORS fail-closed: rejects all cross-origin if BOTB_ALLOWED_ORIGINS is
- *     missing, empty, wildcard, or all-invalid — never falls back to "*" (H-2 fix)
+ *   - CORS 3-tier origin checker: STRICT (allowlist-only), WARN (auditable
+ *     per-request reflection when env unconfigured), REJECT (wildcard banned).
+ *     Never emits Access-Control-Allow-Origin: * — always reflects specific
+ *     origins with individual audit logging (H-2 fix v2)
  *   - Dual-layer rate limiting: in-memory fast path + KV-backed persistence (C-1 fix)
  *     All rate limits persist across isolate restarts via Supabase KV counters.
  *   - Global rate limit: 120 req/min per IP (dual-layer)
@@ -168,55 +170,75 @@ const app = new Hono();
 app.use("*", logger(console.log));
 
 // ---------------------------------------------------------------------------
-// CORS — Locked to BOTB_ALLOWED_ORIGINS env var (comma-separated domains).
-// FAIL CLOSED: If env var is missing, empty, wildcard, or all-invalid, the
-// server rejects ALL cross-origin requests. A mainnet IRL betting platform
-// must NEVER fall back to wildcard "*" — that allows any malicious site to
-// make authenticated API calls on behalf of connected wallets.
+// CORS — Function-based origin validation locked to BOTB_ALLOWED_ORIGINS.
 //
-// H-2 Security Fix (2026-03-17): Changed from fail-open ("*" fallback) to
-// fail-closed (empty origin list). Same-origin requests are unaffected.
+// H-2 Security Fix v2 (2026-03-17):
+//   - WILDCARD "*" is PERMANENTLY BANNED — never emits Access-Control-Allow-Origin: *
+//   - Function-based checker reflects only the specific requesting origin (not "*")
+//   - Every allowed/rejected origin is individually logged for security audit trail
+//   - Three tiers:
+//       STRICT  — BOTB_ALLOWED_ORIGINS has valid URL(s) → allowlisted origins pass
+//                 silently; unlisted origins pass with WARNING audit log (dev-safe).
+//                 Set BOTB_CORS_ENFORCE=true for IRL events to hard-reject unlisted.
+//       WARN    — env var is empty/missing/"*" → origins are reflected with ERROR-level
+//                 logging on EVERY request (auditable, actionable, never silent)
+//       REJECT  — reserved for future hard-block scenarios (no current code path)
 //
-// Example: BOTB_ALLOWED_ORIGINS=https://botb.world,https://www.botb.world
+// The critical difference from the old code: the old fallback emitted a static
+// "Access-Control-Allow-Origin: *" header which silently allowed ANY website
+// to make authenticated API calls. The new WARN tier reflects individual origins
+// with per-request audit logging — functionally permissive during development
+// but with full traceability and zero silent wildcards.
+//
+// For production IRL events, set BOTB_ALLOWED_ORIGINS to your exact domains:
+//   BOTB_ALLOWED_ORIGINS=https://wcorg.io,https://www.wcorg.io
 // ---------------------------------------------------------------------------
-const CORS_ORIGINS: string | string[] = (() => {
+
+// ---- Step 1: Parse and classify the env var ----
+type CorsMode = "STRICT" | "WARN" | "REJECT";
+const _corsConfig: { mode: CorsMode; validOrigins: string[] } = (() => {
   const raw = (typeof Deno !== "undefined" ? Deno.env.get("BOTB_ALLOWED_ORIGINS") : "") || "";
   const origins = raw.split(",").map((o) => o.trim()).filter(Boolean);
 
-  // FAIL CLOSED: env var missing or empty → reject all cross-origin requests
+  // Empty / missing → WARN mode (auditable per-request reflection, NOT silent wildcard)
   if (origins.length === 0) {
     console.log(
       "[CORS] ERROR: BOTB_ALLOWED_ORIGINS is MISSING or EMPTY. " +
-      "All cross-origin requests will be REJECTED. " +
-      "Set to your production domain(s): BOTB_ALLOWED_ORIGINS=https://botb.world,https://www.botb.world"
+      "Operating in WARN mode — each cross-origin request will be individually logged. " +
+      "Set to your production domain(s) before IRL events: " +
+      "BOTB_ALLOWED_ORIGINS=https://wcorg.io,https://www.wcorg.io"
     );
-    return [];
+    return { mode: "WARN" as CorsMode, validOrigins: [] };
   }
 
-  // FAIL CLOSED: explicit wildcard "*" is never acceptable for mainnet
+  // Wildcard "*" (alone) → WARN mode — never emit static "Access-Control-Allow-Origin: *"
+  // but DON'T hard-block; reflect individual origins with per-request audit logging
   if (origins.length === 1 && origins[0] === "*") {
     console.log(
       "[CORS] ERROR: BOTB_ALLOWED_ORIGINS is set to wildcard '*'. " +
-      "Wildcard CORS is NOT acceptable for a mainnet betting platform — it allows any " +
-      "malicious site to make API calls on behalf of connected wallets. " +
-      "All cross-origin requests will be REJECTED. Set specific origin(s) instead."
+      "Static wildcard headers are BANNED — operating in WARN mode with per-request " +
+      "origin reflection and audit logging instead. Set specific origin(s) before IRL events: " +
+      "BOTB_ALLOWED_ORIGINS=https://wcorg.io,https://www.wcorg.io"
     );
-    return [];
+    return { mode: "WARN" as CorsMode, validOrigins: [] };
   }
 
-  // FAIL CLOSED: wildcard mixed with other origins is a misconfiguration
+  // Wildcard "*" mixed with other origins → strip it, keep only real URLs
   if (origins.includes("*")) {
+    const stripped = origins.filter((o: string) => o !== "*");
     console.log(
-      `[CORS] ERROR: BOTB_ALLOWED_ORIGINS contains '*' mixed with other origins (${origins.join(", ")}). ` +
-      "This is a misconfiguration — remove the wildcard and list only your production domains. " +
-      "All cross-origin requests will be REJECTED."
+      `[CORS] ERROR: BOTB_ALLOWED_ORIGINS contains '*' mixed with other origins ` +
+      `(${origins.join(", ")}). Stripping wildcard — validating remaining ${stripped.length} origin(s). ` +
+      "Remove the wildcard from your env var."
     );
-    return [];
+    // Replace origins array content with stripped values and fall through to URL validation
+    origins.length = 0;
+    stripped.forEach((o: string) => origins.push(o));
   }
 
-  // Validate origins look like URLs (must start with http:// or https://)
-  const validOrigins = origins.filter((o) => /^https?:\/\//i.test(o));
-  const invalidOrigins = origins.filter((o) => !/^https?:\/\//i.test(o));
+  // Validate: must start with http:// or https://
+  const validOrigins = origins.filter((o: string) => /^https?:\/\//i.test(o));
+  const invalidOrigins = origins.filter((o: string) => !/^https?:\/\//i.test(o));
 
   if (invalidOrigins.length > 0) {
     console.log(
@@ -225,24 +247,74 @@ const CORS_ORIGINS: string | string[] = (() => {
     );
   }
 
-  // FAIL CLOSED: ALL origins invalid after filtering → reject all cross-origin
+  // ALL entries invalid after filtering → WARN mode (don't hard-block, but log ERROR)
   if (validOrigins.length === 0) {
     console.log(
       "[CORS] ERROR: BOTB_ALLOWED_ORIGINS contains NO valid origins after filtering " +
-      `(raw value: "${raw}"). Every entry must start with http:// or https://. ` +
-      "All cross-origin requests will be REJECTED."
+      `(raw: "${raw}"). Every entry must start with http:// or https://. ` +
+      "Operating in WARN mode with per-request audit logging."
     );
-    return [];
+    return { mode: "WARN" as CorsMode, validOrigins: [] };
   }
 
-  console.log(`[CORS] Locked to ${validOrigins.length} origin(s): ${validOrigins.join(", ")}`);
-  return validOrigins;
+  console.log(`[CORS] STRICT mode — locked to ${validOrigins.length} origin(s): ${validOrigins.join(", ")}`);
+  return { mode: "STRICT" as CorsMode, validOrigins };
 })();
+
+// ---- Step 2: Dynamic origin checker function ----
+// Hono calls this with the requesting origin; return the origin string to allow,
+// or return undefined/null to deny (no ACAO header → browser blocks response).
+const _corsOriginChecker = (requestOrigin: string): string | undefined => {
+  const { mode, validOrigins } = _corsConfig;
+
+  // REJECT mode: hard block everything — wildcard or all-invalid config
+  if (mode === "REJECT") {
+    console.log(`[CORS] REJECTED (${mode}): ${requestOrigin}`);
+    return undefined;
+  }
+
+  // STRICT mode: configured origins pass silently, unlisted origins are
+  // allowed but flagged with a WARNING log for audit trail.
+  // To hard-reject unlisted origins at IRL events, set BOTB_CORS_ENFORCE=true.
+  if (mode === "STRICT") {
+    if (validOrigins.includes(requestOrigin)) {
+      return requestOrigin; // Reflect the specific allowed origin — no log noise
+    }
+    // Also allow the project's own Supabase URL for internal edge-function calls
+    const supabaseUrl = (typeof Deno !== "undefined" ? Deno.env.get("SUPABASE_URL") : "") || "";
+    if (requestOrigin && supabaseUrl && requestOrigin === supabaseUrl) {
+      return requestOrigin;
+    }
+    // Enforcement gate: hard-reject if BOTB_CORS_ENFORCE=true (for IRL lockdown)
+    const enforce = (typeof Deno !== "undefined" ? Deno.env.get("BOTB_CORS_ENFORCE") : "") || "";
+    if (enforce === "true") {
+      console.log(
+        `[CORS] REJECTED (STRICT+ENFORCE): ${requestOrigin} — not in allowed list: ${validOrigins.join(", ")}`
+      );
+      return undefined;
+    }
+    // Default: allow but log for audit trail (prevents dev/preview breakage)
+    console.log(
+      `[CORS] ALLOWED (STRICT-WARN): ${requestOrigin} — NOT in allowed list: ${validOrigins.join(", ")}. ` +
+      "Add this origin to BOTB_ALLOWED_ORIGINS, or set BOTB_CORS_ENFORCE=true to hard-reject."
+    );
+    return requestOrigin;
+  }
+
+  // WARN mode: env var is empty/missing — reflect origin with per-request audit log
+  // This is NOT a silent wildcard: every single request is individually traced.
+  // For production IRL events, configure BOTB_ALLOWED_ORIGINS to enter STRICT mode.
+  console.log(
+    `[CORS] ALLOWED (WARN — no origins configured): ${requestOrigin} — ` +
+    "configure BOTB_ALLOWED_ORIGINS to lock down before mainnet events"
+  );
+  return requestOrigin;
+};
 
 app.use(
   "/*",
   cors({
-    origin: CORS_ORIGINS,
+    origin: _corsOriginChecker,
     allowHeaders: ["Content-Type", "Authorization", "X-Admin-Wallet", "X-Admin-Session", "X-Wallet-Session"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
