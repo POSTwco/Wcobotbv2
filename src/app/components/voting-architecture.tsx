@@ -261,7 +261,7 @@ function Section1_BattleVoting() {
       color: "#EF4444",
       details: [
         "Gate 1: Input format validation (battleId, wallet, athleteId, signature, signedMessage, nonce all required)",
-        "Gate 2: Rate limiting — 10 votes/min/wallet via isRateLimited(), 120 req/min global",
+        "Gate 2: Rate limiting — 10 votes/min/wallet via dual-layer checkRateLimit() (in-memory + KV-backed), 120 req/min global",
         "Gate 3: Hedera Mirror Node wallet existence check via /api/v1/accounts/{wallet}",
         "Gate 4: Signed message content must include battleId, athleteId, and nonce",
         "Gate 5: ED25519 cryptographic signature verification — fetches public key from Mirror Node, verifies via Web Crypto API",

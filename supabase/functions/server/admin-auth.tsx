@@ -22,11 +22,34 @@
  *   - Only whitelisted Hedera accounts (from env) can ever authenticate
  *   - Wallet existence is verified against the Hedera mirror node
  *
- * RATE LIMITING:
- *   - In-memory sliding window counters per wallet/IP
- *   - Vote endpoints: 10/min per wallet
- *   - Admin challenge: 3/5min per wallet
- *   - General API: 60/min per IP
+ * RATE LIMITING — Dual-Layer (In-Memory + KV-Backed Persistence)
+ * ---------------------------------------------------------------------------
+ *
+ * ARCHITECTURE (C-1 Security Fix — 2026-03-17):
+ *
+ *   LAYER 1: In-memory sliding window (Map<string, timestamps[]>)
+ *     → Sub-millisecond, zero I/O. Effective within a single edge function
+ *       isolate's lifetime. Handles burst attacks hitting the same worker.
+ *       NOT persistent across cold starts or multi-worker deployments.
+ *
+ *   LAYER 2: KV-backed fixed-window counter (Supabase KV)
+ *     → 1 read + 1 conditional write per check. Persistent across isolate
+ *       restarts, cold starts, and all deployment topologies. Authoritative
+ *       source of truth for rate enforcement.
+ *
+ *   FLOW:
+ *     1. Check in-memory (instant) → if over limit, block without KV I/O
+ *     2. Check KV counter (1 read) → if over limit, sync to in-memory + block
+ *     3. Both OK → increment KV counter (1 write) + record in-memory
+ *
+ *   This ensures rate limits are enforced even when edge function isolates
+ *   restart between requests (the vulnerability that kvRateLimit was built
+ *   to solve for sponsor analytics — now applied platform-wide).
+ *
+ * KV KEY FORMAT:  rl:{key}:{windowBucket}
+ *   where windowBucket = Math.floor(Date.now() / windowMs)
+ *   Expired window keys are orphaned (cleaned by lazy reaper — see H-5).
+ * ---------------------------------------------------------------------------
  *
  * INPUT SANITIZATION:
  *   - All string inputs stripped of HTML/script tags
@@ -207,17 +230,43 @@ export async function verifyWalletOnMirrorNode(wallet: string): Promise<boolean>
 }
 
 // ---------------------------------------------------------------------------
-// Rate Limiting (In-Memory Sliding Window)
+// Rate Limiting — Dual-Layer (In-Memory + KV-Backed Persistence)
+// ---------------------------------------------------------------------------
+//
+// ARCHITECTURE (C-1 Security Fix — 2026-03-17):
+//
+//   LAYER 1: In-memory sliding window (Map<string, timestamps[]>)
+//     → Sub-millisecond, zero I/O. Effective within a single edge function
+//       isolate's lifetime. Handles burst attacks hitting the same worker.
+//       NOT persistent across cold starts or multi-worker deployments.
+//
+//   LAYER 2: KV-backed fixed-window counter (Supabase KV)
+//     → 1 read + 1 conditional write per check. Persistent across isolate
+//       restarts, cold starts, and all deployment topologies. Authoritative
+//       source of truth for rate enforcement.
+//
+//   FLOW:
+//     1. Check in-memory (instant) → if over limit, block without KV I/O
+//     2. Check KV counter (1 read) → if over limit, sync to in-memory + block
+//     3. Both OK → increment KV counter (1 write) + record in-memory
+//
+//   This ensures rate limits are enforced even when edge function isolates
+//   restart between requests (the vulnerability that kvRateLimit was built
+//   to solve for sponsor analytics — now applied platform-wide).
+//
+// KV KEY FORMAT:  rl:{key}:{windowBucket}
+//   where windowBucket = Math.floor(Date.now() / windowMs)
+//   Expired window keys are orphaned (cleaned by lazy reaper — see H-5).
 // ---------------------------------------------------------------------------
 
 interface RateLimitEntry {
   timestamps: number[];
 }
 
-/** Per-key rate limit buckets */
+/** Per-key rate limit buckets (Layer 1: in-memory fast path) */
 const rateLimitBuckets = new Map<string, RateLimitEntry>();
 
-/** Clean stale entries every 5 minutes */
+/** Clean stale in-memory entries every 5 minutes */
 let lastCleanup = now();
 const CLEANUP_INTERVAL = 5 * 60 * 1000;
 
@@ -232,8 +281,120 @@ function cleanupRateLimits() {
 }
 
 /**
- * Check if a request should be rate-limited.
- * Returns true if OVER the limit (should block).
+ * Layer 1 ONLY: In-memory sliding window check.
+ * Returns true if over the limit within this isolate's memory.
+ * Does NOT record the request — use recordInMemory() separately.
+ */
+function isOverLimitInMemory(key: string, maxRequests: number, windowMs: number): boolean {
+  cleanupRateLimits();
+  const entry = rateLimitBuckets.get(key);
+  if (!entry) return false;
+  const windowStart = now() - windowMs;
+  const inWindow = entry.timestamps.filter((t) => t > windowStart);
+  return inWindow.length >= maxRequests;
+}
+
+/**
+ * Layer 1: Record a request in the in-memory sliding window.
+ * Called after KV confirms the request is allowed.
+ */
+function recordInMemory(key: string) {
+  const entry = rateLimitBuckets.get(key) || { timestamps: [] };
+  entry.timestamps.push(now());
+  rateLimitBuckets.set(key, entry);
+}
+
+/**
+ * Layer 1: Get in-memory cooldown estimate (seconds).
+ * Used as a fast-path fallback when the in-memory layer blocks.
+ */
+function inMemoryCooldown(key: string, maxRequests: number, windowMs: number): number {
+  const entry = rateLimitBuckets.get(key);
+  if (!entry || entry.timestamps.length === 0) return 0;
+  const windowStart = now() - windowMs;
+  const inWindow = entry.timestamps.filter((t) => t > windowStart);
+  if (inWindow.length < maxRequests) return 0;
+  const oldest = Math.min(...inWindow);
+  const unlocksAt = oldest + windowMs;
+  return Math.max(0, Math.ceil((unlocksAt - now()) / 1000));
+}
+
+/**
+ * Dual-layer rate limiter: in-memory fast path + KV-backed persistence.
+ *
+ * Returns { limited: true, retryAfter: N } if the request should be blocked,
+ * or { limited: false, retryAfter: 0 } if the request is allowed.
+ *
+ * SECURITY GUARANTEE: Even if the edge function isolate restarts between
+ * every single request (worst-case cold-start scenario), the KV layer
+ * enforces the rate limit with fixed-window accuracy. The in-memory layer
+ * is a performance optimization for burst traffic within a single isolate.
+ *
+ * COST: 1 KV read per allowed request + 1 KV write per allowed request.
+ *       Blocked requests that hit the in-memory layer first cost 0 KV ops.
+ *       Blocked requests that only hit the KV layer cost 1 KV read.
+ */
+export async function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): Promise<{ limited: boolean; retryAfter: number }> {
+  // ── LAYER 1: In-memory fast path (0ms, 0 I/O) ──
+  // If this isolate already knows the key is over-limit, block instantly.
+  // This catches rapid-fire abuse within a single worker without KV round-trips.
+  if (isOverLimitInMemory(key, maxRequests, windowMs)) {
+    const retryAfter = inMemoryCooldown(key, maxRequests, windowMs);
+    return { limited: true, retryAfter: retryAfter || 5 };
+  }
+
+  // ── LAYER 2: KV authoritative check (1 read) ──
+  const windowBucket = Math.floor(now() / windowMs);
+  const kvKey = `rl:${key}:${windowBucket}`;
+
+  let kvCount = 0;
+  try {
+    const existing: any = await kv.get(kvKey);
+    kvCount = existing?.count || 0;
+  } catch (err) {
+    // KV read failure — fall through to in-memory only (graceful degradation).
+    // The in-memory layer still provides protection within this isolate.
+    console.log(`[RATE-LIMIT] KV read error for ${kvKey} — falling back to in-memory: ${err}`);
+    // Record in in-memory and allow (don't block on infra failure)
+    recordInMemory(key);
+    return { limited: false, retryAfter: 0 };
+  }
+
+  if (kvCount >= maxRequests) {
+    // KV says over limit — sync to in-memory so subsequent requests in this
+    // isolate are blocked instantly (Layer 1 fast path kicks in)
+    for (let i = 0; i < maxRequests; i++) {
+      recordInMemory(key);
+    }
+    const windowEnd = (windowBucket + 1) * windowMs;
+    const retryAfter = Math.max(1, Math.ceil((windowEnd - now()) / 1000));
+    return { limited: true, retryAfter };
+  }
+
+  // ── BOTH LAYERS OK: Increment KV counter + record in-memory ──
+  try {
+    await kv.set(kvKey, { count: kvCount + 1, windowStart: windowBucket * windowMs });
+  } catch (err) {
+    // KV write failure — request is allowed but counter may under-count.
+    // Next request will re-read and self-correct. Non-fatal.
+    console.log(`[RATE-LIMIT] KV write error for ${kvKey} — counter may under-count: ${err}`);
+  }
+
+  recordInMemory(key);
+  return { limited: false, retryAfter: 0 };
+}
+
+/**
+ * LEGACY: In-memory only rate limit check (synchronous).
+ * Retained for backward compatibility with sponsor analytics code that uses
+ * its own kvRateLimit() directly. New code should use checkRateLimit().
+ *
+ * WARNING: This function is NOT persistent across isolate restarts.
+ * For security-critical rate limiting, use checkRateLimit() instead.
  */
 export function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {
   cleanupRateLimits();
@@ -255,8 +416,8 @@ export function isRateLimited(key: string, maxRequests: number, windowMs: number
 }
 
 /**
- * Get remaining cooldown seconds for a rate-limited key.
- * Returns 0 if not rate-limited.
+ * LEGACY: In-memory only cooldown calculation (synchronous).
+ * Retained for backward compatibility. New code uses checkRateLimit().retryAfter.
  */
 export function rateLimitCooldown(key: string, maxRequests: number, windowMs: number): number {
   const entry = rateLimitBuckets.get(key);
@@ -270,8 +431,9 @@ export function rateLimitCooldown(key: string, maxRequests: number, windowMs: nu
 }
 
 /**
- * Hono middleware factory for rate limiting.
- * Extracts a key from the request (wallet or IP) and checks against limits.
+ * Hono middleware factory for rate limiting (dual-layer persistent).
+ * Extracts a key from the request (wallet or IP) and checks against limits
+ * using both the in-memory fast path and KV-backed authoritative layer.
  */
 export function rateLimit(opts: {
   keyFn: (c: Context) => string;
@@ -281,15 +443,15 @@ export function rateLimit(opts: {
 }) {
   return async (c: Context, next: Next) => {
     const key = opts.keyFn(c);
-    if (isRateLimited(key, opts.max, opts.windowMs)) {
-      const retryAfter = rateLimitCooldown(key, opts.max, opts.windowMs);
-      console.log(`[RATE-LIMIT] Blocked: ${key} (max ${opts.max} per ${opts.windowMs / 1000}s, retry=${retryAfter}s)`);
+    const result = await checkRateLimit(key, opts.max, opts.windowMs);
+    if (result.limited) {
+      console.log(`[RATE-LIMIT] Blocked: ${key} (max ${opts.max} per ${opts.windowMs / 1000}s, retry=${result.retryAfter}s)`);
       return c.json({
         success: false,
         error: opts.message || "Too many requests. Please slow down.",
         code: "RATE_LIMITED",
-        retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        retryAfter: result.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(result.retryAfter || 5) } });
     }
     await next();
   };

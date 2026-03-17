@@ -6,12 +6,14 @@
  * Route prefix: /make-server-57fcb0ee
  *
  * SECURITY LAYERS:
- *   - Global rate limit: 120 req/min per IP
+ *   - Dual-layer rate limiting: in-memory fast path + KV-backed persistence (C-1 fix)
+ *     All rate limits persist across isolate restarts via Supabase KV counters.
+ *   - Global rate limit: 120 req/min per IP (dual-layer)
  *   - Wallet Session: X-Wallet-Session token required for all vote + chat writes
  *     (proves caller went through WalletConnect flow — closes curl/headcount attack)
  *   - Admin writes AND reads require X-Admin-Session (signed session token, 20-min TTL)
  *     (reads upgraded from spoofable X-Admin-Wallet to session-based auth)
- *   - Vote endpoints: rate-limited (10/min per wallet) + mirror-node anti-spoofing
+ *   - Vote endpoints: rate-limited (10/min per wallet, dual-layer) + mirror-node anti-spoofing
  *   - All admin write handlers sanitize text, numbers, URLs, and enum fields
  *
  * PUBLIC routes:
@@ -135,8 +137,7 @@ import {
   isValidHederaAccountId,
   verifyWalletOnMirrorNode,
   rateLimit,
-  isRateLimited,
-  rateLimitCooldown,
+  checkRateLimit,
   sanitizeString,
   sanitizeNumber,
   sanitizeUrl,
@@ -435,15 +436,19 @@ app.post(`${PREFIX}/wallet/register`, async (c) => {
     }
 
     // Rate limit: 5 registrations per 2 minutes per wallet (legitimate use: 1-2 per connect)
-    if (isRateLimited(`wsession:${wallet}`, 5, 2 * 60 * 1000)) {
-      return c.json({ success: false, error: "Too many session registrations. Please wait." }, 429);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const wsessionWalletRL = await checkRateLimit(`wsession:${wallet}`, 5, 2 * 60 * 1000);
+    if (wsessionWalletRL.limited) {
+      return c.json({ success: false, error: "Too many session registrations. Please wait.", code: "RATE_LIMITED", retryAfter: wsessionWalletRL.retryAfter }, 429);
     }
 
     // Rate limit: 10 registrations per 5 minutes per IP (prevents mass wallet impersonation)
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
     const registerIp = extractClientIp(c);
-    if (isRateLimited(`wsession-ip:${registerIp}`, 10, 5 * 60 * 1000)) {
+    const wsessionIpRL = await checkRateLimit(`wsession-ip:${registerIp}`, 10, 5 * 60 * 1000);
+    if (wsessionIpRL.limited) {
       console.log(`[WALLET-SESSION] IP rate limited: ${registerIp} — possible mass registration attempt`);
-      return c.json({ success: false, error: "Too many session registrations from this network." }, 429);
+      return c.json({ success: false, error: "Too many session registrations from this network.", code: "RATE_LIMITED", retryAfter: wsessionIpRL.retryAfter }, 429);
     }
 
     // Verify wallet exists on Hedera mainnet
@@ -1245,12 +1250,13 @@ app.post(`${PREFIX}/admin/challenge`, async (c) => {
     }
 
     // Rate limit: 3 challenge requests per 5 minutes per wallet
-    if (isRateLimited(`challenge:${wallet}`, 3, 5 * 60 * 1000)) {
-      const retryAfter = rateLimitCooldown(`challenge:${wallet}`, 3, 5 * 60 * 1000);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const challengeRL = await checkRateLimit(`challenge:${wallet}`, 3, 5 * 60 * 1000);
+    if (challengeRL.limited) {
       return c.json({
         success: false, error: "Too many authentication attempts. Please wait 5 minutes.",
-        code: "RATE_LIMITED", retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 60) } });
+        code: "RATE_LIMITED", retryAfter: challengeRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(challengeRL.retryAfter || 60) } });
     }
 
     if (!isAdmin(wallet)) {
@@ -2091,7 +2097,10 @@ app.get(`${PREFIX}/admin/snapshots/batch-export`, requireAdminSession, async (c)
         headers: {
           "Content-Type": "application/json",
           "Content-Disposition": `attachment; filename="botb-all-snapshots-${Date.now()}.json"`,
-          "Access-Control-Allow-Origin": "*",
+          // SECURITY: No Access-Control-Allow-Origin here — Hono's global CORS
+          // middleware (locked to BOTB_ALLOWED_ORIGINS) handles it. Hardcoding "*"
+          // would bypass the origin whitelist and allow any malicious site to
+          // trigger snapshot downloads from an admin's authenticated session.
         },
       });
     }
@@ -2121,7 +2130,7 @@ app.get(`${PREFIX}/admin/snapshots/batch-export`, requireAdminSession, async (c)
       headers: {
         "Content-Type": "text/csv",
         "Content-Disposition": `attachment; filename="botb-all-snapshots-${Date.now()}.csv"`,
-        "Access-Control-Allow-Origin": "*",
+        // SECURITY: CORS handled by Hono global middleware — see BOTB_ALLOWED_ORIGINS
       },
     });
   } catch (error) {
@@ -2179,7 +2188,7 @@ app.get(`${PREFIX}/admin/snapshots/:id/export`, requireAdminSession, async (c) =
         headers: {
           "Content-Type": "text/csv",
           "Content-Disposition": `attachment; filename="botb-airdrop-${id}.csv"`,
-          "Access-Control-Allow-Origin": "*",
+          // SECURITY: CORS handled by Hono global middleware — see BOTB_ALLOWED_ORIGINS
         },
       });
     }
@@ -2207,7 +2216,7 @@ app.get(`${PREFIX}/admin/snapshots/:id/export`, requireAdminSession, async (c) =
       headers: {
         "Content-Type": "application/json",
         "Content-Disposition": `attachment; filename="botb-airdrop-${id}.json"`,
-        "Access-Control-Allow-Origin": "*",
+        // SECURITY: CORS handled by Hono global middleware — see BOTB_ALLOWED_ORIGINS
       },
     });
   } catch (error) {
@@ -3080,12 +3089,13 @@ app.post(`${PREFIX}/vote/battle`, async (c) => {
       }, 401);
     }
 
-    if (isRateLimited(`vote:battle:${wallet}`, 10, 60 * 1000)) {
-      const retryAfter = rateLimitCooldown(`vote:battle:${wallet}`, 10, 60 * 1000);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const voteBattleRL = await checkRateLimit(`vote:battle:${wallet}`, 10, 60 * 1000);
+    if (voteBattleRL.limited) {
       return c.json({
         success: false, error: "Too many vote attempts. Please wait a moment.",
-        code: "RATE_LIMITED", retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        code: "RATE_LIMITED", retryAfter: voteBattleRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(voteBattleRL.retryAfter || 5) } });
     }
 
     // ── IP ANOMALY DETECTION ──
@@ -3387,12 +3397,13 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
     }
 
     // ── 2b. RATE LIMIT (relaxed — batch is one action) ──
-    if (isRateLimited(`vote:batch:${wallet}`, 5, 60 * 1000)) {
-      const retryAfter = rateLimitCooldown(`vote:batch:${wallet}`, 5, 60 * 1000);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const voteBatchRL = await checkRateLimit(`vote:batch:${wallet}`, 5, 60 * 1000);
+    if (voteBatchRL.limited) {
       return c.json({
         success: false, error: "Too many batch vote attempts. Please wait.",
-        code: "RATE_LIMITED", retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 10) } });
+        code: "RATE_LIMITED", retryAfter: voteBatchRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(voteBatchRL.retryAfter || 10) } });
     }
 
     // ── IP ANOMALY DETECTION (batch) ──
@@ -3757,12 +3768,13 @@ app.post(`${PREFIX}/vote/proposal`, async (c) => {
     }
 
     // ── 3. RATE LIMITING ──
-    if (isRateLimited(`vote:proposal:${wallet}`, 10, 60 * 1000)) {
-      const retryAfter = rateLimitCooldown(`vote:proposal:${wallet}`, 10, 60 * 1000);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const voteProposalRL = await checkRateLimit(`vote:proposal:${wallet}`, 10, 60 * 1000);
+    if (voteProposalRL.limited) {
       return c.json({
         success: false, error: "Too many vote attempts. Please wait a moment.",
-        code: "RATE_LIMITED", retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        code: "RATE_LIMITED", retryAfter: voteProposalRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(voteProposalRL.retryAfter || 5) } });
     }
 
     // ── IP ANOMALY DETECTION (proposal vote) ──
@@ -3967,13 +3979,13 @@ app.post(`${PREFIX}/applications`, async (c) => {
     }
 
     // Rate limit: 3 applications per wallet per hour
-    const rlKey = `apprl:${body.wallet}`;
-    if (isRateLimited(rlKey, 3, 60 * 60 * 1000)) {
-      const retryAfter = rateLimitCooldown(rlKey, 3, 60 * 60 * 1000);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const appRL = await checkRateLimit(`apprl:${body.wallet}`, 3, 60 * 60 * 1000);
+    if (appRL.limited) {
       return c.json({
         success: false, error: "Too many applications. Please wait before submitting again.",
-        code: "RATE_LIMITED", retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 300) } });
+        code: "RATE_LIMITED", retryAfter: appRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(appRL.retryAfter || 300) } });
     }
 
     // Validate required fields
@@ -4431,14 +4443,15 @@ app.get(`${PREFIX}/chat/messages`, async (c) => {
     const cleanWallet = wallet.trim();
 
     // Rate limit polling: 15 requests/min per wallet (prevents aggressive polling)
-    if (isRateLimited(`chat:poll:${cleanWallet}`, 15, 60_000)) {
-      const retryAfter = rateLimitCooldown(`chat:poll:${cleanWallet}`, 15, 60_000);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const chatPollRL = await checkRateLimit(`chat:poll:${cleanWallet}`, 15, 60_000);
+    if (chatPollRL.limited) {
       return c.json({
         success: false,
         error: "Polling too fast — please slow down.",
         code: "RATE_LIMITED",
-        retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+        retryAfter: chatPollRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(chatPollRL.retryAfter || 5) } });
     }
 
     // Verify wallet exists on Hedera mainnet
@@ -4519,22 +4532,23 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
     const isGovernor = await checkGovernorForChat(cleanWallet);
 
     // ── 6. TIERED RATE LIMIT ──
-    const rlKey = `chat:send:${cleanWallet}`;
-    const rlMax = isGovernor ? CHAT_RATE_GOV_MAX : CHAT_RATE_REGULAR_MAX;
-    const rlWindow = isGovernor ? CHAT_RATE_GOV_WINDOW : CHAT_RATE_REGULAR_WINDOW;
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const chatSendKey = `chat:send:${cleanWallet}`;
+    const chatSendMax = isGovernor ? CHAT_RATE_GOV_MAX : CHAT_RATE_REGULAR_MAX;
+    const chatSendWindow = isGovernor ? CHAT_RATE_GOV_WINDOW : CHAT_RATE_REGULAR_WINDOW;
 
-    if (isRateLimited(rlKey, rlMax, rlWindow)) {
-      const retryAfter = rateLimitCooldown(rlKey, rlMax, rlWindow);
+    const chatSendRL = await checkRateLimit(chatSendKey, chatSendMax, chatSendWindow);
+    if (chatSendRL.limited) {
       const windowLabel = isGovernor ? "10 seconds" : "2 minutes";
-      console.log(`[CHAT] Rate-limited ${cleanWallet} (governor=${isGovernor}, retry=${retryAfter}s)`);
+      console.log(`[CHAT] Rate-limited ${cleanWallet} (governor=${isGovernor}, retry=${chatSendRL.retryAfter}s)`);
       return c.json({
         success: false,
         error: `Cooldown active — ${isGovernor ? "Governors" : "wallets"} can send 1 message every ${windowLabel}.`,
         code: "RATE_LIMITED",
-        retryAfter,
+        retryAfter: chatSendRL.retryAfter,
         cooldownMs: isGovernor ? CHAT_RATE_GOV_WINDOW : CHAT_RATE_REGULAR_WINDOW,
         isGovernor,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 5) } });
+      }, { status: 429, headers: { "Retry-After": String(chatSendRL.retryAfter || 5) } });
     }
 
     // ── 7. ATHLETE + ADMIN CHECK ──
@@ -4612,17 +4626,18 @@ app.post(`${PREFIX}/chat/messages/:id/react`, async (c) => {
     }
 
     // Tiered reaction rate limit: Governors get 30/min, regular 10/min
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
     const isGov = await checkGovernorForChat(cleanWallet);
     const reactMax = isGov ? CHAT_REACT_GOV_MAX : CHAT_REACT_REGULAR_MAX;
     const reactWindow = isGov ? CHAT_REACT_GOV_WINDOW : CHAT_REACT_REGULAR_WINDOW;
-    if (isRateLimited(`chat:react:${cleanWallet}`, reactMax, reactWindow)) {
-      const retryAfter = rateLimitCooldown(`chat:react:${cleanWallet}`, reactMax, reactWindow);
+    const chatReactRL = await checkRateLimit(`chat:react:${cleanWallet}`, reactMax, reactWindow);
+    if (chatReactRL.limited) {
       return c.json({
         success: false,
         error: "Slow down on reactions!",
         code: "RATE_LIMITED",
-        retryAfter,
-      }, { status: 429, headers: { "Retry-After": String(retryAfter || 3) } });
+        retryAfter: chatReactRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(chatReactRL.retryAfter || 3) } });
     }
 
     let toggledMessage: any = null;
@@ -4757,8 +4772,10 @@ app.post(`${PREFIX}/chat/emotes`, async (c) => {
     }
 
     // Rate limit
-    if (isRateLimited(`chat:emote:${cleanWallet}`, EMOTE_RATE_LIMIT_MAX, EMOTE_RATE_LIMIT_WINDOW)) {
-      return c.json({ success: false, error: "Emote rate limit reached. Slow down!" }, 429);
+    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
+    const emoteRL = await checkRateLimit(`chat:emote:${cleanWallet}`, EMOTE_RATE_LIMIT_MAX, EMOTE_RATE_LIMIT_WINDOW);
+    if (emoteRL.limited) {
+      return c.json({ success: false, error: "Emote rate limit reached. Slow down!", code: "RATE_LIMITED", retryAfter: emoteRL.retryAfter }, 429);
     }
 
     // Store emote in KV with timestamp — key includes a unique suffix to allow multiple
