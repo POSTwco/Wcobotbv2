@@ -6,6 +6,8 @@
  * Route prefix: /make-server-57fcb0ee
  *
  * SECURITY LAYERS:
+ *   - CORS fail-closed: rejects all cross-origin if BOTB_ALLOWED_ORIGINS is
+ *     missing, empty, wildcard, or all-invalid — never falls back to "*" (H-2 fix)
  *   - Dual-layer rate limiting: in-memory fast path + KV-backed persistence (C-1 fix)
  *     All rate limits persist across isolate restarts via Supabase KV counters.
  *   - Global rate limit: 120 req/min per IP (dual-layer)
@@ -167,18 +169,49 @@ app.use("*", logger(console.log));
 
 // ---------------------------------------------------------------------------
 // CORS — Locked to BOTB_ALLOWED_ORIGINS env var (comma-separated domains).
-// Falls back to "*" ONLY if env var is unset (dev/staging convenience).
-// MUST be configured before mainnet launch to prevent cross-origin attacks.
+// FAIL CLOSED: If env var is missing, empty, wildcard, or all-invalid, the
+// server rejects ALL cross-origin requests. A mainnet IRL betting platform
+// must NEVER fall back to wildcard "*" — that allows any malicious site to
+// make authenticated API calls on behalf of connected wallets.
+//
+// H-2 Security Fix (2026-03-17): Changed from fail-open ("*" fallback) to
+// fail-closed (empty origin list). Same-origin requests are unaffected.
+//
 // Example: BOTB_ALLOWED_ORIGINS=https://botb.world,https://www.botb.world
 // ---------------------------------------------------------------------------
 const CORS_ORIGINS: string | string[] = (() => {
   const raw = (typeof Deno !== "undefined" ? Deno.env.get("BOTB_ALLOWED_ORIGINS") : "") || "";
   const origins = raw.split(",").map((o) => o.trim()).filter(Boolean);
 
-  // Handle wildcard — Hono needs the STRING "*", not an ARRAY ["*"]
-  if (origins.length === 0 || (origins.length === 1 && origins[0] === "*")) {
-    console.log("[CORS] WARNING: BOTB_ALLOWED_ORIGINS not set or wildcard — allowing all origins (lock down before mainnet)");
-    return "*";
+  // FAIL CLOSED: env var missing or empty → reject all cross-origin requests
+  if (origins.length === 0) {
+    console.log(
+      "[CORS] ERROR: BOTB_ALLOWED_ORIGINS is MISSING or EMPTY. " +
+      "All cross-origin requests will be REJECTED. " +
+      "Set to your production domain(s): BOTB_ALLOWED_ORIGINS=https://botb.world,https://www.botb.world"
+    );
+    return [];
+  }
+
+  // FAIL CLOSED: explicit wildcard "*" is never acceptable for mainnet
+  if (origins.length === 1 && origins[0] === "*") {
+    console.log(
+      "[CORS] ERROR: BOTB_ALLOWED_ORIGINS is set to wildcard '*'. " +
+      "Wildcard CORS is NOT acceptable for a mainnet betting platform — it allows any " +
+      "malicious site to make API calls on behalf of connected wallets. " +
+      "All cross-origin requests will be REJECTED. Set specific origin(s) instead."
+    );
+    return [];
+  }
+
+  // FAIL CLOSED: wildcard mixed with other origins is a misconfiguration
+  if (origins.includes("*")) {
+    console.log(
+      `[CORS] ERROR: BOTB_ALLOWED_ORIGINS contains '*' mixed with other origins (${origins.join(", ")}). ` +
+      "This is a misconfiguration — remove the wildcard and list only your production domains. " +
+      "All cross-origin requests will be REJECTED."
+    );
+    return [];
   }
 
   // Validate origins look like URLs (must start with http:// or https://)
@@ -186,12 +219,20 @@ const CORS_ORIGINS: string | string[] = (() => {
   const invalidOrigins = origins.filter((o) => !/^https?:\/\//i.test(o));
 
   if (invalidOrigins.length > 0) {
-    console.log(`[CORS] WARNING: Ignoring ${invalidOrigins.length} invalid origin(s) (must start with http(s)://): ${invalidOrigins.join(", ")}`);
+    console.log(
+      `[CORS] WARNING: Ignoring ${invalidOrigins.length} malformed origin(s) ` +
+      `(must start with http:// or https://): ${invalidOrigins.join(", ")}`
+    );
   }
 
+  // FAIL CLOSED: ALL origins invalid after filtering → reject all cross-origin
   if (validOrigins.length === 0) {
-    console.log("[CORS] WARNING: No valid origins after filtering — allowing all origins (set proper URLs before mainnet)");
-    return "*";
+    console.log(
+      "[CORS] ERROR: BOTB_ALLOWED_ORIGINS contains NO valid origins after filtering " +
+      `(raw value: "${raw}"). Every entry must start with http:// or https://. ` +
+      "All cross-origin requests will be REJECTED."
+    );
+    return [];
   }
 
   console.log(`[CORS] Locked to ${validOrigins.length} origin(s): ${validOrigins.join(", ")}`);
