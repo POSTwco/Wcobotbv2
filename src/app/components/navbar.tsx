@@ -28,6 +28,7 @@ export function Navbar() {
   const walletBtnRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
+  const [scrolled, setScrolled] = useState(false);
 
   const {
     connected,
@@ -50,6 +51,15 @@ export function Navbar() {
 
   const accent = vipActive ? "#D4A843" : "#4274B9";
   const accentLight = vipActive ? "#F0D078" : "#6AA3E0";
+
+  // Shrink navbar on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 40);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const openDropdown = () => {
     if (hoverTimeoutRef.current) {
@@ -103,7 +113,7 @@ export function Navbar() {
           vipActive
             ? "bg-[#0B1120]/92 border-[#D4A843]/15 shadow-[0_2px_20px_rgba(212,168,67,0.08)]"
             : "bg-[#0B1120]/90 border-[#4274B9]/10"
-        }`}
+        } ${scrolled ? "shadow-lg shadow-black/20" : ""}`}
       >
         {/* VIP shimmer bar */}
         {vipActive && (
@@ -116,7 +126,7 @@ export function Navbar() {
         )}
 
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
+          <div className={`flex items-center justify-between transition-all duration-300 ${scrolled ? "h-12 sm:h-13" : "h-14 sm:h-16"}`}>
             {/* Logo — slightly smaller on mobile */}
             <Link to="/" className="flex items-center gap-2 shrink-0">
               <img

@@ -13,6 +13,7 @@ import { BecomeSponsorSection } from "./become-sponsor";
 import { X } from "lucide-react";
 import { Toaster } from "sonner";
 import { MobileBottomNav } from "./mobile-bottom-nav";
+import { PageTransition, ScrollProgress } from "./ui-enhancements";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -73,7 +74,9 @@ export function Layout() {
       <div className="relative z-10">
         <Navbar />
         <main className="pt-14 sm:pt-16 pb-20 md:pb-0">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
         <footer className={`border-t py-8 sm:py-12 pb-24 md:pb-12 ${vipActive ? "border-[#D4A843]/15 bg-[#0A0F1A]" : "border-[#4274B9]/10 bg-[#0A0F1A]"}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -146,6 +149,7 @@ export function Layout() {
         </footer>
       </div>
       <Toaster position="top-right" theme="dark" richColors toastOptions={{ style: { background: "#111827", border: "1px solid rgba(66,116,185,0.15)", color: "#E8ECF0" } }} />
+      <ScrollProgress color={vipActive ? "#D4A843" : "#4274B9"} />
       <MobileBottomNav />
     </div>
   );

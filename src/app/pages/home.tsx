@@ -7,33 +7,44 @@ import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { RateAthletesSection } from "../components/rate-athletes";
 import { SponsorShowcase, TitleSponsorBanner } from "../components/sponsor-showcase";
 import { useConfig, useBattles, useAthletes } from "../lib/hooks";
+import { AnimatedCounter, StaggerText, FadeInWhenVisible, TiltCard } from "../components/ui-enhancements";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
 
 const ATHLETE_BG = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/athlete1.jpg";
 const WCO_VIDEO = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCOVID.M4V";
 
-function StatCard({ label, value, icon: Icon, color }: { label: string; value: string; icon: any; color: string }) {
+function StatCard({ label, value, icon: Icon, color, animatedValue, prefix, suffix, decimals }: { label: string; value: string; icon: any; color: string; animatedValue?: number; prefix?: string; suffix?: string; decimals?: number }) {
   const { vipActive } = useVIP();
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      className={`rounded-xl p-3 sm:p-5 transition-all group ${
-        vipActive
-          ? "vip-glass-card vip-shimmer-overlay hover:border-[#D4A843]/40"
-          : "bg-[#111827] border border-[#4274B9]/10 hover:border-[#4274B9]/30"
-      }`}
+    <TiltCard
+      maxTilt={8}
+      glowColor={vipActive ? "#D4A843" : color}
+      className="relative"
     >
-      <div className="flex items-center gap-2 sm:gap-3 mb-2">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center" style={{ background: vipActive ? "rgba(212,168,67,0.1)" : `${color}15` }}>
-          <Icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: vipActive ? "#D4A843" : color }} />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className={`rounded-xl p-3 sm:p-5 transition-all group ${
+          vipActive
+            ? "vip-glass-card vip-shimmer-overlay hover:border-[#D4A843]/40"
+            : "bg-[#111827] border border-[#4274B9]/10 hover:border-[#4274B9]/30"
+        }`}
+      >
+        <div className="flex items-center gap-2 sm:gap-3 mb-2">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center" style={{ background: vipActive ? "rgba(212,168,67,0.1)" : `${color}15` }}>
+            <Icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: vipActive ? "#D4A843" : color }} />
+          </div>
+          <span className="text-[#8494A7] text-xs sm:text-sm">{label}</span>
         </div>
-        <span className="text-[#8494A7] text-xs sm:text-sm">{label}</span>
-      </div>
-      <p className={`text-xl sm:text-2xl ${vipActive ? "vip-gold-text" : "text-[#E8ECF0]"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>{value}</p>
-    </motion.div>
+        <p className={`text-xl sm:text-2xl ${vipActive ? "vip-gold-text" : "text-[#E8ECF0]"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>
+          {animatedValue !== undefined ? (
+            <AnimatedCounter value={animatedValue} prefix={prefix} suffix={suffix} decimals={decimals ?? 0} duration={2.5} />
+          ) : value}
+        </p>
+      </motion.div>
+    </TiltCard>
   );
 }
 
@@ -213,10 +224,10 @@ export function HomePage() {
       <section className="py-8 sm:py-16 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-            <StatCard label="Token Price" value={`$${tokenStats.price}`} icon={TrendingUp} color="#4274B9" />
-            <StatCard label="Total Staked" value={`${(tokenStats.totalStaked / 1e6).toFixed(1)}M`} icon={Shield} color="#6AA3E0" />
-            <StatCard label="Total Voters" value={`${(tokenStats.totalVoters / 1e3).toFixed(0)}K`} icon={Users} color="#f59e0b" />
-            <StatCard label="Total Battles" value={totalBattles.toString()} icon={Trophy} color="#10b981" />
+            <StatCard label="Token Price" value={`$${tokenStats.price}`} icon={TrendingUp} color="#4274B9" animatedValue={parseFloat(tokenStats.price) || 0} prefix="$" decimals={2} />
+            <StatCard label="Total Staked" value="" icon={Shield} color="#6AA3E0" animatedValue={tokenStats.totalStaked / 1e6} suffix="M" decimals={1} />
+            <StatCard label="Total Voters" value="" icon={Users} color="#f59e0b" animatedValue={tokenStats.totalVoters / 1e3} suffix="K" decimals={0} />
+            <StatCard label="Total Battles" value={totalBattles.toString()} icon={Trophy} color="#10b981" animatedValue={totalBattles} />
           </div>
         </div>
       </section>

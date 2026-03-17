@@ -23,6 +23,7 @@ import { ErrorCard } from "../components/error-boundary";
 import { BOTBSpinner, SkeletonAthleteCard } from "../components/botb-spinner";
 import { getCountryFlag } from "../lib/country-flags";
 import { InlineFlag } from "../components/country-flag";
+import { TiltCard, BlurImage, FadeInWhenVisible } from "../components/ui-enhancements";
 
 // ---------------------------------------------------------------------------
 // Skill bar colors (matches admin form)
@@ -132,221 +133,228 @@ export function AthletesPage() {
                 : "0.0";
 
               return (
-                <motion.div
+                <TiltCard
                   key={athlete.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.08 }}
-                  onClick={() => setSelectedAthlete(isExpanded ? null : athlete.id)}
-                  className="bg-[#111827] border rounded-2xl overflow-hidden cursor-pointer hover:border-opacity-60 transition-all group"
-                  style={{ borderColor: `${borderColor}20` }}
+                  maxTilt={5}
+                  scale={1.02}
+                  glowColor={borderColor}
+                  className="relative"
                 >
-                  {/* Image */}
-                  <div className="relative h-72 sm:h-96 overflow-hidden bg-[#0B1120]">
-                    {hasPfp ? (
-                      <ImageWithFallback
-                        src={athlete.pfpUrl}
-                        alt={athlete.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <User className="w-16 h-16 text-[#4274B9]/15" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#111827] via-transparent to-transparent" />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08 }}
+                    onClick={() => setSelectedAthlete(isExpanded ? null : athlete.id)}
+                    className="bg-[#111827] border rounded-2xl overflow-hidden cursor-pointer hover:border-opacity-60 transition-all group"
+                    style={{ borderColor: `${borderColor}20` }}
+                  >
+                    {/* Image */}
+                    <div className="relative h-72 sm:h-96 overflow-hidden bg-[#0B1120]">
+                      {hasPfp ? (
+                        <ImageWithFallback
+                          src={athlete.pfpUrl}
+                          alt={athlete.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <User className="w-16 h-16 text-[#4274B9]/15" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#111827] via-transparent to-transparent" />
 
-                    {/* Rank badge */}
-                    <div className="absolute top-3 left-3 px-3 py-1 rounded-lg" style={{ background: `${borderColor}20`, border: `1px solid ${borderColor}40` }}>
-                      <span className="text-xs font-bold" style={{ fontFamily: "Orbitron, sans-serif", color: borderColor }}>
-                        #{athlete.rank}
-                      </span>
-                    </div>
-
-                    {/* Streak badge */}
-                    {athlete.streak > 0 && (
-                      <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-[#f59e0b]/20 border border-[#f59e0b]/40">
-                        <Flame className="w-3 h-3 text-[#f59e0b]" />
-                        <span className="text-xs text-[#f59e0b]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.streak}</span>
-                      </div>
-                    )}
-
-                    {/* Status badge */}
-                    {athlete.status !== "active" && (
-                      <div className="absolute top-3 right-3">
-                        <span className={`px-2 py-0.5 rounded text-[0.5rem] font-bold ${
-                          athlete.status === "champion" ? "bg-[#D4A843]/20 text-[#D4A843]" :
-                          "bg-red-500/20 text-red-400"
-                        }`} style={{ fontFamily: "Orbitron, sans-serif" }}>
-                          {athlete.status.toUpperCase()}
+                      {/* Rank badge */}
+                      <div className="absolute top-3 left-3 px-3 py-1 rounded-lg" style={{ background: `${borderColor}20`, border: `1px solid ${borderColor}40` }}>
+                        <span className="text-xs font-bold" style={{ fontFamily: "Orbitron, sans-serif", color: borderColor }}>
+                          #{athlete.rank}
                         </span>
                       </div>
-                    )}
 
-                    {/* Country + Flag */}
-                    <div className="absolute bottom-3 right-3 text-xs text-[#8494A7] flex items-center gap-1">
-                      <InlineFlag country={athlete.country} /> {athlete.country}
-                    </div>
-                  </div>
+                      {/* Streak badge */}
+                      {athlete.streak > 0 && (
+                        <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-[#f59e0b]/20 border border-[#f59e0b]/40">
+                          <Flame className="w-3 h-3 text-[#f59e0b]" />
+                          <span className="text-xs text-[#f59e0b]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.streak}</span>
+                        </div>
+                      )}
 
-                  {/* Info */}
-                  <div className="p-3 sm:p-5">
-                    <h3 className="text-[#E8ECF0] mb-0.5 font-bold truncate" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                      {athlete.name}
-                    </h3>
-                    {athlete.nickname && (
-                      <p className="text-[0.65rem] mb-1" style={{ color: borderColor }}>
-                        "{athlete.nickname}"
-                      </p>
-                    )}
-                    {athlete.weightClass && (
-                      <p className="text-[0.5rem] text-[#8494A7]/70 mb-2 truncate" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                        {athlete.weightClass}
-                      </p>
-                    )}
-
-                    <div className="grid grid-cols-3 gap-3 mb-3">
-                      <div className="text-center">
-                        <p className="text-lg text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.wins}</p>
-                        <p className="text-xs text-[#8494A7]">Wins</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-lg text-red-400" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.losses}</p>
-                        <p className="text-xs text-[#8494A7]">Losses</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-lg text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                          {athlete.totalPowerRating?.toFixed(1) || "—"}
-                        </p>
-                        <p className="text-xs text-[#8494A7]">Power</p>
-                      </div>
-                    </div>
-
-                    {/* Skill bars (compact) */}
-                    {athlete.skills && (
-                      <div className="space-y-1 mb-2">
-                        {(["energy", "performance", "static", "aggression", "dynamic"] as const).map((skill) => {
-                          const val = athlete.skills[skill] || 0;
-                          return (
-                            <div key={skill} className="flex items-center gap-1.5">
-                              <span className="text-[0.45rem] text-[#8494A7] w-12 truncate">{SKILL_LABELS[skill]}</span>
-                              <div className="flex-1 h-1 rounded-full bg-[#162033] overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500"
-                                  style={{ width: `${(val / 10) * 100}%`, background: SKILL_COLORS[skill] }}
-                                />
-                              </div>
-                              <span className="text-[0.45rem] font-mono w-5 text-right" style={{ color: SKILL_COLORS[skill] }}>
-                                {val.toFixed(1)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Expanded details */}
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="space-y-3 pt-3 border-t border-[#4274B9]/10"
-                      >
-                        {athlete.bio && (
-                          <p className="text-[#8494A7] text-xs leading-relaxed">{athlete.bio}</p>
-                        )}
-                        {athlete.specialMove && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-[#8494A7] flex items-center gap-2">
-                              <Target className="w-3 h-3" /> Special Move
-                            </span>
-                            <span className="text-[#f59e0b] text-xs">{athlete.specialMove}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-[#8494A7] flex items-center gap-2">
-                            <Trophy className="w-3 h-3" /> Win Rate
-                          </span>
-                          <span className="text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.7rem" }}>
-                            {winRate}%
+                      {/* Status badge */}
+                      {athlete.status !== "active" && (
+                        <div className="absolute top-3 right-3">
+                          <span className={`px-2 py-0.5 rounded text-[0.5rem] font-bold ${
+                            athlete.status === "champion" ? "bg-[#D4A843]/20 text-[#D4A843]" :
+                            "bg-red-500/20 text-red-400"
+                          }`} style={{ fontFamily: "Orbitron, sans-serif" }}>
+                            {athlete.status.toUpperCase()}
                           </span>
                         </div>
-                        {athlete.totalVotes > 0 && (
+                      )}
+
+                      {/* Country + Flag */}
+                      <div className="absolute bottom-3 right-3 text-xs text-[#8494A7] flex items-center gap-1">
+                        <InlineFlag country={athlete.country} /> {athlete.country}
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="p-3 sm:p-5">
+                      <h3 className="text-[#E8ECF0] mb-0.5 font-bold truncate" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
+                        {athlete.name}
+                      </h3>
+                      {athlete.nickname && (
+                        <p className="text-[0.65rem] mb-1" style={{ color: borderColor }}>
+                          "{athlete.nickname}"
+                        </p>
+                      )}
+                      {athlete.weightClass && (
+                        <p className="text-[0.5rem] text-[#8494A7]/70 mb-2 truncate" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                          {athlete.weightClass}
+                        </p>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-3 mb-3">
+                        <div className="text-center">
+                          <p className="text-lg text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.wins}</p>
+                          <p className="text-xs text-[#8494A7]">Wins</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg text-red-400" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.losses}</p>
+                          <p className="text-xs text-[#8494A7]">Losses</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                            {athlete.totalPowerRating?.toFixed(1) || "—"}
+                          </p>
+                          <p className="text-xs text-[#8494A7]">Power</p>
+                        </div>
+                      </div>
+
+                      {/* Skill bars (compact) */}
+                      {athlete.skills && (
+                        <div className="space-y-1 mb-2">
+                          {(["energy", "performance", "static", "aggression", "dynamic"] as const).map((skill) => {
+                            const val = athlete.skills[skill] || 0;
+                            return (
+                              <div key={skill} className="flex items-center gap-1.5">
+                                <span className="text-[0.45rem] text-[#8494A7] w-12 truncate">{SKILL_LABELS[skill]}</span>
+                                <div className="flex-1 h-1 rounded-full bg-[#162033] overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${(val / 10) * 100}%`, background: SKILL_COLORS[skill] }}
+                                  />
+                                </div>
+                                <span className="text-[0.45rem] font-mono w-5 text-right" style={{ color: SKILL_COLORS[skill] }}>
+                                  {val.toFixed(1)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Expanded details */}
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="space-y-3 pt-3 border-t border-[#4274B9]/10"
+                        >
+                          {athlete.bio && (
+                            <p className="text-[#8494A7] text-xs leading-relaxed">{athlete.bio}</p>
+                          )}
+                          {athlete.specialMove && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-[#8494A7] flex items-center gap-2">
+                                <Target className="w-3 h-3" /> Special Move
+                              </span>
+                              <span className="text-[#f59e0b] text-xs">{athlete.specialMove}</span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-[#8494A7] flex items-center gap-2">
-                              <TrendingUp className="w-3 h-3" /> Total Votes
+                              <Trophy className="w-3 h-3" /> Win Rate
                             </span>
-                            <span className="text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.7rem" }}>
-                              {athlete.totalVotes.toLocaleString()}
+                            <span className="text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.7rem" }}>
+                              {winRate}%
                             </span>
                           </div>
-                        )}
+                          {athlete.totalVotes > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-[#8494A7] flex items-center gap-2">
+                                <TrendingUp className="w-3 h-3" /> Total Votes
+                              </span>
+                              <span className="text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.7rem" }}>
+                                {athlete.totalVotes.toLocaleString()}
+                              </span>
+                            </div>
+                          )}
 
-                        {/* Social links */}
-                        {(athlete.socials?.instagram || athlete.socials?.twitter || athlete.socials?.youtube || athlete.socials?.website) && (
-                          <div className="flex items-center gap-3 pt-2 border-t border-[#4274B9]/10">
-                            {athlete.socials.instagram && (
-                              <a
-                                href={athlete.socials.instagram.startsWith("http") ? athlete.socials.instagram : `https://instagram.com/${athlete.socials.instagram.replace("@", "")}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-pink-400/60 hover:text-pink-400 transition-colors"
-                              >
-                                <Instagram className="w-4 h-4" />
-                              </a>
-                            )}
-                            {athlete.socials.twitter && (
-                              <a
-                                href={athlete.socials.twitter.startsWith("http") ? athlete.socials.twitter : `https://x.com/${athlete.socials.twitter.replace("@", "")}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-sky-400/60 hover:text-sky-400 transition-colors"
-                              >
-                                <Twitter className="w-4 h-4" />
-                              </a>
-                            )}
-                            {athlete.socials.youtube && (
-                              <a
-                                href={athlete.socials.youtube.startsWith("http") ? athlete.socials.youtube : `https://youtube.com/${athlete.socials.youtube}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-red-400/60 hover:text-red-400 transition-colors"
-                              >
-                                <Youtube className="w-4 h-4" />
-                              </a>
-                            )}
-                            {athlete.socials.website && (
-                              <a
-                                href={athlete.socials.website}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-[#6AA3E0]/60 hover:text-[#6AA3E0] transition-colors"
-                              >
-                                <Link2 className="w-4 h-4" />
-                              </a>
-                            )}
-                          </div>
-                        )}
+                          {/* Social links */}
+                          {(athlete.socials?.instagram || athlete.socials?.twitter || athlete.socials?.youtube || athlete.socials?.website) && (
+                            <div className="flex items-center gap-3 pt-2 border-t border-[#4274B9]/10">
+                              {athlete.socials.instagram && (
+                                <a
+                                  href={athlete.socials.instagram.startsWith("http") ? athlete.socials.instagram : `https://instagram.com/${athlete.socials.instagram.replace("@", "")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-pink-400/60 hover:text-pink-400 transition-colors"
+                                >
+                                  <Instagram className="w-4 h-4" />
+                                </a>
+                              )}
+                              {athlete.socials.twitter && (
+                                <a
+                                  href={athlete.socials.twitter.startsWith("http") ? athlete.socials.twitter : `https://x.com/${athlete.socials.twitter.replace("@", "")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-sky-400/60 hover:text-sky-400 transition-colors"
+                                >
+                                  <Twitter className="w-4 h-4" />
+                                </a>
+                              )}
+                              {athlete.socials.youtube && (
+                                <a
+                                  href={athlete.socials.youtube.startsWith("http") ? athlete.socials.youtube : `https://youtube.com/${athlete.socials.youtube}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-red-400/60 hover:text-red-400 transition-colors"
+                                >
+                                  <Youtube className="w-4 h-4" />
+                                </a>
+                              )}
+                              {athlete.socials.website && (
+                                <a
+                                  href={athlete.socials.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[#6AA3E0]/60 hover:text-[#6AA3E0] transition-colors"
+                                >
+                                  <Link2 className="w-4 h-4" />
+                                </a>
+                              )}
+                            </div>
+                          )}
 
-                        {/* NFT info if present */}
-                        {athlete.nftSeriesName && (
-                          <div className="flex items-center justify-between text-sm pt-1">
-                            <span className="text-[#8494A7] flex items-center gap-2">
-                              <Zap className="w-3 h-3" /> NFT Series
-                            </span>
-                            <span className="text-[#D4A843] text-xs" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                              {athlete.nftSeriesName}
-                            </span>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </div>
-                </motion.div>
+                          {/* NFT info if present */}
+                          {athlete.nftSeriesName && (
+                            <div className="flex items-center justify-between text-sm pt-1">
+                              <span className="text-[#8494A7] flex items-center gap-2">
+                                <Zap className="w-3 h-3" /> NFT Series
+                              </span>
+                              <span className="text-[#D4A843] text-xs" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                                {athlete.nftSeriesName}
+                              </span>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </div>
+                  </motion.div>
+                </TiltCard>
               );
           };
 
