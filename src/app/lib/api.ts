@@ -180,6 +180,14 @@ export const api = {
   getConfig: (adminWallet?: string) =>
     request<SiteConfig & { isAdmin: boolean }>("/config", { adminWallet }),
 
+  // Visit ping — fire-and-forget, server hashes IP, never logs raw addr.
+  // Errors are swallowed so a tracking failure never breaks the page.
+  trackVisit: () =>
+    request<{ ok: boolean }>("/track-visit", { method: "POST" }).catch(() => ({
+      success: true,
+      data: { ok: true },
+    })),
+
   // Athletes
   getAthletes: () => request<Athlete[]>("/athletes"),
   getAthlete: (id: string) => request<Athlete>(`/athletes/${id}`),
@@ -342,6 +350,19 @@ export const api = {
         alerts: { pendingApplications: number; overdueVoting: number; newInquiries: number };
         generatedAt: string;
       }>("/admin/dashboard", { adminWallet, sessionToken }),
+
+    /** Real-time unique-IP traffic counter (privacy-preserving, hashed). */
+    getVisitStats: (adminWallet: string, sessionToken?: string) =>
+      request<{
+        today: number;
+        yesterday: number;
+        last7d: number;
+        last30d: number;
+        total: number;
+        breakdown: { date: string; count: number }[];
+        retentionDays: number;
+        privacyNote: string;
+      }>("/admin/visit-stats", { adminWallet, sessionToken }),
 
     /** Batch-update multiple battles' status at once (e.g., open voting on all R1 battles) */
     batchBattleStatus: (battleIds: string[], status: string, adminWallet: string, sessionToken?: string) =>

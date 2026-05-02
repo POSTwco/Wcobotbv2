@@ -681,6 +681,171 @@ app.get(`${PREFIX}/health`, async (c) => {
   return c.json({ status: "ok", timestamp: now() });
 });
 
+// ---------------------------------------------------------------------------
+// VISIT COUNTER — Privacy-preserving unique-IP traffic gauge
+// ---------------------------------------------------------------------------
+// Goal: give admins a real-time count of unique daily/weekly/total visitors
+// WITHOUT recording any user data.
+//
+// PRIVACY:
+//   - Raw IPs are NEVER stored. Each IP is HMAC-SHA256-hashed with a per-day
+//     server-side salt that is itself derived from the SUPABASE_SERVICE_ROLE_KEY.
+//   - The salt rotates daily, so yesterday's hashes can never be linked to
+//     today's hashes for the same IP. After 31 days, all hashes are reaped.
+//   - User-Agent is mixed into the hash to give better granularity than
+//     pure IP (households on shared NAT) without ever leaving the server.
+//
+// TAMPER-PROOFING:
+//   - IP is extracted server-side from x-forwarded-for (set by Supabase Edge,
+//     not client-controllable).
+//   - HMAC means a hostile client cannot pre-compute a hash to know whether
+//     they'd be deduped — flooding /track-visit can only register ONE unique
+//     per real (IP, UA) per day.
+//   - /track-visit is rate-limited per-IP (30/min) so a single attacker
+//     can't burn KV writes via header rotation.
+//   - Counter increments are serialized via the per-day mutex
+//     (`vcounter:{date}`) — race-free exact count.
+//   - Endpoint is public (page-load fires it) but writes only happen on the
+//     FIRST distinct hash per day, so cost is bounded by real unique traffic.
+//
+// SCALE:
+//   - One KV write per unique (IP, UA, day) tuple. At 250K daily uniques
+//     that's 250K writes; subsequent hits are read-only.
+//   - Lazy reaper deletes vhash:{date}:* entries older than 31 days.
+// ---------------------------------------------------------------------------
+
+const VISIT_HASH_RETENTION_DAYS = 31;
+let lastVisitReapDate = "";
+
+async function dailyVisitSalt(date: string): Promise<string> {
+  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "botb-fallback-visit-salt";
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`botb-visit-salt-${date}`));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashVisitor(ip: string, ua: string, date: string): Promise<string> {
+  const salt = await dailyVisitSalt(date);
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(salt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${ip}|${ua}`));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function reapOldVisitHashes(today: string): Promise<void> {
+  if (lastVisitReapDate === today) return;
+  lastVisitReapDate = today;
+  try {
+    const cutoff = new Date(today);
+    cutoff.setUTCDate(cutoff.getUTCDate() - VISIT_HASH_RETENTION_DAYS);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const allHashes: any[] = await kv.getByPrefix("vhash:");
+    const expiredKeys: string[] = [];
+    for (const v of allHashes) {
+      if (v && v._d && v._d < cutoffStr && v._k) {
+        expiredKeys.push(`vhash:${v._d}:${v._k}`);
+      }
+      if (expiredKeys.length >= 500) break;
+    }
+    if (expiredKeys.length > 0) {
+      await kv.mdel(expiredKeys);
+      console.log(`[VISIT] Reaped ${expiredKeys.length} expired visit hashes (older than ${cutoffStr}).`);
+    }
+  } catch (err) {
+    console.log(`[VISIT] Reap error (non-fatal): ${err}`);
+  }
+}
+
+app.post(`${PREFIX}/track-visit`, async (c) => {
+  try {
+    const ip = extractClientIp(c);
+    if (!ip || ip === "unknown") return c.json({ ok: true });
+
+    // Per-IP rate limit — prevents counter inflation via flooding
+    const rl = await checkRateLimit(`visit-track:${ip}`, 30, 60 * 1000);
+    if (!rl.success) return c.json({ ok: true });
+
+    const ua = (c.req.header("user-agent") || "").substring(0, 200);
+    const date = todayUTC();
+    const hash = await hashVisitor(ip, ua, date);
+    const hashKey = `vhash:${date}:${hash}`;
+
+    // Fast path — already counted today, no lock, no write
+    const existing = await kv.get(hashKey);
+    if (existing) return c.json({ ok: true });
+
+    // First-seen path — serialize counter increments per-day to avoid race
+    const release = await acquireLock(`vcounter:${date}`);
+    try {
+      const recheck = await kv.get(hashKey);
+      if (recheck) return c.json({ ok: true });
+
+      // Store hash with self-referencing metadata for the lazy reaper
+      // (getByPrefix returns values only, so we need date + hash inside).
+      await kv.set(hashKey, { _d: date, _k: hash, t: Date.now() });
+
+      const dailyKey = `vcount:${date}`;
+      const totalKey = `vcount:total`;
+      const dailyCount = (Number(await kv.get(dailyKey)) || 0) + 1;
+      const totalCount = (Number(await kv.get(totalKey)) || 0) + 1;
+      await kv.mset([dailyKey, totalKey], [dailyCount, totalCount]);
+    } finally {
+      release();
+    }
+
+    // Lazy reap stale day buckets (runs at most once per day per worker)
+    reapOldVisitHashes(date).catch(() => {});
+
+    return c.json({ ok: true });
+  } catch (e) {
+    console.log(`[VISIT] track error (non-fatal): ${e}`);
+    return c.json({ ok: true }); // never fail loud — UI is fire-and-forget
+  }
+});
+
+app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
+  try {
+    const today = todayUTC();
+    const days: string[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() - i);
+      days.push(d.toISOString().slice(0, 10));
+    }
+    const dailyKeys = days.map((d) => `vcount:${d}`);
+    const dailyValsRaw = await kv.mget(dailyKeys);
+    const dailyVals = dailyValsRaw.map((v: any) => Number(v) || 0);
+    const total = Number(await kv.get(`vcount:total`)) || 0;
+    const last7d = dailyVals.slice(0, 7).reduce((s: number, v: number) => s + v, 0);
+    const last30d = dailyVals.reduce((s: number, v: number) => s + v, 0);
+    return c.json({
+      success: true,
+      data: {
+        today: dailyVals[0] || 0,
+        yesterday: dailyVals[1] || 0,
+        last7d,
+        last30d,
+        total,
+        breakdown: days.map((d, i) => ({ date: d, count: dailyVals[i] || 0 })),
+        retentionDays: VISIT_HASH_RETENTION_DAYS,
+        privacyNote: "IPs are HMAC-hashed with a daily-rotating server salt; raw IPs are never stored.",
+      },
+    });
+  } catch (e) {
+    console.log(`[VISIT] stats error: ${e}`);
+    return c.json({ success: false, error: "Failed to load visit stats" }, 500);
+  }
+});
+
 // ============================================================================
 // PUBLIC ROUTES
 // ============================================================================

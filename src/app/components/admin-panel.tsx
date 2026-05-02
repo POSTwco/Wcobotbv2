@@ -37,7 +37,7 @@ import {
   Vote, Camera, BookOpen, AlertTriangle, CheckCircle, Loader2,
   ChevronDown, Database, Fingerprint, Timer, X,
   ClipboardList, ExternalLink, Youtube,
-  Megaphone, Rocket,
+  Megaphone, Rocket, Activity,
 } from "lucide-react";
 import { useWallet } from "./wallet-context";
 import { api } from "../lib/api";
@@ -411,6 +411,9 @@ export function AdminPanel() {
             </div>
           </div>
         </div>
+
+        {/* Live unique-IP visit counter — privacy-preserving traffic gauge */}
+        <VisitCounter wallet={session.wallet} sessionToken={session.token} />
 
         {/* Tab Navigation */}
         <div className="border-b border-[#D4A843]/10 overflow-x-auto">
@@ -1107,6 +1110,135 @@ function ManualTab() {
       <CEOLetterModal open={showCEOLetter} onClose={() => setShowCEOLetter(false)} />
       <VotingArchitectureModal open={showVotingArchitecture} onClose={() => setShowVotingArchitecture(false)} />
       <FundingModelModal open={showFundingModel} onClose={() => setShowFundingModel(false)} />
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// VisitCounter — Live unique-IP traffic gauge
+// ───────────────────────────────────────────────────────────────────────────
+// Server hashes IPs with a daily-rotating HMAC salt; raw addresses never
+// touch the database. This component just polls /admin/visit-stats every
+// 30s and shows the running counts. Auto-pauses when the tab is hidden.
+// ───────────────────────────────────────────────────────────────────────────
+function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: string }) {
+  const [stats, setStats] = useState<{
+    today: number;
+    yesterday: number;
+    last7d: number;
+    last30d: number;
+    total: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pulse, setPulse] = useState(false);
+  const lastTodayRef = useRef<number>(0);
+
+  const load = useCallback(async () => {
+    const res = await api.admin.getVisitStats(wallet, sessionToken);
+    if (res.success && res.data) {
+      const d = res.data;
+      // Pulse when today's count ticks up — visual heartbeat for the admin
+      if (lastTodayRef.current > 0 && d.today > lastTodayRef.current) {
+        setPulse(true);
+        setTimeout(() => setPulse(false), 800);
+      }
+      lastTodayRef.current = d.today;
+      setStats({
+        today: d.today,
+        yesterday: d.yesterday,
+        last7d: d.last7d,
+        last30d: d.last30d,
+        total: d.total,
+      });
+    }
+    setLoading(false);
+  }, [wallet, sessionToken]);
+
+  useEffect(() => {
+    load();
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(load, 30_000);
+    };
+    const stop = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") { load(); start(); } else { stop(); }
+    };
+    start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [load]);
+
+  const fmt = (n: number) => n.toLocaleString();
+
+  return (
+    <div className="px-4 sm:px-5 py-3 border-b border-[#D4A843]/10 bg-[#0B1120]/40">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className={`p-1.5 rounded-lg bg-[#10b981]/10 border border-[#10b981]/30 ${pulse ? "animate-pulse" : ""}`}>
+            <Activity className={`w-3.5 h-3.5 text-[#10b981] ${pulse ? "animate-pulse" : ""}`} />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#E8ECF0] text-[0.65rem] font-bold tracking-wider" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                LIVE TRAFFIC
+              </span>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#10b981]"></span>
+              </span>
+            </div>
+            <p className="text-[#8494A7] text-[0.55rem] mt-0.5">
+              Unique visitors · IPs are hashed, never stored
+            </p>
+          </div>
+        </div>
+
+        {loading && !stats ? (
+          <div className="flex items-center gap-2 text-[#8494A7] text-[0.6rem]">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Loading…
+          </div>
+        ) : stats ? (
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <Stat label="TODAY" value={fmt(stats.today)} highlight pulse={pulse} />
+            <Stat label="YESTERDAY" value={fmt(stats.yesterday)} />
+            <Stat label="7-DAY" value={fmt(stats.last7d)} />
+            <Stat label="30-DAY" value={fmt(stats.last30d)} />
+            <Stat label="ALL-TIME" value={fmt(stats.total)} />
+          </div>
+        ) : (
+          <span className="text-[#8494A7] text-[0.6rem]">Stats unavailable</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, highlight, pulse }: { label: string; value: string; highlight?: boolean; pulse?: boolean }) {
+  return (
+    <div
+      className={`px-2.5 py-1.5 rounded-lg border ${
+        highlight
+          ? "bg-[#10b981]/10 border-[#10b981]/40"
+          : "bg-[#162033] border-[#4274B9]/15"
+      } ${pulse && highlight ? "ring-2 ring-[#10b981]/40" : ""} transition-all`}
+    >
+      <div className="text-[#8494A7] text-[0.5rem] tracking-wider" style={{ fontFamily: "Orbitron, sans-serif" }}>
+        {label}
+      </div>
+      <div
+        className={`text-xs font-bold tabular-nums ${highlight ? "text-[#10b981]" : "text-[#E8ECF0]"}`}
+        style={{ fontFamily: "Orbitron, sans-serif" }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
