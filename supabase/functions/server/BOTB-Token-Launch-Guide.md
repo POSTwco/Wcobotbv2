@@ -51,7 +51,7 @@ create it and tell the website its ID number.
 
 Check each box before continuing:
 
-- [ ] **A Hedera mainnet account** (your "treasury" account, like 0.0.9707752)
+- [ ] **A Hedera mainnet account** (your "treasury" account, like 0.0.5402824)
 - [ ] **HashPack wallet** installed (browser extension or mobile) with that account loaded
 - [ ] **HBAR in your treasury account** — you need at least 5-10 HBAR for fees
   (creating a token costs about 1-2 HBAR, transactions cost fractions of a cent)
@@ -88,7 +88,7 @@ There are two ways to create a token. Pick whichever feels more comfortable:
 4. Click **"Create Token"**
 5. Fill in the settings as described in
    [Section 10 (Token Settings Explained)](#10-token-settings-explained) below
-6. When it asks for your account, enter your treasury account ID (like 0.0.9707752)
+6. When it asks for your account, enter your treasury account ID (like 0.0.5402824)
 7. Approve the transaction via HashPack
 8. The portal will display the new **Token ID**
 9. **WRITE THIS DOWN IMMEDIATELY.**
@@ -211,8 +211,8 @@ For a CSV airdrop, you will need a file like:
 
 ```
 account_id,amount
-0.0.518487,50000
-0.0.9707752,50000
+0.0.5402824,50000
+0.0.10445281,50000
 0.0.435185,10000
 0.0.5402804,10000
 ```
@@ -334,7 +334,7 @@ what to put for each one, and WHY.
 | **Token Type** | `Fungible` | This means every token is identical (like dollars). NOT "Non-Fungible" — that is for NFTs. |
 | **Decimals** | `0` | How many decimal places. Use `0` for whole-number tokens (1 WCO, 2 WCO, etc.). If you want fractions like 1.5 WCO, use `2` or `8`. **Recommendation: use 0 for simplicity.** |
 | **Initial Supply** | Your chosen number (e.g., `100000000`) | How many tokens exist right now. You can mint more later if you keep the Supply Key. Enter the number WITHOUT commas. |
-| **Treasury Account** | Your treasury account ID (e.g., `0.0.9707752`) | This is the account that will hold all newly minted tokens. It is the "bank vault." |
+| **Treasury Account** | Your treasury account ID (e.g., `0.0.5402824`) | This is the account that will hold all newly minted tokens. It is the "bank vault." |
 
 ### Key Settings (VERY IMPORTANT — Read Each One Carefully)
 

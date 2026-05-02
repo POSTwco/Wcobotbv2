@@ -231,12 +231,12 @@ This framework aims to reinforce Battle of the Bars as the premier global calist
 
 
 
-Weight Class						Weight Limit
-Flyweight                                                  106 - 115 lbs – (48 kg - 51.75 kg)      
-Featherweight                                          125 lbs - (56.25 kg)
-Lightweight                                               135 lbs - (60.75 kg)
-Super Lightweight                                    145 lbs– (65.25 kg)
-Welterweight                                            155 lbs – (69.75 kg)
-Middleweight                                            165 lbs – (74.25 kg)
-Super Middleweight                                 175 lbs – (78.75 kg)
+Weight Class						Weight Limit (Min/Max)
+Strawweight                                             105 - 115 lbs - (52.15 kg)
+Featherweight                                          115 - 125 lbs - (56.25 kg)
+Lightweight                                               135+ lbs - (60.75 kg)
+Super Lightweight                                    145+ lbs – (65.25 kg)
+Welterweight                                            155+ lbs – (69.75 kg)
+Middleweight                                            165+ lbs – (74.25 kg)
+Super Middleweight                                 175 - 190 lbs – (78.75 kg)
 ****Athlete MUST weigh in no more than 1 lb. below weight class category for selected 1 vs 1 battle. If Athlete does not make weight, he/she will relinquish 20% of his earnings to opponent. win or lose.

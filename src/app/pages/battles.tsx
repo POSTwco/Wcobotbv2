@@ -68,16 +68,13 @@ const ORBITRON = { fontFamily: "Orbitron, sans-serif" } as const;
  */
 function getWeightClassAbbr(wc: string): string {
   const lower = wc.toLowerCase();
-  // Order matters — most specific patterns first
+  // Order matters — most specific patterns first.
+  // Official WCO divisions: Strawweight, Featherweight, Lightweight,
+  // Super Lightweight, Welterweight, Middleweight, Super Middleweight.
   if (lower.includes("straw")) return "STW";
-  if (lower.includes("fly")) return "FLY";
-  if (lower.includes("bantam")) return "BAN";
   if (lower.includes("feather")) return "FTW";
-  if (lower.includes("super") && lower.includes("heavy")) return "SHW";
-  if (lower.includes("light") && lower.includes("heavy")) return "LHW";
-  if (lower.includes("cruiser")) return "CRW";
-  if (lower.includes("heavy") && !lower.includes("light") && !lower.includes("super")) return "HVW";
-  if (lower.includes("light") && lower.includes("welter")) return "LWW";
+  if (lower.includes("super") && lower.includes("middle")) return "SMW";
+  if (lower.includes("super") && lower.includes("light")) return "SLW";
   if (lower.includes("welter")) return "WLT";
   if (lower.includes("middle")) return "MDW";
   if (lower.includes("light")) return "LTW";

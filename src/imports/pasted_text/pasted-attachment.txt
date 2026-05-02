@@ -1,15 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
 IvyFi - WCO Platform Security Assessment Report
 Wallet Authentication, Administrative Session Handling, API Discovery, and Privilege Escalation Risk
 
@@ -151,7 +139,7 @@ Observed endpoint: POST /admin/verify
 Returned:
 admin session token
 TTL: 20 minutes
-wallet: 0.0.9707752
+wallet: 0.0.5402824
 
 6.6 Admin Dashboard Access
 
@@ -221,7 +209,7 @@ Chat objects contained:
 Wallet
 isAdmin flag
 
-Admin wallet identified: 0.0.9707752
+Admin wallet identified: 0.0.5402824
 
 Step 5 - Confirm Admin Status
 

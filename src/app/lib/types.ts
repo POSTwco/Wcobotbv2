@@ -73,7 +73,7 @@ export interface Athlete {
   secondaryColor?: string;       // Hex color e.g. "#FFB347" — secondary accent
 
   // Weight class — official WCO divisions
-  weightClass?: string;          // e.g. "Lightweight (135–155 lbs)"
+  weightClass?: string;          // Official WCO division, e.g. "Lightweight (135+ lbs / 61 kg)"
 
   // Verified Hedera wallet (admin-set, for Arena Chat athlete badge)
   wallet?: string;               // Hedera account ID e.g. "0.0.XXXXXXX"

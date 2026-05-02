@@ -232,7 +232,7 @@ export function LaunchGuideTab() {
           <p className="text-xs text-[#8494A7]">Make sure you have all of these ready before proceeding:</p>
           <div className="space-y-2">
             <CheckItem checked={!!checklist["pre-wallet"]} onToggle={() => toggleCheck("pre-wallet")}>
-              <strong>Hedera mainnet account</strong> (your treasury, e.g. 0.0.9707752) loaded in HashPack
+              <strong>Hedera mainnet account</strong> (your treasury, e.g. 0.0.5402824) loaded in HashPack
             </CheckItem>
             <CheckItem checked={!!checklist["pre-hbar"]} onToggle={() => toggleCheck("pre-hbar")}>
               <strong>5-10 HBAR</strong> in your treasury for fees (token creation costs ~1-2 HBAR)

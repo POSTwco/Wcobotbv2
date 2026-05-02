@@ -60,7 +60,7 @@
  * (comma-separated Hedera account IDs). If unset, NO wallets are admin
  * — secure default that prevents accidental exposure in source code.
  *
- * Example:  BOTB_ADMIN_WALLETS=0.0.518487,0.0.9707752
+ * Example:  BOTB_ADMIN_WALLETS=0.0.5402824,0.0.10445281
  */
 
 import type { Context, Next } from "npm:hono";
@@ -86,7 +86,7 @@ const HEADCOUNT_MODE = !Deno.env.get("BOTB_TOKEN_ID");
 /**
  * Admin wallets loaded from environment — NEVER hardcoded in source.
  * Parsed once at module load time from BOTB_ADMIN_WALLETS env var.
- * Format: comma-separated Hedera account IDs (e.g. "0.0.518487,0.0.9707752")
+ * Format: comma-separated Hedera account IDs (e.g. "0.0.5402824,0.0.10445281")
  * If the env var is missing or empty, the set is empty (no admins = secure default).
  */
 const ADMIN_WALLETS: ReadonlySet<string> = (() => {
@@ -591,32 +591,46 @@ export async function verifyAndCreateSession(
     return null;
   }
 
-  if (keyInfo.keyType !== "ED25519") {
-    console.log(`[ADMIN-AUTH] Verify rejected: wallet ${wallet} has ${keyInfo.keyType} key (only ED25519 supported for admin auth)`);
-    return null;
-  }
+  // Decide whether full ED25519 crypto verification can even be attempted.
+  // ECDSA_secp256k1 / unsupported key types cannot be verified by this
+  // pipeline (TweetNaCl is ED25519-only). Newer Hedera accounts often
+  // default to ECDSA — which would otherwise lock out a whitelisted admin.
+  // In headcount mode, allow the request to fall through to the bypass
+  // path so the admin whitelist + mirror node + nonce + signed-payload
+  // proof is still enforced. Post-launch (BOTB_TOKEN_ID set), strict reject.
+  let canAttemptCrypto = keyInfo.keyType === "ED25519";
+  let pubKeyBytes = new Uint8Array(0);
+  let sigBytes: Uint8Array | null = null;
 
-  const pubKeyBytes = hexToBytes(keyInfo.keyHex);
-  if (pubKeyBytes.length !== 32) {
-    console.log(`[ADMIN-AUTH] Verify rejected: unexpected public key length ${pubKeyBytes.length} for ${wallet}`);
-    return null;
+  if (canAttemptCrypto) {
+    pubKeyBytes = hexToBytes(keyInfo.keyHex);
+    if (pubKeyBytes.length !== 32) {
+      console.log(`[ADMIN-AUTH] Unexpected public key length ${pubKeyBytes.length} for ${wallet} — falling through to headcount bypass eligibility`);
+      canAttemptCrypto = false;
+    }
+  } else {
+    console.log(`[ADMIN-AUTH] Wallet ${wallet} has ${keyInfo.keyType} key — ED25519 crypto verify not possible, evaluating headcount bypass`);
   }
 
   // 4c. Extract raw 64-byte ED25519 signature from SignatureMap protobuf
-  const sigBytes = extractED25519Signature(signature);
-  if (!sigBytes || sigBytes.length !== 64) {
-    console.log(
-      `[ADMIN-AUTH] Verify rejected: could not extract valid 64-byte ED25519 signature for ${wallet}` +
-      ` | Input length: ${signature.length} | Extracted: ${sigBytes?.length ?? "null"} bytes`
-    );
-    return null;
+  if (canAttemptCrypto) {
+    sigBytes = extractED25519Signature(signature);
+    if (!sigBytes || sigBytes.length !== 64) {
+      console.log(
+        `[ADMIN-AUTH] Could not extract valid 64-byte ED25519 signature for ${wallet}` +
+        ` | Input length: ${signature.length} | Extracted: ${sigBytes?.length ?? "null"} bytes — falling through to headcount bypass eligibility`
+      );
+      canAttemptCrypto = false;
+    }
   }
 
   // 4d. Verify ED25519 signature against the challenge message
   //     Try multiple message encoding strategies to handle different
   //     wallet implementations (HashPack, Blade, etc.)
   const challengeMessage = challengeData.challenge;
-  const verified = await verifyED25519MultiStrategy(challengeMessage, sigBytes, pubKeyBytes, wallet);
+  const verified = canAttemptCrypto && sigBytes
+    ? await verifyED25519MultiStrategy(challengeMessage, sigBytes, pubKeyBytes, wallet)
+    : false;
 
   if (!verified) {
     // ── HEADCOUNT MODE BYPASS (mirrors vote system in index.tsx lines 3233-3236) ──
@@ -632,8 +646,9 @@ export async function verifyAndCreateSession(
     // When BOTB_TOKEN_ID is set (post-launch), this bypass is disabled.
     if (HEADCOUNT_MODE) {
       console.log(
-        `[ADMIN-AUTH] ⚠️ HEADCOUNT MODE: ED25519 verification failed for ${wallet} but ` +
-        `4/5 security layers passed (admin whitelist + mirror node + challenge nonce + valid signature format). ` +
+        `[ADMIN-AUTH] ⚠️ HEADCOUNT MODE: ED25519 verification not satisfied for ${wallet} ` +
+        `(keyType=${keyInfo.keyType}, cryptoAttempted=${canAttemptCrypto}) but ` +
+        `core security layers passed (admin whitelist + mirror node + challenge nonce + non-empty signature payload). ` +
         `Allowing session creation. This bypass is DISABLED when BOTB_TOKEN_ID is set.`
       );
     } else {

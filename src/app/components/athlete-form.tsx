@@ -388,18 +388,14 @@ export function AthleteForm({
                   className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
                 >
                   <option value="">Not assigned</option>
-                  <optgroup label="Standard Divisions">
-                    <option value="Strawweight (115 lbs / 52 kg)">Strawweight (115 lbs / 52 kg)</option>
-                    <option value="Flyweight (125 lbs / 57 kg)">Flyweight (125 lbs / 57 kg)</option>
-                    <option value="Bantamweight (135 lbs / 61 kg)">Bantamweight (135 lbs / 61 kg)</option>
-                    <option value="Featherweight (145 lbs / 66 kg)">Featherweight (145 lbs / 66 kg)</option>
-                    <option value="Lightweight (155 lbs / 70 kg)">Lightweight (155 lbs / 70 kg)</option>
-                    <option value="Welterweight (170 lbs / 77 kg)">Welterweight (170 lbs / 77 kg)</option>
-                    <option value="Middleweight (185 lbs / 84 kg)">Middleweight (185 lbs / 84 kg)</option>
-                    <option value="Light Heavyweight (205 lbs / 93 kg)">Light Heavyweight (205 lbs / 93 kg)</option>
-                    <option value="Cruiserweight (225 lbs / 102 kg)">Cruiserweight (225 lbs / 102 kg)</option>
-                    <option value="Heavyweight (265 lbs / 120 kg)">Heavyweight (265 lbs / 120 kg)</option>
-                    <option value="Super Heavyweight (265+ lbs / 120+ kg)">Super Heavyweight (265+ lbs / 120+ kg)</option>
+                  <optgroup label="Official WCO Divisions">
+                    <option value="Strawweight (105–115 lbs / 52 kg)">Strawweight (105–115 lbs / 52 kg)</option>
+                    <option value="Featherweight (115–125 lbs / 56 kg)">Featherweight (115–125 lbs / 56 kg)</option>
+                    <option value="Lightweight (135+ lbs / 61 kg)">Lightweight (135+ lbs / 61 kg)</option>
+                    <option value="Super Lightweight (145+ lbs / 65 kg)">Super Lightweight (145+ lbs / 65 kg)</option>
+                    <option value="Welterweight (155+ lbs / 70 kg)">Welterweight (155+ lbs / 70 kg)</option>
+                    <option value="Middleweight (165+ lbs / 74 kg)">Middleweight (165+ lbs / 74 kg)</option>
+                    <option value="Super Middleweight (175–190 lbs / 79 kg)">Super Middleweight (175–190 lbs / 79 kg)</option>
                   </optgroup>
                   <optgroup label="Special Divisions">
                     <option value="Open Weight">Open Weight (No limit)</option>

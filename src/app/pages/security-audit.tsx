@@ -56,7 +56,7 @@ interface TestResult {
 }
 
 // Known admin wallet from the pen test report (public info)
-const KNOWN_ADMIN_WALLET = "0.0.9707752";
+const KNOWN_ADMIN_WALLET = "0.0.5402824";
 // Non-admin wallet for testing
 const NON_ADMIN_WALLET = "0.0.12345";
 

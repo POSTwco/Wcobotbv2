@@ -2798,6 +2798,49 @@ app.post(`${PREFIX}/sponsor-inquiry`, async (c) => {
     const body = await c.req.json();
     const { companyName, contactName, contactEmail, message, budget, logoUrl, productImageUrl, websiteUrl } = body;
     if (!companyName || !contactEmail) return c.json({ success: false, error: "Company name and email required" }, 400);
+
+    // ── PUBLIC-FORM RATE LIMITING (anti spam / KV storage-DoS) ──
+    // No wallet auth on this endpoint — it's open to any company. Without
+    // a cap, a single curl loop fills KV with sponsor-inquiry:* keys.
+    // Three independent limiters: per-IP, per-email, and a global ceiling
+    // so even a botnet rotating IPs can't pad the queue infinitely.
+    const inquiryIp = extractClientIp(c);
+    const inquiryIpRL = await checkRateLimit(`inquiry-ip:${inquiryIp}`, 3, 60 * 60 * 1000);
+    if (inquiryIpRL.limited) {
+      console.log(`[SPONSORS] Inquiry rate-limited by IP: ${inquiryIp} (retry=${inquiryIpRL.retryAfter}s)`);
+      return c.json({
+        success: false,
+        error: "Too many inquiries from your network. Please try again later or email us directly.",
+        code: "RATE_LIMITED",
+        retryAfter: inquiryIpRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(inquiryIpRL.retryAfter || 600) } });
+    }
+
+    const emailKey = sanitizeString(contactEmail, 200).toLowerCase().trim();
+    if (emailKey) {
+      const inquiryEmailRL = await checkRateLimit(`inquiry-email:${emailKey}`, 3, 24 * 60 * 60 * 1000);
+      if (inquiryEmailRL.limited) {
+        console.log(`[SPONSORS] Inquiry rate-limited by email: ${emailKey} (retry=${inquiryEmailRL.retryAfter}s)`);
+        return c.json({
+          success: false,
+          error: "An inquiry from this email was received recently. We'll be in touch — please avoid duplicate submissions.",
+          code: "RATE_LIMITED",
+          retryAfter: inquiryEmailRL.retryAfter,
+        }, { status: 429, headers: { "Retry-After": String(inquiryEmailRL.retryAfter || 3600) } });
+      }
+    }
+
+    const inquiryGlobalRL = await checkRateLimit(`inquiry-global`, 200, 60 * 60 * 1000);
+    if (inquiryGlobalRL.limited) {
+      console.log(`[SPONSORS] Inquiry rate-limited GLOBALLY (likely attack) retry=${inquiryGlobalRL.retryAfter}s`);
+      return c.json({
+        success: false,
+        error: "Inquiry intake temporarily paused. Please try again shortly.",
+        code: "RATE_LIMITED",
+        retryAfter: inquiryGlobalRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(inquiryGlobalRL.retryAfter || 600) } });
+    }
+
     const id = generateId("inq");
     const inquiry = {
       id,
@@ -2924,7 +2967,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#FFD700] via-[#22C55E] to-[#FFD700]",
         primaryColor: "#FFD700",
         secondaryColor: "#B8860B",
-        weightClass: "Middleweight (185 lbs / 84 kg)",
+        weightClass: "Middleweight (165+ lbs / 74 kg)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -2955,7 +2998,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#6AA3E0] via-[#8B5CF6] to-[#6AA3E0]",
         primaryColor: "#6AA3E0",
         secondaryColor: "#4A7FB8",
-        weightClass: "Lightweight (155 lbs / 70 kg)",
+        weightClass: "Lightweight (135+ lbs / 61 kg)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -2986,7 +3029,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#22C55E] via-[#FFD700] to-[#22C55E]",
         primaryColor: "#22C55E",
         secondaryColor: "#16A34A",
-        weightClass: "Welterweight (170 lbs / 77 kg)",
+        weightClass: "Welterweight (155+ lbs / 70 kg)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -3291,117 +3334,142 @@ app.post(`${PREFIX}/vote/battle`, async (c) => {
       requestedStake = 0;
     }
 
-    // ── SCALING FIX: Allocation index replaces O(battles × KV reads) ──
-    // OLD: getByPrefix("battle:") → filter event → kv.get per battle  [50+ sequential reads]
-    // NEW: Single kv.get("walloc:{wallet}:{eventId}")                 [1 read]
-    const existingVoteInThisBattle: any = await kv.get(`vote:battle:${battleId}:${wallet}`);
-    const allocIndex = await getAllocation(wallet, eventId);
-    let tokensAllocatedInEvent = allocIndex ? allocIndex.totalAllocated : 0;
-
-    // Subtract this battle's current allocation (if updating) to get "other battles" total
-    if (allocIndex && allocIndex.battles[battleId]) {
-      tokensAllocatedInEvent -= allocIndex.battles[battleId];
-    }
-
-    const availableBalance = mirrorBalance - tokensAllocatedInEvent;
-
-    // Enforce balance only when BOTB token is live
-    if (BOTB_TOKEN_ID && requestedStake > 0 && requestedStake > availableBalance) {
-      return c.json({
-        success: false,
-        error: `Insufficient balance. ${mirrorBalance.toLocaleString()} BOTB total, ${tokensAllocatedInEvent.toLocaleString()} allocated in event. Available: ${Math.max(0, availableBalance).toLocaleString()} BOTB.`,
-        code: "INSUFFICIENT_BALANCE",
-      }, 400);
-    }
-
-    // ── WEIGHTED VOTE CALCULATION ──
-    // Token mode: tokens × NFT multiplier (e.g. 1000 BOTB × 2x Governor = 2000)
-    // Headcount mode (pre-launch): NFT multiplier alone IS the weight.
-    // Governor (2x) gets double share, Sigma (1.5x) gets 1.5x, Both (3x) triple.
-    // Without this, all headcount weights are 0 and NFT multipliers have no effect.
-    const weighted = BOTB_TOKEN_ID ? requestedStake * power : power;
-    const isUpdate = !!existingVoteInThisBattle;
-    const oldStake = isUpdate ? (existingVoteInThisBattle.stakeAmount || 0) : 0;
-
-    const vote = {
-      battleId, wallet, athleteId, eventId,
-      stakeAmount: requestedStake, votingPower: power, weightedVote: weighted,
-      hasGovernorNFT: nftHoldings.hasGovernor, hasSigmaNFT: nftHoldings.hasSigma,
-      signature: sanitizeString(signature, 500),
-      signedMessage: sanitizeString(signedMessage, 1000),
-      nonce: sanitizeString(nonce, 100),
-      isUpdate, verifiedBalance: mirrorBalance, timestamp: now(),
-    };
-
-    // ── SCALING FIX: Battle mutex prevents read-modify-write race conditions ──
-    // Two concurrent votes on the same battle can interleave between async read
-    // and write, causing one tally increment to be lost. The mutex serializes
-    // the critical section per battleId. If any drift still occurs (multi-worker),
-    // the winner-declaration recalc (snapshot step 6) corrects it at finalization.
+    // ── ALLOCATION RACE FIX: per-(wallet, event) outer lock ──
+    // Two concurrent votes from the same wallet on DIFFERENT battles in the
+    // same event would otherwise both read the same `walloc:` snapshot, both
+    // pass the balance check, and both write — silently letting a wallet
+    // over-stake (post-launch). The per-battle lock below does NOT cover
+    // this because each vote takes a different battle key. The walloc lock
+    // serializes everything that touches `walloc:{wallet}:{eventId}` for
+    // the same wallet within one event. Different wallets are unaffected;
+    // the same wallet voting in different events is unaffected.
     //
-    // LIVE TALLY FIX: We capture the updated tallies INSIDE the mutex so the
-    // vote response includes the authoritative post-write counts. This eliminates
-    // the read-after-write consistency gap that caused the frontend to show stale
-    // 50/50 percentages after voting — the client applies these tallies to local
-    // state immediately instead of depending on a subsequent GET /battles round-trip.
+    // LOCK ORDER: walloc (outer)  →  battle (inner). Always. No reverse path
+    // exists in this handler, so deadlock is impossible.
+    //
+    // Variables read after the lock are declared here and assigned inside.
+    let existingVoteInThisBattle: any = null;
+    let isUpdate = false;
+    let oldStake = 0;
+    let weighted = 0;
+    let vote: any = null;
     let updatedTallies = { votes1Count: 0, votes2Count: 0, votes1Weighted: 0, votes2Weighted: 0 };
-    const release = await acquireLock(`battle:${battleId}`);
+    let earlyResponse: Response | null = null;
+
+    const allocLockKey = `walloc:${wallet}:${eventId}`;
+    const allocRelease = await acquireLock(allocLockKey);
     try {
-      // Re-read battle inside the lock to get the freshest tallies
-      const lockedBattle: any = await kv.get(`battle:${battleId}`);
-      if (!lockedBattle) {
-        return c.json({ success: false, error: `Battle ${battleId} not found` }, 404);
+      // ── SCALING FIX: Allocation index replaces O(battles × KV reads) ──
+      // OLD: getByPrefix("battle:") → filter event → kv.get per battle  [50+ sequential reads]
+      // NEW: Single kv.get("walloc:{wallet}:{eventId}")                 [1 read]
+      // CRITICAL: Read INSIDE the walloc lock — guarantees no other request
+      // for the same wallet+event can read+write between our check and write.
+      existingVoteInThisBattle = await kv.get(`vote:battle:${battleId}:${wallet}`);
+      const allocIndex = await getAllocation(wallet, eventId);
+      let tokensAllocatedInEvent = allocIndex ? allocIndex.totalAllocated : 0;
+
+      // Subtract this battle's current allocation (if updating) to get "other battles" total
+      if (allocIndex && allocIndex.battles[battleId]) {
+        tokensAllocatedInEvent -= allocIndex.battles[battleId];
       }
 
-      // Reverse old vote tallies if updating
-      if (isUpdate && existingVoteInThisBattle) {
-        const old = existingVoteInThisBattle;
-        if (old.athleteId === lockedBattle.athlete1Id) {
-          lockedBattle.votes1Count = Math.max(0, (lockedBattle.votes1Count || 0) - 1);
-          lockedBattle.votes1Weighted = Math.max(0, (lockedBattle.votes1Weighted || 0) - (old.weightedVote || 0));
-        } else {
-          lockedBattle.votes2Count = Math.max(0, (lockedBattle.votes2Count || 0) - 1);
-          lockedBattle.votes2Weighted = Math.max(0, (lockedBattle.votes2Weighted || 0) - (old.weightedVote || 0));
+      const availableBalance = mirrorBalance - tokensAllocatedInEvent;
+
+      // Enforce balance only when BOTB token is live
+      if (BOTB_TOKEN_ID && requestedStake > 0 && requestedStake > availableBalance) {
+        earlyResponse = c.json({
+          success: false,
+          error: `Insufficient balance. ${mirrorBalance.toLocaleString()} BOTB total, ${tokensAllocatedInEvent.toLocaleString()} allocated in event. Available: ${Math.max(0, availableBalance).toLocaleString()} BOTB.`,
+          code: "INSUFFICIENT_BALANCE",
+        }, 400);
+      } else {
+        // ── WEIGHTED VOTE CALCULATION ──
+        // Token mode: tokens × NFT multiplier (e.g. 1000 BOTB × 2x Governor = 2000)
+        // Headcount mode (pre-launch): NFT multiplier alone IS the weight.
+        weighted = BOTB_TOKEN_ID ? requestedStake * power : power;
+        isUpdate = !!existingVoteInThisBattle;
+        oldStake = isUpdate ? (existingVoteInThisBattle.stakeAmount || 0) : 0;
+
+        vote = {
+          battleId, wallet, athleteId, eventId,
+          stakeAmount: requestedStake, votingPower: power, weightedVote: weighted,
+          hasGovernorNFT: nftHoldings.hasGovernor, hasSigmaNFT: nftHoldings.hasSigma,
+          signature: sanitizeString(signature, 500),
+          signedMessage: sanitizeString(signedMessage, 1000),
+          nonce: sanitizeString(nonce, 100),
+          isUpdate, verifiedBalance: mirrorBalance, timestamp: now(),
+        };
+
+        // ── BATTLE MUTEX (inner) — protects per-battle tally read/write ──
+        const release = await acquireLock(`battle:${battleId}`);
+        try {
+          // Re-read battle inside the lock to get the freshest tallies
+          const lockedBattle: any = await kv.get(`battle:${battleId}`);
+          if (!lockedBattle) {
+            earlyResponse = c.json({ success: false, error: `Battle ${battleId} not found` }, 404);
+          } else {
+            // Reverse old vote tallies if updating
+            if (isUpdate && existingVoteInThisBattle) {
+              const old = existingVoteInThisBattle;
+              if (old.athleteId === lockedBattle.athlete1Id) {
+                lockedBattle.votes1Count = Math.max(0, (lockedBattle.votes1Count || 0) - 1);
+                lockedBattle.votes1Weighted = Math.max(0, (lockedBattle.votes1Weighted || 0) - (old.weightedVote || 0));
+              } else {
+                lockedBattle.votes2Count = Math.max(0, (lockedBattle.votes2Count || 0) - 1);
+                lockedBattle.votes2Weighted = Math.max(0, (lockedBattle.votes2Weighted || 0) - (old.weightedVote || 0));
+              }
+            }
+
+            if (athleteId === lockedBattle.athlete1Id) {
+              lockedBattle.votes1Count = (lockedBattle.votes1Count || 0) + 1;
+              lockedBattle.votes1Weighted = (lockedBattle.votes1Weighted || 0) + weighted;
+            } else {
+              lockedBattle.votes2Count = (lockedBattle.votes2Count || 0) + 1;
+              lockedBattle.votes2Weighted = (lockedBattle.votes2Weighted || 0) + weighted;
+            }
+            lockedBattle.updatedAt = now();
+
+            // Capture tallies BEFORE releasing mutex — these are the authoritative values
+            updatedTallies = {
+              votes1Count: lockedBattle.votes1Count,
+              votes2Count: lockedBattle.votes2Count,
+              votes1Weighted: lockedBattle.votes1Weighted,
+              votes2Weighted: lockedBattle.votes2Weighted,
+            };
+
+            // ── BATCH WRITE: vote record + battle tallies ──
+            await kv.mset(
+              [`vote:battle:${battleId}:${wallet}`, `battle:${battleId}`],
+              [vote, lockedBattle],
+            );
+          }
+        } finally {
+          release(); // Always release the battle mutex
+        }
+
+        // Only finish allocation/index writes if the inner block succeeded
+        if (!earlyResponse) {
+          // ── SCALING FIX: Write wallet vote index (wvote:) for O(1) "my votes" lookups ──
+          const compactVote: CompactVote = {
+            battleId, athleteId, eventId, wallet,
+            stakeAmount: requestedStake, weightedVote: weighted, votingPower: power,
+            hasGovernorNFT: nftHoldings.hasGovernor, hasSigmaNFT: nftHoldings.hasSigma,
+            isUpdate, timestamp: vote.timestamp,
+          };
+          await indexWalletVote(compactVote);
+
+          // ── SCALING FIX: Update allocation index (walloc:) for O(1) balance checks ──
+          // STILL INSIDE walloc lock — guarantees the read at top of this block
+          // and this write form an atomic critical section against concurrent
+          // same-wallet+event votes.
+          await updateAllocation(wallet, eventId, battleId, requestedStake, oldStake);
         }
       }
-
-      if (athleteId === lockedBattle.athlete1Id) {
-        lockedBattle.votes1Count = (lockedBattle.votes1Count || 0) + 1;
-        lockedBattle.votes1Weighted = (lockedBattle.votes1Weighted || 0) + weighted;
-      } else {
-        lockedBattle.votes2Count = (lockedBattle.votes2Count || 0) + 1;
-        lockedBattle.votes2Weighted = (lockedBattle.votes2Weighted || 0) + weighted;
-      }
-      lockedBattle.updatedAt = now();
-
-      // Capture tallies BEFORE releasing mutex — these are the authoritative values
-      updatedTallies = {
-        votes1Count: lockedBattle.votes1Count,
-        votes2Count: lockedBattle.votes2Count,
-        votes1Weighted: lockedBattle.votes1Weighted,
-        votes2Weighted: lockedBattle.votes2Weighted,
-      };
-
-      // ── BATCH WRITE: vote record + battle tallies ──
-      await kv.mset(
-        [`vote:battle:${battleId}:${wallet}`, `battle:${battleId}`],
-        [vote, lockedBattle],
-      );
     } finally {
-      release(); // Always release the mutex
+      allocRelease(); // Always release the walloc mutex
     }
 
-    // ── SCALING FIX: Write wallet vote index (wvote:) for O(1) "my votes" lookups ──
-    const compactVote: CompactVote = {
-      battleId, athleteId, eventId, wallet,
-      stakeAmount: requestedStake, weightedVote: weighted, votingPower: power,
-      hasGovernorNFT: nftHoldings.hasGovernor, hasSigmaNFT: nftHoldings.hasSigma,
-      isUpdate, timestamp: vote.timestamp,
-    };
-    await indexWalletVote(compactVote);
-
-    // ── SCALING FIX: Update allocation index (walloc:) for O(1) balance checks ──
-    await updateAllocation(wallet, eventId, battleId, requestedStake, oldStake);
+    if (earlyResponse) return earlyResponse;
 
     // ── SCALING FIX: Nonce with self-referencing key for lazy reaper cleanup ──
     await writeNonceWithKey(sanitizeString(nonce, 100), wallet, battleId);
@@ -3605,7 +3673,26 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
     const totalBatchStake = processedVotes.reduce((s: number, v: any) => s + v.stakeAmount, 0);
     const mirrorBalance = await fetchBotbBalance(wallet);
 
-    // Get current allocation index for this event
+    // ── ALLOCATION RACE FIX: per-(wallet, event) outer lock ──
+    // Same rationale as POST /vote/battle: the alloc index read, balance check,
+    // and per-vote `updateAllocation` writes must form an atomic critical
+    // section per (wallet, eventId). Without this, a wallet submitting a batch
+    // concurrently with single votes (or another batch) in the same event
+    // could over-stake by reading a stale `walloc:` snapshot.
+    //
+    // LOCK ORDER: walloc (outer) → battle (inner per vote). All inner battle
+    // locks are short-lived; the walloc lock spans the whole batch. Different
+    // wallets are never blocked by this; the same wallet voting in a different
+    // event is never blocked.
+    const results: any[] = [];
+    const ts = now();
+    let earlyResponseBatch: Response | null = null;
+    const allocLockKeyBatch = `walloc:${wallet}:${eventId}`;
+    const allocReleaseBatch = await acquireLock(allocLockKeyBatch);
+    try {
+    // Get current allocation index for this event (INSIDE the lock — must be
+    // freshest possible value; pre-lock reads can be stale by the time we
+    // acquire the lock).
     const allocIndex = await getAllocation(wallet, eventId);
     let existingEventAllocation = allocIndex ? allocIndex.totalAllocated : 0;
 
@@ -3623,7 +3710,7 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
     const totalNeeded = existingEventAllocation + totalBatchStake;
 
     if (BOTB_TOKEN_ID && totalNeeded > mirrorBalance) {
-      return c.json({
+      earlyResponseBatch = c.json({
         success: false,
         error: `Batch total (${totalBatchStake.toLocaleString()} BOTB) + other event allocations (${existingEventAllocation.toLocaleString()}) = ${totalNeeded.toLocaleString()} exceeds balance of ${mirrorBalance.toLocaleString()} BOTB.`,
         code: "INSUFFICIENT_BALANCE",
@@ -3631,8 +3718,7 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
     }
 
     // ── 10. PROCESS ALL VOTES ATOMICALLY ──
-    const results: any[] = [];
-    const ts = now();
+    if (!earlyResponseBatch) {
 
     for (const pv of processedVotes) {
       const battle = battleMap.get(pv.battleId)!;
@@ -3752,8 +3838,15 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
         battleTallies: updatedTallies,
       });
     }
+    } // end if (!earlyResponseBatch)
+    } finally {
+      allocReleaseBatch(); // Always release the walloc mutex
+    }
+
+    if (earlyResponseBatch) return earlyResponseBatch;
 
     // ── 11. BURN NONCE ──
+    // Outside the walloc lock — nonce key is global, not per-(wallet,event).
     await writeNonceWithKey(sanitizeString(nonce, 100), wallet, `batch:${eventId}`);
 
     // Invalidate caches
