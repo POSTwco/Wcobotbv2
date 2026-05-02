@@ -773,9 +773,11 @@ app.post(`${PREFIX}/track-visit`, async (c) => {
     const ip = extractClientIp(c);
     if (!ip || ip === "unknown") return c.json({ ok: true });
 
-    // Per-IP rate limit — prevents counter inflation via flooding
+    // Per-IP rate limit — prevents counter inflation via flooding.
+    // checkRateLimit returns { limited, retryAfter } — when limited=true,
+    // silently drop the ping (don't error the user; tracker is fire-and-forget).
     const rl = await checkRateLimit(`visit-track:${ip}`, 30, 60 * 1000);
-    if (!rl.success) return c.json({ ok: true });
+    if (rl.limited) return c.json({ ok: true });
 
     const ua = (c.req.header("user-agent") || "").substring(0, 200);
     const date = todayUTC();
