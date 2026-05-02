@@ -351,7 +351,7 @@ export const api = {
         generatedAt: string;
       }>("/admin/dashboard", { adminWallet, sessionToken }),
 
-    /** Real-time unique-IP traffic counter (privacy-preserving, hashed). */
+    /** Real-time unique-IP traffic counter + all-time wallet metrics (privacy-preserving, hashed). */
     getVisitStats: (adminWallet: string, sessionToken?: string) =>
       request<{
         today: number;
@@ -359,6 +359,8 @@ export const api = {
         last7d: number;
         last30d: number;
         total: number;
+        walletsConnected: number;
+        walletsVoted: number;
         breakdown: { date: string; count: number }[];
         retentionDays: number;
         privacyNote: string;

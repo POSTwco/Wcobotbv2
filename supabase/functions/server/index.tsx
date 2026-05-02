@@ -590,6 +590,9 @@ app.post(`${PREFIX}/wallet/register`, async (c) => {
       [sessionData, { token }],
     );
 
+    // All-time unique-wallet metric (idempotent, hashed, fire-and-forget)
+    recordWalletConnected(wallet).catch(() => {});
+
     console.log(`[WALLET-SESSION] Registered session for ${wallet} (topic: ${wcTopic.substring(0, 16)}…, TTL: 4h)`);
 
     return c.json({
@@ -812,6 +815,82 @@ app.post(`${PREFIX}/track-visit`, async (c) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// WALLET ENGAGEMENT COUNTERS — All-time unique wallet metrics
+// ---------------------------------------------------------------------------
+// Two separate counters:
+//   1. wconn:total      Unique wallets that have ever connected (registered a session)
+//   2. wvoted:total     Unique wallets that have ever cast a vote
+//
+// PRIVACY: We never expose wallet IDs in any admin endpoint. Wallets ARE
+// public on-chain identifiers, but to comply with "no client-side leakage"
+// we store dedupe markers as HMAC hashes (`wconn:{hash}`, `wvoted:{hash}`)
+// rather than the raw wallet. The admin endpoint returns ONLY the counts.
+//
+// TAMPER-PROOFING:
+//   - Hooks fire only on the SUCCESS path of /wallet/register and /vote/*
+//     (after rate limits, signature verification, and KV writes succeed),
+//     so spoofed requests cannot inflate the counts.
+//   - Counter increments are serialized via per-counter mutex to avoid race.
+//   - HMAC salt is the SUPABASE_SERVICE_ROLE_KEY (server-only); even an
+//     attacker who guesses a wallet cannot compute the hash to predict
+//     dedupe behavior or craft inflation attempts.
+// ---------------------------------------------------------------------------
+
+async function hashWallet(wallet: string, scope: string): Promise<string> {
+  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "botb-fallback-wallet-salt";
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${scope}|${wallet}`));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Increment all-time unique wallet-connected counter. Idempotent per wallet. */
+async function recordWalletConnected(wallet: string): Promise<void> {
+  try {
+    if (!wallet) return;
+    const hash = await hashWallet(wallet, "wconn");
+    const markerKey = `wconn:${hash}`;
+    if (await kv.get(markerKey)) return; // Already counted
+
+    const release = await acquireLock(`wccounter:total`);
+    try {
+      if (await kv.get(markerKey)) return;
+      await kv.set(markerKey, 1);
+      const total = (Number(await kv.get(`wconn:total`)) || 0) + 1;
+      await kv.set(`wconn:total`, total);
+    } finally {
+      release();
+    }
+  } catch (err) {
+    console.log(`[WALLET-METRIC] connected counter error (non-fatal): ${err}`);
+  }
+}
+
+/** Increment all-time unique wallet-voted counter. Idempotent per wallet. */
+async function recordWalletVoted(wallet: string): Promise<void> {
+  try {
+    if (!wallet) return;
+    const hash = await hashWallet(wallet, "wvoted");
+    const markerKey = `wvoted:${hash}`;
+    if (await kv.get(markerKey)) return;
+
+    const release = await acquireLock(`wvcounter:total`);
+    try {
+      if (await kv.get(markerKey)) return;
+      await kv.set(markerKey, 1);
+      const total = (Number(await kv.get(`wvoted:total`)) || 0) + 1;
+      await kv.set(`wvoted:total`, total);
+    } finally {
+      release();
+    }
+  } catch (err) {
+    console.log(`[WALLET-METRIC] voted counter error (non-fatal): ${err}`);
+  }
+}
+
 app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
   try {
     const today = todayUTC();
@@ -827,6 +906,10 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
     const total = Number(await kv.get(`vcount:total`)) || 0;
     const last7d = dailyVals.slice(0, 7).reduce((s: number, v: number) => s + v, 0);
     const last30d = dailyVals.reduce((s: number, v: number) => s + v, 0);
+    const [walletsConnected, walletsVoted] = await kv.mget([
+      `wconn:total`,
+      `wvoted:total`,
+    ]);
     return c.json({
       success: true,
       data: {
@@ -835,9 +918,11 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
         last7d,
         last30d,
         total,
+        walletsConnected: Number(walletsConnected) || 0,
+        walletsVoted: Number(walletsVoted) || 0,
         breakdown: days.map((d, i) => ({ date: d, count: dailyVals[i] || 0 })),
         retentionDays: VISIT_HASH_RETENTION_DAYS,
-        privacyNote: "IPs are HMAC-hashed with a daily-rotating server salt; raw IPs are never stored.",
+        privacyNote: "IPs and wallet IDs are HMAC-hashed; raw values are never returned by this endpoint.",
       },
     });
   } catch (e) {
@@ -3639,6 +3724,9 @@ app.post(`${PREFIX}/vote/battle`, async (c) => {
     // ── SCALING FIX: Nonce with self-referencing key for lazy reaper cleanup ──
     await writeNonceWithKey(sanitizeString(nonce, 100), wallet, battleId);
 
+    // All-time unique-wallet-voted metric (idempotent, hashed, fire-and-forget)
+    recordWalletVoted(wallet).catch(() => {});
+
     // ── UPDATE ATHLETE totalVotes + tokensStaked COUNTERS ──
     // These feed the leaderboard formula: (totalVotes * 0.5)
     // On new vote: +1 totalVotes on voted athlete, +stakeAmount to tokensStaked
@@ -4013,6 +4101,9 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
     // ── 11. BURN NONCE ──
     // Outside the walloc lock — nonce key is global, not per-(wallet,event).
     await writeNonceWithKey(sanitizeString(nonce, 100), wallet, `batch:${eventId}`);
+
+    // All-time unique-wallet-voted metric (idempotent, hashed, fire-and-forget)
+    recordWalletVoted(wallet).catch(() => {});
 
     // Invalidate caches
     invalidateCache("leaderboard:athletes");

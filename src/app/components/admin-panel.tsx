@@ -1128,6 +1128,8 @@ function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: 
     last7d: number;
     last30d: number;
     total: number;
+    walletsConnected: number;
+    walletsVoted: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pulse, setPulse] = useState(false);
@@ -1149,6 +1151,8 @@ function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: 
         last7d: d.last7d,
         last30d: d.last30d,
         total: d.total,
+        walletsConnected: d.walletsConnected || 0,
+        walletsVoted: d.walletsVoted || 0,
       });
     }
     setLoading(false);
@@ -1211,7 +1215,9 @@ function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: 
             <Stat label="YESTERDAY" value={fmt(stats.yesterday)} />
             <Stat label="7-DAY" value={fmt(stats.last7d)} />
             <Stat label="30-DAY" value={fmt(stats.last30d)} />
-            <Stat label="ALL-TIME" value={fmt(stats.total)} />
+            <Stat label="ALL-TIME IPs" value={fmt(stats.total)} />
+            <Stat label="WALLETS CONNECTED" value={fmt(stats.walletsConnected)} accent="gold" />
+            <Stat label="WALLETS VOTED" value={fmt(stats.walletsVoted)} accent="gold" />
           </div>
         ) : (
           <span className="text-[#8494A7] text-[0.6rem]">Stats unavailable</span>
@@ -1221,20 +1227,31 @@ function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: 
   );
 }
 
-function Stat({ label, value, highlight, pulse }: { label: string; value: string; highlight?: boolean; pulse?: boolean }) {
+function Stat({
+  label, value, highlight, pulse, accent,
+}: {
+  label: string; value: string; highlight?: boolean; pulse?: boolean; accent?: "gold";
+}) {
+  const isGold = accent === "gold";
+  const containerCls = highlight
+    ? "bg-[#10b981]/10 border-[#10b981]/40"
+    : isGold
+      ? "bg-[#D4A843]/10 border-[#D4A843]/40"
+      : "bg-[#162033] border-[#4274B9]/15";
+  const valueCls = highlight
+    ? "text-[#10b981]"
+    : isGold
+      ? "text-[#D4A843]"
+      : "text-[#E8ECF0]";
   return (
     <div
-      className={`px-2.5 py-1.5 rounded-lg border ${
-        highlight
-          ? "bg-[#10b981]/10 border-[#10b981]/40"
-          : "bg-[#162033] border-[#4274B9]/15"
-      } ${pulse && highlight ? "ring-2 ring-[#10b981]/40" : ""} transition-all`}
+      className={`px-2.5 py-1.5 rounded-lg border ${containerCls} ${pulse && highlight ? "ring-2 ring-[#10b981]/40" : ""} transition-all`}
     >
       <div className="text-[#8494A7] text-[0.5rem] tracking-wider" style={{ fontFamily: "Orbitron, sans-serif" }}>
         {label}
       </div>
       <div
-        className={`text-xs font-bold tabular-nums ${highlight ? "text-[#10b981]" : "text-[#E8ECF0]"}`}
+        className={`text-xs font-bold tabular-nums ${valueCls}`}
         style={{ fontFamily: "Orbitron, sans-serif" }}
       >
         {value}
