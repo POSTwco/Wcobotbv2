@@ -129,6 +129,7 @@
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
 import {
   requireAdminSession,
@@ -361,6 +362,62 @@ function generateId(prefix: string): string {
 
 function now(): string {
   return new Date().toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Supabase Storage — private bucket for athlete application PFPs
+// ---------------------------------------------------------------------------
+// Bucket is private. Files are NEVER served via public URL. Admin reads use
+// short-lived signed URLs (5 min). Bucket is created idempotently at startup.
+// Allowed MIME: image/png, image/jpeg, image/webp. Max 5 MB.
+// ---------------------------------------------------------------------------
+const PFP_BUCKET = "make-57fcb0ee-pfps";
+const PFP_MAX_BYTES = 5 * 1024 * 1024;
+const PFP_ALLOWED_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
+const PFP_SIGNED_URL_TTL_SEC = 300;
+
+const supabaseAdmin = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+);
+
+let pfpBucketReady: Promise<void> | null = null;
+async function ensurePfpBucket(): Promise<void> {
+  if (pfpBucketReady) return pfpBucketReady;
+  pfpBucketReady = (async () => {
+    try {
+      const { data: buckets, error } = await supabaseAdmin.storage.listBuckets();
+      if (error) throw error;
+      const exists = buckets?.some((b) => b.name === PFP_BUCKET);
+      if (!exists) {
+        const { error: createErr } = await supabaseAdmin.storage.createBucket(PFP_BUCKET, { public: false });
+        if (createErr && !String(createErr.message || "").toLowerCase().includes("already exists")) {
+          throw createErr;
+        }
+        console.log(`[STORAGE] Created private bucket ${PFP_BUCKET}`);
+      }
+    } catch (err) {
+      console.log(`[STORAGE] ensurePfpBucket failed: ${err}`);
+      pfpBucketReady = null; // allow retry next call
+      throw err;
+    }
+  })();
+  return pfpBucketReady;
+}
+ensurePfpBucket().catch(() => {});
+
+/** Generate a signed URL for a stored PFP path. Returns "" on failure. */
+async function getPfpSignedUrl(path: string): Promise<string> {
+  if (!path || !path.startsWith("pfps/")) return "";
+  try {
+    const { data, error } = await supabaseAdmin.storage
+      .from(PFP_BUCKET)
+      .createSignedUrl(path, PFP_SIGNED_URL_TTL_SEC);
+    if (error || !data?.signedUrl) return "";
+    return data.signedUrl;
+  } catch {
+    return "";
+  }
 }
 
 /** Strip admin-only/sensitive fields from athlete objects before public API responses */
@@ -4431,6 +4488,72 @@ app.post(`${PREFIX}/vote/proposal`, async (c) => {
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
+// POST /applications/upload-pfp — Upload athlete profile picture (public)
+// ---------------------------------------------------------------------------
+// Accepts multipart/form-data with `file` (image) + `wallet`. Stores the file
+// in a private Supabase Storage bucket and returns the storage path. The path
+// is what the client submits as `pfpUrl` on POST /applications. Admin reads
+// generate short-lived signed URLs server-side.
+// ---------------------------------------------------------------------------
+app.post(`${PREFIX}/applications/upload-pfp`, async (c) => {
+  try {
+    const ip = extractClientIp(c);
+    const ipRL = await checkRateLimit(`pfprl:${ip}`, 10, 60 * 60 * 1000);
+    if (ipRL.limited) {
+      return c.json({
+        success: false, error: "Too many uploads. Please wait before trying again.",
+        code: "RATE_LIMITED", retryAfter: ipRL.retryAfter,
+      }, { status: 429, headers: { "Retry-After": String(ipRL.retryAfter || 300) } });
+    }
+
+    const formData = await c.req.formData();
+    const file = formData.get("file");
+    const wallet = String(formData.get("wallet") || "");
+
+    if (!wallet || !isValidHederaAccountId(wallet)) {
+      return c.json({ success: false, error: "Valid Hedera wallet ID required" }, 400);
+    }
+    if (!(file instanceof File)) {
+      return c.json({ success: false, error: "No file provided" }, 400);
+    }
+    if (file.size === 0) {
+      return c.json({ success: false, error: "File is empty" }, 400);
+    }
+    if (file.size > PFP_MAX_BYTES) {
+      return c.json({ success: false, error: `File too large (max ${PFP_MAX_BYTES / (1024 * 1024)} MB)` }, 400);
+    }
+    if (!PFP_ALLOWED_MIME.has(file.type)) {
+      return c.json({ success: false, error: "Only PNG, JPEG, or WEBP images are allowed" }, 400);
+    }
+
+    await ensurePfpBucket();
+
+    // Derive extension from MIME (don't trust client filename)
+    const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+    const safeWallet = wallet.replace(/[^0-9.]/g, "_");
+    const path = `pfps/${safeWallet}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const { error: upErr } = await supabaseAdmin.storage
+      .from(PFP_BUCKET)
+      .upload(path, bytes, { contentType: file.type, upsert: false });
+    if (upErr) {
+      console.log(`[APPLICATIONS] PFP upload failed for ${wallet}: ${upErr.message}`);
+      return c.json({ success: false, error: "Upload failed. Please try again." }, 500);
+    }
+
+    // Return both the stored path (to submit with the application) and a
+    // short-lived signed URL the applicant can use to preview their upload.
+    const previewUrl = await getPfpSignedUrl(path);
+    console.log(`[APPLICATIONS] PFP uploaded for ${wallet} → ${path}`);
+    return c.json({ success: true, data: { path, previewUrl } });
+  } catch (error) {
+    console.log(`[APPLICATIONS] PFP upload error: ${error}`);
+    return c.json({ success: false, error: safeErrorMsg("Failed to upload image") }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /applications — Submit athlete application (public, wallet required)
 // ---------------------------------------------------------------------------
 app.post(`${PREFIX}/applications`, async (c) => {
@@ -4487,8 +4610,13 @@ app.post(`${PREFIX}/applications`, async (c) => {
       nickname: sanitizeString(body.nickname, 100),
       country: sanitizeString(body.country, 80),
       bio: sanitizeString(body.bio, 2000),
-      pfpUrl: sanitizeUrl(body.pfpUrl) || "",
+      pfpStoragePath: typeof body.pfpStoragePath === "string" && body.pfpStoragePath.startsWith("pfps/")
+        ? sanitizeString(body.pfpStoragePath, 300)
+        : "",
+      pfpUrl: "", // legacy field — actual image lives in private storage; admin gets signed URL on read
+
       specialMove: sanitizeString(body.specialMove, 200),
+      weightClass: sanitizeString(body.weightClass, 80),
       email: sanitizeString(body.email, 200),
       phone: sanitizeString(body.phone, 50),
       socials: {
@@ -4524,10 +4652,54 @@ app.get(`${PREFIX}/admin/applications`, requireAdminSession, async (c) => {
   try {
     const applications = await kv.getByPrefix("application:");
     applications.sort((a: any, b: any) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-    return c.json({ success: true, data: applications });
+    // Attach short-lived signed URLs for any applications with a stored PFP
+    const withSignedUrls = await Promise.all(
+      applications.map(async (app: any) => {
+        if (app?.pfpStoragePath) {
+          const pfpSignedUrl = await getPfpSignedUrl(app.pfpStoragePath);
+          return { ...app, pfpSignedUrl };
+        }
+        return app;
+      })
+    );
+    return c.json({ success: true, data: withSignedUrls });
   } catch (error) {
     console.log(`[ADMIN] Error listing applications: ${error}`);
     return c.json({ success: false, error: safeErrorMsg("Failed to list applications") }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/applications/:id/pfp-download — Stream PFP for admin download
+// ---------------------------------------------------------------------------
+app.get(`${PREFIX}/admin/applications/:id/pfp-download`, requireAdminSession, async (c) => {
+  try {
+    const appId = c.req.param("id");
+    const application = await kv.get(`application:${appId}`);
+    if (!application) {
+      return c.json({ success: false, error: `Application ${appId} not found` }, 404);
+    }
+    const path = (application as any).pfpStoragePath;
+    if (!path) {
+      return c.json({ success: false, error: "No profile picture on file" }, 404);
+    }
+    const { data, error } = await supabaseAdmin.storage.from(PFP_BUCKET).download(path);
+    if (error || !data) {
+      console.log(`[ADMIN] PFP download failed for ${appId}: ${error?.message}`);
+      return c.json({ success: false, error: "Failed to fetch image" }, 500);
+    }
+    const ext = path.split(".").pop() || "jpg";
+    const filename = `${(application as any).name || "athlete"}-${appId}.${ext}`.replace(/[^a-zA-Z0-9._-]/g, "_");
+    return new Response(data, {
+      headers: {
+        "Content-Type": data.type || "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    console.log(`[ADMIN] PFP download error: ${error}`);
+    return c.json({ success: false, error: safeErrorMsg("Failed to download image") }, 500);
   }
 });
 
@@ -4560,6 +4732,7 @@ app.post(`${PREFIX}/admin/applications/:id/approve`, requireAdminSession, async 
       country: app.country,
       bio: app.bio,
       pfpUrl: app.pfpUrl || "placeholder",
+      pfpStoragePath: app.pfpStoragePath || "",
       email: app.email || "",
       phone: app.phone || "",
       socials: {
@@ -4585,7 +4758,7 @@ app.post(`${PREFIX}/admin/applications/:id/approve`, requireAdminSession, async 
       nftCardGlowGradient: "from-[#4274B9] via-[#6AA3E0] to-[#4274B9]",
       primaryColor: "",
       secondaryColor: "",
-      weightClass: "",
+      weightClass: app.weightClass || "",
       bracketSeat: 0,
       totalVotes: 0,
       tokensStaked: 0,

@@ -532,6 +532,27 @@ export const api = {
   submitApplication: (data: any) =>
     request<{ id: string; message: string }>("/applications", { method: "POST", body: data }),
 
+  // Upload athlete application profile picture (multipart/form-data)
+  uploadApplicationPfp: async (file: File, wallet: string): Promise<ApiResponse<{ path: string; previewUrl: string }>> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("wallet", wallet);
+    try {
+      const res = await fetch(`${BASE_URL}/applications/upload-pfp`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${publicAnonKey}` },
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        return { success: false, error: sanitizeApiError(json.error || `Upload failed (${res.status})`) };
+      }
+      return { success: true, data: json.data };
+    } catch (e) {
+      return { success: false, error: sanitizeApiError(String(e)) };
+    }
+  },
+
   // Sponsors (public)
   getSponsors: () => request<Sponsor[]>("/sponsors"),
   trackSponsorImpression: (id: string) =>

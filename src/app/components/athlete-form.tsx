@@ -22,6 +22,7 @@ import {
   Dumbbell,
 } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { WCO_WEIGHT_CLASSES } from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -389,13 +390,9 @@ export function AthleteForm({
                 >
                   <option value="">Not assigned</option>
                   <optgroup label="Official WCO Divisions">
-                    <option value="Strawweight (105–115 lbs / 52 kg)">Strawweight (105–115 lbs / 52 kg)</option>
-                    <option value="Featherweight (115–125 lbs / 56 kg)">Featherweight (115–125 lbs / 56 kg)</option>
-                    <option value="Lightweight (135+ lbs / 61 kg)">Lightweight (135+ lbs / 61 kg)</option>
-                    <option value="Super Lightweight (145+ lbs / 65 kg)">Super Lightweight (145+ lbs / 65 kg)</option>
-                    <option value="Welterweight (155+ lbs / 70 kg)">Welterweight (155+ lbs / 70 kg)</option>
-                    <option value="Middleweight (165+ lbs / 74 kg)">Middleweight (165+ lbs / 74 kg)</option>
-                    <option value="Super Middleweight (175–190 lbs / 79 kg)">Super Middleweight (175–190 lbs / 79 kg)</option>
+                    {WCO_WEIGHT_CLASSES.map((wc) => (
+                      <option key={wc} value={wc}>{wc}</option>
+                    ))}
                   </optgroup>
                   <optgroup label="Special Divisions">
                     <option value="Open Weight">Open Weight (No limit)</option>

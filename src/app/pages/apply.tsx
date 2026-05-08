@@ -13,9 +13,11 @@ import {
   User, Globe, Youtube, Instagram, Twitter, Link2,
   Shield, AlertTriangle, CheckCircle, Loader2,
   Zap, FileText, ChevronDown, ExternalLink, Mail, Phone,
+  Dumbbell,
 } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
 import { api } from "../lib/api";
+import { WCO_WEIGHT_CLASSES } from "../lib/types";
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "../components/error-boundary";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
@@ -45,8 +47,10 @@ export function ApplyPage() {
     fullName: "",
     nickname: "",
     country: "",
+    weightClass: "",
     bio: "",
-    pfpUrl: "",
+    pfpStoragePath: "",
+    pfpPreviewUrl: "",
     specialMove: "",
     email: "",
     phone: "",
@@ -73,7 +77,9 @@ export function ApplyPage() {
     form.name.trim() &&
     form.fullName.trim() &&
     form.country &&
+    form.weightClass &&
     form.bio.trim() &&
+    form.pfpStoragePath &&
     form.youtubeRoutine.trim() &&
     hasSocial &&
     disclaimerAccepted;
@@ -258,29 +264,44 @@ export function ApplyPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="text-[#8494A7] text-[0.6rem] flex items-center gap-1 mb-1">
+                    <Dumbbell className="w-3 h-3 text-[#D4A843]" />
+                    Weight Class *
+                  </label>
+                  <select
+                    value={form.weightClass}
+                    onChange={(e) => updateField("weightClass", e.target.value)}
+                    className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#4274B9]/60"
+                  >
+                    <option value="">Select your division...</option>
+                    {WCO_WEIGHT_CLASSES.map((wc) => (
+                      <option key={wc} value={wc}>{wc}</option>
+                    ))}
+                  </select>
+                  <p className="text-[#8494A7]/50 text-[0.5rem] mt-0.5">
+                    Official WCO division. You must make weight at the competition (within 1 lb of class limit).
+                  </p>
+                </div>
                 <Field
                   label="Signature Move"
                   value={form.specialMove}
                   onChange={(v) => updateField("specialMove", v)}
                   placeholder="e.g. 360 Muscle-Up to Planche"
                 />
-                <div>
-                  <label className="text-[#8494A7] text-[0.6rem] block mb-1">Profile Picture URL</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={form.pfpUrl}
-                      onChange={(e) => updateField("pfpUrl", e.target.value)}
-                      placeholder="https://..."
-                      className="flex-1 bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#4274B9]/60 placeholder:text-[#8494A7]/40"
-                    />
-                    {form.pfpUrl && (
-                      <div className="w-8 h-8 rounded-lg overflow-hidden border border-[#4274B9]/20 shrink-0">
-                        <ImageWithFallback src={form.pfpUrl} alt="Preview" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <PfpUploader
+                  wallet={accountId || ""}
+                  storagePath={form.pfpStoragePath}
+                  previewUrl={form.pfpPreviewUrl}
+                  onUploaded={(path, url) => {
+                    updateField("pfpStoragePath", path);
+                    updateField("pfpPreviewUrl", url);
+                  }}
+                  onClear={() => {
+                    updateField("pfpStoragePath", "");
+                    updateField("pfpPreviewUrl", "");
+                  }}
+                />
               </div>
               <div className="mt-3">
                 <label className="text-[#8494A7] text-[0.6rem] block mb-1">Bio / About You *</label>
@@ -523,6 +544,10 @@ export function ApplyPage() {
                 <p className="text-amber-400/70 text-[0.6rem] text-center sm:text-left">
                   {!form.name.trim() || !form.fullName.trim() || !form.country || !form.bio.trim()
                     ? "Fill all required fields (Name, Full Name, Country, Bio)"
+                    : !form.weightClass
+                    ? "Select your official WCO weight class"
+                    : !form.pfpStoragePath
+                    ? "Upload a profile picture"
                     : !form.youtubeRoutine.trim()
                     ? "YouTube routine video link is required"
                     : !hasSocial
@@ -548,6 +573,91 @@ export function ApplyPage() {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function PfpUploader({
+  wallet, storagePath, previewUrl, onUploaded, onClear,
+}: {
+  wallet: string;
+  storagePath: string;
+  previewUrl: string;
+  onUploaded: (path: string, url: string) => void;
+  onClear: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file: File | null) => {
+    if (!file) return;
+    if (!wallet) {
+      toast.error("Connect your wallet before uploading");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be 5 MB or smaller");
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      toast.error("Only PNG, JPEG, or WEBP images are allowed");
+      return;
+    }
+    setUploading(true);
+    try {
+      const res = await api.uploadApplicationPfp(file, wallet);
+      if (res.success && res.data) {
+        onUploaded(res.data.path, res.data.previewUrl);
+        toast.success("Profile picture uploaded securely");
+      } else {
+        toast.error(res.error || "Upload failed");
+      }
+    } catch (err: any) {
+      toast.error(sanitizeErrorMessage(err?.message || err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="text-[#8494A7] text-[0.6rem] block mb-1">Profile Picture *</label>
+      <div className="flex items-center gap-2">
+        <label className={`flex-1 cursor-pointer bg-[#162033] border border-dashed border-[#4274B9]/30 hover:border-[#4274B9]/60 rounded-lg px-3 py-2 text-xs text-center transition-all ${uploading ? "opacity-50 cursor-wait" : ""}`}>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={uploading}
+            onChange={(e) => handleFile(e.target.files?.[0] || null)}
+            className="hidden"
+          />
+          {uploading ? (
+            <span className="flex items-center justify-center gap-2 text-[#6AA3E0]">
+              <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+            </span>
+          ) : storagePath ? (
+            <span className="text-[#10b981]">✓ Uploaded — click to replace</span>
+          ) : (
+            <span className="text-[#8494A7]">Choose image (PNG/JPEG/WEBP, max 5 MB)</span>
+          )}
+        </label>
+        {previewUrl && (
+          <div className="w-10 h-10 rounded-lg overflow-hidden border border-[#4274B9]/20 shrink-0">
+            <ImageWithFallback src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+          </div>
+        )}
+        {storagePath && !uploading && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="px-2 py-1.5 text-[0.55rem] rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all border border-red-500/20"
+          >
+            REMOVE
+          </button>
+        )}
+      </div>
+      <p className="text-[#8494A7]/50 text-[0.5rem] mt-0.5">
+        Stored privately. Only WCO admins can access it for review.
+      </p>
+    </div>
+  );
+}
 
 function FormSection({
   icon, title, children,

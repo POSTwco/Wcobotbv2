@@ -36,9 +36,10 @@ import {
   Shield, Lock, Unlock, Clock, LogOut, Users, Swords, Trophy,
   Vote, Camera, BookOpen, AlertTriangle, CheckCircle, Loader2,
   ChevronDown, Database, Fingerprint, Timer, X,
-  ClipboardList, ExternalLink, Youtube,
+  ClipboardList, ExternalLink, Youtube, Download,
   Megaphone, Rocket, Activity,
 } from "lucide-react";
+import { projectId, publicAnonKey } from "/utils/supabase/info";
 import { useWallet } from "./wallet-context";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -677,6 +678,37 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
     setSeeding(false);
   };
 
+  const downloadAppPfp = async (appId: string, name: string, adminWallet: string, sessionTok: string) => {
+    try {
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-57fcb0ee/admin/applications/${appId}/pfp-download`,
+        {
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+            "X-Admin-Wallet": adminWallet,
+            "X-Admin-Session": sessionTok,
+          },
+        }
+      );
+      if (!res.ok) {
+        toast.error(`Download failed (${res.status})`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+      a.download = `${(name || "athlete").replace(/[^a-zA-Z0-9._-]/g, "_")}-${appId}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error(sanitizeErrorMessage(err?.message || err));
+    }
+  };
+
   const processApplication = async (appId: string, action: "approve" | "reject") => {
     setProcessingApp(appId);
     const res = action === "approve"
@@ -835,6 +867,26 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                 className="p-3 rounded-xl bg-[#0B1120] border border-amber-500/20 hover:border-amber-500/40 transition-all"
               >
                 <div className="flex items-start justify-between gap-3">
+                  {app.pfpSignedUrl ? (
+                    <div className="shrink-0">
+                      <img
+                        src={app.pfpSignedUrl}
+                        alt={app.name}
+                        className="w-14 h-14 rounded-lg object-cover border border-[#4274B9]/20"
+                      />
+                      <button
+                        onClick={() => downloadAppPfp(app.id, app.name, wallet, sessionToken)}
+                        className="mt-1 w-14 flex items-center justify-center gap-0.5 px-1 py-0.5 text-[0.5rem] rounded bg-[#4274B9]/10 text-[#6AA3E0] hover:bg-[#4274B9]/20 transition-all border border-[#4274B9]/20"
+                        title="Download original image"
+                      >
+                        <Download className="w-2.5 h-2.5" /> SAVE
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-[#162033] border border-dashed border-[#4274B9]/20 flex items-center justify-center shrink-0">
+                      <Camera className="w-4 h-4 text-[#4274B9]/40" />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-[#E8ECF0] text-sm font-semibold truncate">{app.name}</p>
@@ -843,6 +895,19 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                     <p className="text-[#8494A7] text-[0.6rem] truncate">
                       {app.fullName} · {app.country} · Wallet: <span className="font-mono text-[#6AA3E0]">{app.wallet}</span>
                     </p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {app.weightClass && (
+                        <span className="px-1.5 py-0.5 rounded text-[0.5rem] bg-[#D4A843]/10 text-[#D4A843] border border-[#D4A843]/20 font-bold">
+                          {app.weightClass}
+                        </span>
+                      )}
+                      {app.email && (
+                        <span className="text-[0.55rem] text-[#8494A7]">✉ {app.email}</span>
+                      )}
+                      {app.phone && (
+                        <span className="text-[0.55rem] text-[#8494A7]">☎ {app.phone}</span>
+                      )}
+                    </div>
                     <p className="text-[#8494A7] text-[0.55rem] mt-1 line-clamp-2">{app.bio}</p>
                     <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                       {app.youtubeRoutine && (
@@ -853,6 +918,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                       )}
                       {app.socials?.instagram && <span className="text-[0.55rem] text-pink-400">IG: {app.socials.instagram}</span>}
                       {app.socials?.twitter && <span className="text-[0.55rem] text-sky-400">X: {app.socials.twitter}</span>}
+                      {app.specialMove && <span className="text-[0.55rem] text-[#D4A843]">★ {app.specialMove}</span>}
                       <span className="text-[0.5rem] text-[#8494A7]">{new Date(app.submittedAt).toLocaleDateString()}</span>
                     </div>
                   </div>
