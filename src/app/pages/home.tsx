@@ -162,7 +162,7 @@ export function HomePage() {
               
               {/* Video container — links to WCO YouTube */}
               <a
-                href="https://www.youtube.com/@WorldCalisthenicsOrg"
+                href="https://www.youtube.com/live/B9h_UMvGz3I"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block relative bg-[#0B1120] rounded-2xl overflow-hidden cursor-pointer"
