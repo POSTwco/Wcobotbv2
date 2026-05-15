@@ -12,7 +12,8 @@ import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.p
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
 
 const ATHLETE_BG = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/athlete1.jpg";
-const WCO_VIDEO = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCOVID.M4V";
+// ✅ Updated hero video (mp4 format = better compatibility & smaller file size)
+const WCO_VIDEO = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCOVID.mp4";
 
 function StatCard({ label, value, icon: Icon, color, animatedValue, prefix, suffix, decimals }: { label: string; value: string; icon: any; color: string; animatedValue?: number; prefix?: string; suffix?: string; decimals?: number }) {
   const { vipActive } = useVIP();
