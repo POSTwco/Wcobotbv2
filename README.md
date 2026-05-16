@@ -72,11 +72,9 @@ This is **decentralized sports entertainment
 
 - WalletConnect Project ID loaded from environment variables
 - No admin backdoors or centralized control
-
 - All transactions signed directly in the user’s wallet
 - WalletConnect Project ID loaded securely from environment variables
 - No admin backdoors or centralized vote control — everything is on-chain
->>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
 - Branch protection + required PR reviews enabled on `main`
 - Full audit-friendly architecture
 
