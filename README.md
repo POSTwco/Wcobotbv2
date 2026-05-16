@@ -1,41 +1,74 @@
+# 🏆 WCO Battle of the Bars
 
-  # Web 3 Interactive Voting Site (Copy)
+**The World's First Decentralized Calisthenics Competition Platform**
 
-  This is a code bundle for Web 3 Interactive Voting Site (Copy). The original project is available at https://www.figma.com/design/ONYFF4b0z10GlNzXDm0rZs/Web-3-Interactive-Voting-Site--Copy-.
+<div align="center">
+  <img src="https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/BOTB%20SHIELD%20LOGORegisteredsmall.png" alt="WCO Battle of the Bars" width="180" />
+  <h3><strong>No Loss. Only Gains.</strong></h3>
 
-  ## Running the code
+  <p>
+    <a href="https://wco-beta.vercel.app">
+      <img src="https://img.shields.io/badge/🌐_LIVE-wco--beta.vercel.app-00FF9D?style=for-the-badge" alt="Live Site" />
+    </a>
+    <a href="https://hedera.com">
+      <img src="https://img.shields.io/badge/Powered%20by-Hedera%20Hashgraph-0A6CFF?style=for-the-badge&logo=hedera" alt="Hedera" />
+    </a>
+    <a href="https://wco-beta.vercel.app">
+      <img src="https://img.shields.io/badge/Web3-Only%20Gains-00FF9D?style=for-the-badge" alt="Only Gains" />
+    </a>
+  </p>
+</div>
 
-  Run `npm i` to install the dependencies.
+**Vote on real-world calisthenics battles. Stake tokens. Earn rewards. Own the sport’s future — all on-chain with Hedera.**
 
-  Run `npm run dev` to start the development server.
-  ## 🛡️ Security & Setup
+---
 
-### Security Highlights
-- **User funds and wallets are 100% safe**: This is a pure client-side dApp. Private keys **never** touch the server or this codebase.
-- All transactions are signed directly in the user’s wallet (HashPack, Blade, Kabila, etc.).
-- WalletConnect Project ID is loaded from environment variables (never hardcoded in source code).
-- No admin backdoors or centralized vote manipulation — voting is handled on-chain via Hedera Consensus Service (HCS).
-- Supabase storage is used only for public assets (images/videos). Sensitive operations use Row Level Security where applicable.
+## 🌟 What is Battle of the Bars?
 
-### 🚀 Local Development Setup
-1. Clone the repository
-2. Copy `.env.example` → `.env`
-3. Fill in your `VITE_WC_PROJECT_ID` (create one free at https://cloud.reown.com)
-4. Run `pnpm install`
-5. Run `pnpm run dev`
+**WCO Battle of the Bars** is the ultimate fusion of elite calisthenics and Web3 sports entertainment.
 
-Open http://localhost:5173 to test.
+Watch world-class athletes compete in real life → **vote live with your wallet** → stake WCO tokens → earn when your picks dominate.
 
-### Production Deployment
-- Automatically deployed to Vercel on every push to `main`
-- **Important**: Add the following environment variable in Vercel Dashboard → Settings → Environment Variables:
-  - `VITE_WC_PROJECT_ID` = your real WalletConnect Project ID
+This is **decentralized sports** — built for athletes, fans, and the next generation of competition.
 
-**Never commit real secrets, `.env` files, or private keys.**
+---
 
-### Additional Security Notes
-- `.gitignore` is configured to protect environment files and build artifacts
-- All dependencies are audited and kept up-to-date
-- Branch protection and pull-request reviews are recommended for the `main` branch
+## 🔥 Key Features
 
-For questions or contributions, open an issue or reach out to the team.
+- **Live IRL Voting** — Real-time votes on actual battles
+- **Staking & Rewards** — Stake tokens, earn when your athlete wins
+- **No-Loss Tokenomics** — Designed so participants only gain
+- **Fully On-Chain** — Powered by Hedera Consensus Service (HCS)
+- **WalletConnect** — Seamless with HashPack, Blade, Kabila & more
+- **Real-Time Leaderboards + NFTs** — Athletes, Governors, and limited-edition drops
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React + TypeScript + Vite + Tailwind + Radix UI + Shadcn
+- **Blockchain**: Hedera Hashgraph (HCS voting & staking)
+- **Wallets**: WalletConnect + Hedera-native
+- **Storage**: Supabase (public assets only)
+- **Deployment**: Vercel (instant previews & production)
+
+---
+
+## 🛡️ Security & Transparency
+
+- Pure **client-side dApp** — private keys **never** leave your wallet
+- WalletConnect Project ID loaded from environment variables
+- No admin backdoors or centralized control
+- Branch protection + required PR reviews enabled on `main`
+- Full audit-friendly architecture
+
+---
+
+## 🚀 Quick Start
+
+```bash
+git clone https://github.com/POSTwco/Wcobotbv2.git
+cd Wcobotbv2
+pnpm install
+cp .env.example .env
+pnpm run dev
