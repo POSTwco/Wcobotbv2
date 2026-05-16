@@ -1,0 +1,8 @@
+# These owners will be the default owners for everything in the repo.
+# They will be automatically requested for review on every PR.
+
+*       @POSTwco
+
+# Optional: You can be more specific with certain folders/files
+/src/   @POSTwco
+/README.md  @POSTwco
