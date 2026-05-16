@@ -33,46 +33,46 @@ This is **decentralized sports entertainment
 
 - **Live IRL Voting** — Real-time votes on actual battles
 - **Staking & Rewards** — Stake tokens, earn when your athlete wins
-<<<<<<< HEAD
+
 - **No-Loss Tokenomics** — Designed so participants only gain
 - **Fully On-Chain** — Powered by Hedera Consensus Service (HCS)
 - **WalletConnect** — Seamless with HashPack, Blade, Kabila & more
 - **Real-Time Leaderboards + NFTs** — Athletes, Governors, and limited-edition drops
-=======
+
 - **No-Loss Mechanics** — Designed so participants only gain
 - **On-Chain Everything** — Powered by Hedera Consensus Service (HCS)
 - **WalletConnect Integration** — Seamless login with HashPack, Blade, Kabila & more
 - **Real-Time Leaderboards** — Athletes, Governors, and community rankings
 - **NFT Collectibles** — Limited-edition athlete drops and battle moments
->>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
+
 
 ---
 
 ## 🛠️ Tech Stack
 
-<<<<<<< HEAD
+
 - **Frontend**: React + TypeScript + Vite + Tailwind + Radix UI + Shadcn
 - **Blockchain**: Hedera Hashgraph (HCS voting & staking)
 - **Wallets**: WalletConnect + Hedera-native
 - **Storage**: Supabase (public assets only)
 - **Deployment**: Vercel (instant previews & production)
-=======
+
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS + Radix UI
 - **Blockchain**: Hedera Hashgraph (HCS for voting & staking)
 - **Wallets**: WalletConnect + Hedera-native extensions
 - **Storage**: Supabase (public assets only)
 - **Deployment**: Vercel (instant previews + production)
->>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
+
 
 ---
 
 ## 🛡️ Security & Transparency
 
 - Pure **client-side dApp** — private keys **never** leave your wallet
-<<<<<<< HEAD
+
 - WalletConnect Project ID loaded from environment variables
 - No admin backdoors or centralized control
-=======
+
 - All transactions signed directly in the user’s wallet
 - WalletConnect Project ID loaded securely from environment variables
 - No admin backdoors or centralized vote control — everything is on-chain
@@ -85,13 +85,13 @@ This is **decentralized sports entertainment
 ## 🚀 Quick Start
 
 ```bash
-<<<<<<< HEAD
+
 git clone https://github.com/POSTwco/Wcobotbv2.git
 cd Wcobotbv2
 pnpm install
 cp .env.example .env
 pnpm run dev
-=======
+
 # Clone the repository
 git clone https://github.com/POSTwco/Wcobotbv2.git
 cd Wcobotbv2
@@ -104,4 +104,4 @@ cp .env.example .env
 
 # Start development server
 pnpm run dev
->>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
+
