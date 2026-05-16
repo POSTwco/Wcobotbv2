@@ -19,46 +19,64 @@
   </p>
 </div>
 
-**Vote on real-world calisthenics battles. Stake tokens. Earn rewards. Own the sport’s future — all on-chain with Hedera.**
+**Vote on real-world calisthenics battles. Stake tokens on your favorite athletes. Earn rewards when they win — all on-chain with Hedera.**
 
 ---
 
 ## 🌟 What is Battle of the Bars?
 
-**WCO Battle of the Bars** is the ultimate fusion of elite calisthenics and Web3 sports entertainment.
+**Battle of the Bars®** is the premier 1v1 freestyle calisthenics competition brought to Web3 by the **World Calisthenics Organization (WCO)**.
 
-Watch world-class athletes compete in real life → **vote live with your wallet** → stake WCO tokens → earn when your picks dominate.
+Watch elite athletes compete in real life. Vote live using your wallet. Stake tokens. Earn rewards when your picks dominate.
 
-This is **decentralized sports** — built for athletes, fans, and the next generation of competition.
-
----
-
-## 🔥 Key Features
+This is **decentralized sports entertainment
 
 - **Live IRL Voting** — Real-time votes on actual battles
 - **Staking & Rewards** — Stake tokens, earn when your athlete wins
+<<<<<<< HEAD
 - **No-Loss Tokenomics** — Designed so participants only gain
 - **Fully On-Chain** — Powered by Hedera Consensus Service (HCS)
 - **WalletConnect** — Seamless with HashPack, Blade, Kabila & more
 - **Real-Time Leaderboards + NFTs** — Athletes, Governors, and limited-edition drops
+=======
+- **No-Loss Mechanics** — Designed so participants only gain
+- **On-Chain Everything** — Powered by Hedera Consensus Service (HCS)
+- **WalletConnect Integration** — Seamless login with HashPack, Blade, Kabila & more
+- **Real-Time Leaderboards** — Athletes, Governors, and community rankings
+- **NFT Collectibles** — Limited-edition athlete drops and battle moments
+>>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
 
 ---
 
 ## 🛠️ Tech Stack
 
+<<<<<<< HEAD
 - **Frontend**: React + TypeScript + Vite + Tailwind + Radix UI + Shadcn
 - **Blockchain**: Hedera Hashgraph (HCS voting & staking)
 - **Wallets**: WalletConnect + Hedera-native
 - **Storage**: Supabase (public assets only)
 - **Deployment**: Vercel (instant previews & production)
+=======
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS + Radix UI
+- **Blockchain**: Hedera Hashgraph (HCS for voting & staking)
+- **Wallets**: WalletConnect + Hedera-native extensions
+- **Storage**: Supabase (public assets only)
+- **Deployment**: Vercel (instant previews + production)
+>>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
 
 ---
 
 ## 🛡️ Security & Transparency
 
 - Pure **client-side dApp** — private keys **never** leave your wallet
+<<<<<<< HEAD
 - WalletConnect Project ID loaded from environment variables
 - No admin backdoors or centralized control
+=======
+- All transactions signed directly in the user’s wallet
+- WalletConnect Project ID loaded securely from environment variables
+- No admin backdoors or centralized vote control — everything is on-chain
+>>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
 - Branch protection + required PR reviews enabled on `main`
 - Full audit-friendly architecture
 
@@ -67,8 +85,23 @@ This is **decentralized sports** — built for athletes, fans, and the next gene
 ## 🚀 Quick Start
 
 ```bash
+<<<<<<< HEAD
 git clone https://github.com/POSTwco/Wcobotbv2.git
 cd Wcobotbv2
 pnpm install
 cp .env.example .env
 pnpm run dev
+=======
+# Clone the repository
+git clone https://github.com/POSTwco/Wcobotbv2.git
+cd Wcobotbv2
+
+# Install dependencies
+pnpm install
+
+# Setup environment variables
+cp .env.example .env
+
+# Start development server
+pnpm run dev
+>>>>>>> 21ed73d396ef54851a3c9adec57cdbb603125833
