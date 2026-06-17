@@ -35,6 +35,7 @@
 import {
   EXERCISES,
   LIBRARY_VERSION,
+  getExercise,
   type Exercise,
   type CaliCategory,
   type CaliPattern,
@@ -72,6 +73,11 @@ export interface WorkoutBlockItem {
   tempoHint?: string;
   cues: string[];
   equipment: CaliEquipment;
+  /** Category benefit — shown in coaching UI */
+  benefit?: string;
+  /** Human-readable easier/harder variants for scaling ladder */
+  scalingDownName?: string;
+  scalingUpName?: string;
 }
 
 export type BlockKind =
@@ -117,6 +123,15 @@ interface LevelRung {
   conditioningCount: number;
   cooldownCount: number;
 }
+
+const CATEGORY_BENEFITS: Record<CaliCategory, string> = {
+  push: "Builds pressing power, shoulder stability, and upper-body resilience",
+  pull: "Develops back strength, grip endurance, and postural control",
+  core: "Forges trunk stiffness, anti-rotation strength, and midline power",
+  legs: "Builds lower-body drive, single-leg balance, and athletic explosiveness",
+  conditioning: "Elevates work capacity, heart rate recovery, and mental toughness",
+  mobility: "Unlocks range of motion, joint health, and movement quality",
+};
 
 const RUNGS: Record<CaliLevel, LevelRung> = {
   1: { difficultyBand: [1, 4], setsPrimary: 3, setsCore: 2, setsConditioning: 1, restSec: 90, warmupCount: 2, conditioningCount: 1, cooldownCount: 1 },
@@ -421,6 +436,13 @@ export function buildWorkoutPlan(input: GeneratorInput): WorkoutPlan {
         tempoHint: chosen.tempoHint,
         cues: chosen.cues,
         equipment: chosen.equipment,
+        benefit: CATEGORY_BENEFITS[chosen.category],
+        scalingDownName: chosen.scalingDown
+          ? getExercise(chosen.scalingDown)?.name
+          : undefined,
+        scalingUpName: chosen.scalingUp
+          ? getExercise(chosen.scalingUp)?.name
+          : undefined,
       });
 
       idsSeen.add(chosen.id);

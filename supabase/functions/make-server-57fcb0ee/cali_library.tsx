@@ -30,7 +30,7 @@
  * edge isolate at boot — keep it lean.
  */
 
-export const LIBRARY_VERSION = "cali-lib-1.1.0";
+export const LIBRARY_VERSION = "cali-lib-1.2.0";
 
 export type CaliCategory =
   | "push"
