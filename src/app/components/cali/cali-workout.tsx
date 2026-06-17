@@ -16,7 +16,9 @@ import { CaliWorkoutProgress } from "./cali-workout-progress";
 import { CaliExerciseCard } from "./cali-exercise-card";
 import { CaliCoachToast } from "./cali-coach-toast";
 import { CaliWorkoutCelebration } from "./cali-workout-celebration";
+import { CaliMotionRail } from "./cali-motion-rail";
 import { getCoachMessage } from "../../lib/cali-coach-messages";
+import { getAvatarGender, setAvatarGender, type AvatarGender } from "../../lib/cali-avatar-prefs";
 import {
   xpForSet, xpForBlock, xpForPr, xpForWorkoutComplete,
 } from "../../lib/cali-workout-xp";
@@ -100,6 +102,13 @@ export function CaliWorkout() {
   const [streak, setStreak] = useState(0);
 
   const [activeBlock, setActiveBlock] = useState(0);
+  const [focusedItemIndex, setFocusedItemIndex] = useState(0);
+  const [avatarGender, setAvatarGenderState] = useState<AvatarGender>(() => getAvatarGender());
+
+  const handleGenderChange = useCallback((g: AvatarGender) => {
+    setAvatarGenderState(g);
+    setAvatarGender(g);
+  }, []);
 
   useEffect(() => {
     if (!cali.sessionToken || !id) return;
@@ -264,6 +273,13 @@ export function CaliWorkout() {
 
   const estMin = useMemo(() => Math.round((plan?.estimatedDurationSec ?? 0) / 60), [plan]);
 
+  const activeItems = plan?.blocks[activeBlock]?.items ?? [];
+  const focusedItem = activeItems[focusedItemIndex] ?? activeItems[0] ?? null;
+
+  useEffect(() => {
+    setFocusedItemIndex(0);
+  }, [activeBlock]);
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
@@ -284,7 +300,7 @@ export function CaliWorkout() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 sm:py-10 space-y-5 pb-32">
+    <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10 space-y-5 pb-32">
       <div className="flex items-center justify-between">
         <Link to="/calisthenics" className="flex items-center gap-1.5 text-xs text-[#8494A7] hover:text-[#E8ECF0]" style={dmSans}>
           <ArrowLeft className="w-4 h-4" /> Dashboard
@@ -324,26 +340,39 @@ export function CaliWorkout() {
         ))}
       </div>
 
-      {/* Active block exercises */}
-      <div className="space-y-4">
-        {plan.blocks[activeBlock]?.items.map((item, i) => (
-          <CaliExerciseCard
-            key={`${item.exerciseId}-${i}`}
-            item={item as BlockItem}
-            blockIndex={activeBlock}
-            itemIndex={i}
-            actuals={actuals}
-            loggedSets={loggedSets}
-            savingSet={savingSet}
-            onChangeActual={(key, patch) =>
-              setActuals((prev) => ({
-                ...prev,
-                [key]: { value: "", rpe: "", note: "", ...prev[key], ...patch },
-              }))
-            }
-            onLogSet={logSet}
+      {/* Active block: list + right coaching rail */}
+      <div className="flex gap-6 items-start">
+        <div className="flex-1 min-w-0 space-y-4">
+          {activeItems.map((item, i) => (
+            <CaliExerciseCard
+              key={`${item.exerciseId}-${i}`}
+              item={item as BlockItem}
+              blockIndex={activeBlock}
+              itemIndex={i}
+              actuals={actuals}
+              loggedSets={loggedSets}
+              savingSet={savingSet}
+              isFocused={focusedItemIndex === i}
+              gender={avatarGender}
+              onFocus={() => setFocusedItemIndex(i)}
+              onChangeActual={(key, patch) =>
+                setActuals((prev) => ({
+                  ...prev,
+                  [key]: { value: "", rpe: "", note: "", ...prev[key], ...patch },
+                }))
+              }
+              onLogSet={logSet}
+            />
+          ))}
+        </div>
+
+        {focusedItem && (
+          <CaliMotionRail
+            item={focusedItem as BlockItem}
+            gender={avatarGender}
+            onGenderChange={handleGenderChange}
           />
-        ))}
+        )}
       </div>
 
       {/* Coach toast */}
@@ -362,7 +391,7 @@ export function CaliWorkout() {
       {/* Sticky bottom action bar */}
       <div className="fixed bottom-20 md:bottom-6 left-0 right-0 z-40 px-4" style={{ pointerEvents: "none" }}>
         <div
-          className="max-w-3xl mx-auto flex gap-2 p-2 rounded-2xl border"
+          className="max-w-5xl mx-auto flex gap-2 p-2 rounded-2xl border"
           style={{
             pointerEvents: "auto",
             background: "rgba(11,17,32,0.92)",

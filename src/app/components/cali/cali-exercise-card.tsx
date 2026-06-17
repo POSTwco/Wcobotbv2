@@ -7,8 +7,10 @@ import {
   ChevronDown, CheckCircle2, AlertTriangle, Wind, Zap, TrendingUp, TrendingDown, Minus,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
-import { CaliExerciseMotion } from "./cali-exercise-motion";
+import type { AvatarGender } from "../../lib/cali-avatar-prefs";
 import { getExerciseGuide, CATEGORY_COLORS, type WorkoutExerciseItem } from "../../lib/cali-exercise-guide";
+import { CaliAvatarMotion } from "./cali-avatar-motion";
+import { CaliMotionCoachPopover } from "./cali-motion-coach-popover";
 import { CaliSetLogger } from "./cali-set-logger";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
@@ -34,12 +36,16 @@ interface Props {
   actuals: Record<string, SetState>;
   loggedSets: Set<string>;
   savingSet: string | null;
+  isFocused?: boolean;
+  gender: AvatarGender;
+  onFocus?: () => void;
   onChangeActual: (key: string, patch: Partial<SetState>) => void;
   onLogSet: (key: string, b: number, i: number, s: number) => void;
 }
 
 export function CaliExerciseCard({
-  item, blockIndex, itemIndex, actuals, loggedSets, savingSet, onChangeActual, onLogSet,
+  item, blockIndex, itemIndex, actuals, loggedSets, savingSet,
+  isFocused, gender, onFocus, onChangeActual, onLogSet,
 }: Props) {
   const guide = getExerciseGuide(item);
   const accent = CATEGORY_COLORS[item.category] ?? "#4274B9";
@@ -50,17 +56,21 @@ export function CaliExerciseCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4, ease: "easeOut" }}
-      className="rounded-2xl border overflow-hidden"
+      className="rounded-2xl border overflow-hidden transition-all duration-200"
       style={{
         background: "linear-gradient(160deg, rgba(66,116,185,0.05), rgba(11,17,32,0.9))",
-        borderColor: `${accent}25`,
-        boxShadow: `0 4px 24px ${accent}08`,
+        borderColor: isFocused ? `${accent}55` : `${accent}25`,
+        boxShadow: isFocused ? `0 4px 24px ${accent}18` : `0 4px 24px ${accent}08`,
+        borderLeftWidth: isFocused ? 3 : 1,
+        borderLeftColor: isFocused ? accent : undefined,
       }}
+      onMouseEnter={onFocus}
+      onFocus={onFocus}
     >
       {/* Card header */}
       <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex-1 min-w-0">
             <span
               className="inline-block text-[0.55rem] font-bold tracking-widest uppercase px-2 py-0.5 rounded-md mb-2"
               style={{ ...orbitron, background: `${accent}18`, color: accent }}
@@ -69,21 +79,33 @@ export function CaliExerciseCard({
             </span>
             <h3 className="text-base sm:text-lg font-bold text-white" style={dmSans}>{item.name}</h3>
           </div>
-          <span
-            className="text-[0.65rem] font-bold px-2.5 py-1 rounded-lg flex-shrink-0"
-            style={{ ...dmSans, background: "rgba(66,116,185,0.12)", color: "#6AA3E0" }}
-          >
-            {item.sets} × {item.target.low}–{item.target.high}
-            {item.target.metric === "reps" ? " reps" : "s"}
-            {item.unilateral ? "/side" : ""}
-          </span>
+          <div className="flex items-start gap-2 flex-shrink-0">
+            <span
+              className="lg:hidden"
+            >
+              <CaliMotionCoachPopover item={item}>
+                <CaliAvatarMotion
+                  pattern={item.pattern}
+                  category={item.category}
+                  gender={gender}
+                  size="compact"
+                />
+              </CaliMotionCoachPopover>
+            </span>
+            <span
+              className="text-[0.65rem] font-bold px-2.5 py-1 rounded-lg"
+              style={{ ...dmSans, background: "rgba(66,116,185,0.12)", color: "#6AA3E0" }}
+            >
+              {item.sets} × {item.target.low}–{item.target.high}
+              {item.target.metric === "reps" ? " reps" : "s"}
+              {item.unilateral ? "/side" : ""}
+            </span>
+          </div>
         </div>
 
         {item.tempoHint && (
-          <p className="text-[0.6rem] text-[#D4A843]/90 mb-3" style={dmSans}>Tempo: {item.tempoHint}</p>
+          <p className="text-[0.6rem] text-[#D4A843]/90 mb-2" style={dmSans}>Tempo: {item.tempoHint}</p>
         )}
-
-        <CaliExerciseMotion pattern={item.pattern} category={item.category} className="mb-4" />
 
         {/* Collapsible coaching guide */}
         <Collapsible>

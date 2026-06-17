@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "frameCount": 4,
+  "ready": {
+    "male": ["stretch", "horizontal_push"],
+    "female": []
+  }
+}
