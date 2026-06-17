@@ -57,6 +57,7 @@ import { LaunchGuideTab } from "./launch-guide-tab";
 import { AdminWelcomeOverlay } from "./admin-welcome";
 import { AthleteOnboardedOverlay } from "./athlete-onboarded-overlay";
 import { SnapshotsTab } from "./snapshots-tab";
+import { CaliAdminStats } from "./cali/cali-admin-stats";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -415,6 +416,9 @@ export function AdminPanel() {
 
         {/* Live unique-IP visit counter — privacy-preserving traffic gauge */}
         <VisitCounter wallet={session.wallet} sessionToken={session.token} />
+
+        {/* Calisthenics tab metrics — DAU, generations, anchors, top exercises */}
+        <CaliAdminStats wallet={session.wallet} sessionToken={session.token} />
 
         {/* Tab Navigation */}
         <div className="border-b border-[#D4A843]/10 overflow-x-auto">

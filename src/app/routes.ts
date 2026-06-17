@@ -7,6 +7,10 @@ import { NFTsPage } from "./pages/nfts";
 import { GovernancePage } from "./pages/governance";
 import { LeaderboardPage } from "./pages/leaderboard";
 import { ApplyPage } from "./pages/apply";
+import { CalisthenicsPage } from "./pages/calisthenics";
+import { CalisthenicsWorkoutPage } from "./pages/calisthenics-workout";
+import { CalisthenicsHistoryPage } from "./pages/calisthenics-history";
+import { CalisthenicsPRsPage } from "./pages/calisthenics-prs";
 import { PrivacyPage } from "./pages/privacy";
 import { TermsPage } from "./pages/terms";
 import { WhitepaperPage } from "./pages/whitepaper";
@@ -45,6 +49,10 @@ export const router = createBrowserRouter([
       { path: "governance", Component: GovernancePage },
       { path: "leaderboard", Component: LeaderboardPage },
       { path: "apply", Component: ApplyPage },
+      { path: "calisthenics", Component: CalisthenicsPage },
+      { path: "calisthenics/workout/:id", Component: CalisthenicsWorkoutPage },
+      { path: "calisthenics/history", Component: CalisthenicsHistoryPage },
+      { path: "calisthenics/prs", Component: CalisthenicsPRsPage },
       { path: "privacy", Component: PrivacyPage },
       { path: "terms", Component: TermsPage },
       { path: "whitepaper", Component: WhitepaperPage },

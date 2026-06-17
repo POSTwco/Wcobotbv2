@@ -18,7 +18,7 @@ import { Link, useLocation } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Home, Swords, Layers, Trophy, MoreHorizontal,
-  Users, Shield, FileText, Wallet,
+  Users, Shield, FileText, Wallet, Dumbbell,
   X, RefreshCw, Crown, ExternalLink, LogOut,
   Loader2,
 } from "lucide-react";
@@ -67,6 +67,7 @@ const TABS: NavTab[] = [
 
 // Secondary pages shown in the "More" sheet
 const MORE_LINKS = [
+  { to: "/calisthenics", label: "Calisthenics", icon: <Dumbbell className="w-5 h-5" /> },
   { to: "/athletes", label: "Athletes", icon: <Users className="w-5 h-5" /> },
   { to: "/governance", label: "Governors Hub", icon: <Shield className="w-5 h-5" /> },
   { to: "/whitepaper", label: "Whitepaper", icon: <FileText className="w-5 h-5" /> },

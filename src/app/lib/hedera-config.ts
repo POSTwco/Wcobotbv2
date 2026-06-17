@@ -15,17 +15,7 @@
 // WalletConnect Project ID (public identifier — safe to embed in frontend)
 // Registered at https://cloud.reown.com
 // ---------------------------------------------------------------------------
-// WalletConnect Project ID — loaded securely from environment variables
-// (Never commit the real value in code)
-export const WC_PROJECT_ID = import.meta.env.VITE_WC_PROJECT_ID as string;
-
-// Helpful warning if someone forgets to set the env var
-if (import.meta.env.DEV && !WC_PROJECT_ID) {
-  console.warn(
-    "⚠️  VITE_WC_PROJECT_ID is missing from .env file.\n" +
-    "WalletConnect will not work until you add it."
-  );
-}
+export const WC_PROJECT_ID = "a89d7b107e0310e2e7ffddc91d37415d";
 
 // ---------------------------------------------------------------------------
 // Hedera Network Definitions (CAIP-2 format: "hedera:<network>")

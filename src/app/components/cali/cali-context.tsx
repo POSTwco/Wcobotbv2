@@ -1,0 +1,296 @@
+/**
+ * BOTB Calisthenics — Session Context
+ * ====================================
+ *
+ * Owns the gate-state machine for the Calisthenics tab:
+ *   idle → connecting → challenging → signing → verifying → eligible
+ *     ↓                                                        ↓
+ *   error ←──────────────────────────────────────────── revoked
+ *
+ * The cali session token is *separate* from any other wallet session token
+ * in the app — it's specifically scoped to the cali HBAR-gate. It lives in
+ * localStorage (key: botb-cali-session) and is silently restored on mount,
+ * then validated against /cali/session/me before the UI commits.
+ *
+ * Security:
+ *   - Token is HMAC-bound to accountId + exp; server reverifies every call.
+ *   - On wallet disconnect or accountId mismatch, the token is wiped.
+ *   - On 401 from any cali API, the token is wiped + state → revoked.
+ */
+
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type ReactNode,
+} from "react";
+import { api } from "../../lib/api";
+import { useWallet } from "../wallet-context";
+
+const STORAGE_KEY = "botb-cali-session";
+
+export type CaliPhase =
+  | "idle"        // no wallet, or wallet has no token yet
+  | "checking"    // restoring token from localStorage / probing /me
+  | "connecting"  // wallet connect modal open
+  | "challenging" // requesting a challenge from the server
+  | "signing"     // waiting for HashPack signature
+  | "verifying"   // posting signature to /cali/verify
+  | "eligible"    // session active, full access
+  | "revoked"     // token expired or balance fell below gate
+  | "error";
+
+export interface CaliEligibility {
+  accountId: string;
+  tinybars: number;
+  checkedAt: number;
+  expiresAt: number;
+}
+
+interface CaliContextValue {
+  phase: CaliPhase;
+  error: string | null;
+  accountId: string | null;
+  sessionToken: string | null;
+  eligibility: CaliEligibility | null;
+  /** Tinybars threshold the server enforces. Mirrored here for UI copy. */
+  minTinybars: number;
+  /** Kick off the full sign-and-verify flow. Wallet must already be connected. */
+  enter: () => Promise<void>;
+  /** Re-check HBAR balance + extend session. */
+  refresh: () => Promise<void>;
+  /** Wipe local token (server eligibility KV will time out on its own). */
+  signOut: () => void;
+  /** Helper used by feature components after a 401 to drop back to gate UI. */
+  handleAuthError: (code?: string) => void;
+}
+
+const MIN_TINYBARS = 100_000_000;
+
+const CaliContext = createContext<CaliContextValue | null>(null);
+
+interface StoredSession {
+  token: string;
+  accountId: string;
+  exp: number;
+}
+
+function loadStored(): StoredSession | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredSession;
+    if (!parsed?.token || !parsed?.accountId || !parsed?.exp) return null;
+    if (parsed.exp < Date.now()) {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persistStored(s: StoredSession) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  } catch {
+    /* quota or private mode — non-fatal, user just re-signs next time */
+  }
+}
+
+function clearStored() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export function CaliSessionProvider({ children }: { children: ReactNode }) {
+  const wallet = useWallet();
+  const [phase, setPhase] = useState<CaliPhase>("checking");
+  const [error, setError] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [eligibility, setEligibility] = useState<CaliEligibility | null>(null);
+
+  // Track the current accountId we hold a session for, so we can detect a
+  // wallet swap and invalidate immediately.
+  const sessionAccountIdRef = useRef<string | null>(null);
+
+  // ── Restore on mount + probe /me ────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stored = loadStored();
+      if (!stored) {
+        setPhase("idle");
+        return;
+      }
+      setSessionToken(stored.token);
+      sessionAccountIdRef.current = stored.accountId;
+      const res = await api.cali.me(stored.token);
+      if (cancelled) return;
+      if (res.success && res.data) {
+        setEligibility(res.data.eligibility);
+        setPhase("eligible");
+      } else {
+        clearStored();
+        setSessionToken(null);
+        sessionAccountIdRef.current = null;
+        setPhase("idle");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ── Detect wallet disconnect or account swap ────────────────────────────
+  useEffect(() => {
+    if (!sessionAccountIdRef.current) return;
+    if (!wallet.connected || wallet.accountId !== sessionAccountIdRef.current) {
+      clearStored();
+      setSessionToken(null);
+      setEligibility(null);
+      sessionAccountIdRef.current = null;
+      setPhase("idle");
+    }
+  }, [wallet.connected, wallet.accountId]);
+
+  // ── Enter flow ──────────────────────────────────────────────────────────
+  const enter = useCallback(async () => {
+    setError(null);
+    if (!wallet.connected || !wallet.accountId) {
+      setPhase("connecting");
+      try {
+        await wallet.connect();
+      } catch (err: any) {
+        setError(err?.message || "Wallet connection failed.");
+        setPhase("error");
+        return;
+      }
+    }
+    const accountId = wallet.accountId;
+    if (!accountId) {
+      setError("No wallet connected.");
+      setPhase("error");
+      return;
+    }
+
+    setPhase("challenging");
+    const ch = await api.cali.challenge(accountId);
+    if (!ch.success || !ch.data) {
+      setError(ch.error || "Failed to request challenge.");
+      setPhase("error");
+      return;
+    }
+
+    setPhase("signing");
+    let signature: string | null;
+    try {
+      signature = await wallet.signMessage(ch.data.challenge);
+    } catch (err: any) {
+      setError(err?.message || "Signature was cancelled or failed.");
+      setPhase("error");
+      return;
+    }
+    if (!signature) {
+      setError("Wallet did not return a signature. Approve the request in HashPack and try again.");
+      setPhase("error");
+      return;
+    }
+
+    setPhase("verifying");
+    const verify = await api.cali.verify(accountId, ch.data.nonce, signature);
+    if (!verify.success || !verify.data) {
+      // INSUFFICIENT_HBAR is a deliberate, user-facing message — keep it.
+      setError(verify.error || "Verification failed.");
+      setPhase("error");
+      return;
+    }
+
+    const stored: StoredSession = {
+      token: verify.data.sessionToken,
+      accountId,
+      exp: verify.data.expiresAt,
+    };
+    persistStored(stored);
+    setSessionToken(stored.token);
+    sessionAccountIdRef.current = accountId;
+    setEligibility(verify.data.eligibility);
+    setPhase("eligible");
+  }, [wallet]);
+
+  // ── Refresh ─────────────────────────────────────────────────────────────
+  const refresh = useCallback(async () => {
+    if (!sessionToken) return;
+    const res = await api.cali.refresh(sessionToken);
+    if (res.success && res.data) {
+      const accountId = sessionAccountIdRef.current;
+      if (accountId) {
+        persistStored({ token: res.data.sessionToken, accountId, exp: res.data.expiresAt });
+      }
+      setSessionToken(res.data.sessionToken);
+      setEligibility(res.data.eligibility);
+      setPhase("eligible");
+    } else if (res.code === "INSUFFICIENT_HBAR") {
+      clearStored();
+      setSessionToken(null);
+      setEligibility(null);
+      setError(res.error || "HBAR balance fell below the gate.");
+      setPhase("revoked");
+    } else if (res.code === "CALI_SESSION_REQUIRED" || res.code === "CALI_ELIGIBILITY_EXPIRED") {
+      clearStored();
+      setSessionToken(null);
+      setEligibility(null);
+      setPhase("idle");
+    }
+  }, [sessionToken]);
+
+  const signOut = useCallback(() => {
+    clearStored();
+    setSessionToken(null);
+    setEligibility(null);
+    sessionAccountIdRef.current = null;
+    setPhase("idle");
+  }, []);
+
+  const handleAuthError = useCallback((code?: string) => {
+    if (
+      code === "CALI_SESSION_REQUIRED" ||
+      code === "CALI_ELIGIBILITY_EXPIRED" ||
+      code === "INSUFFICIENT_HBAR"
+    ) {
+      clearStored();
+      setSessionToken(null);
+      setEligibility(null);
+      sessionAccountIdRef.current = null;
+      setPhase(code === "INSUFFICIENT_HBAR" ? "revoked" : "idle");
+    }
+  }, []);
+
+  const value: CaliContextValue = {
+    phase,
+    error,
+    accountId: sessionAccountIdRef.current,
+    sessionToken,
+    eligibility,
+    minTinybars: MIN_TINYBARS,
+    enter,
+    refresh,
+    signOut,
+    handleAuthError,
+  };
+
+  return <CaliContext.Provider value={value}>{children}</CaliContext.Provider>;
+}
+
+export function useCaliSession(): CaliContextValue {
+  const ctx = useContext(CaliContext);
+  if (!ctx) throw new Error("useCaliSession must be used within <CaliSessionProvider>");
+  return ctx;
+}

@@ -164,6 +164,7 @@ import {
   ensureIndicesMigrated,
   type CompactVote,
 } from "./scaling.tsx";
+import { mountCaliRoutes } from "./cali.tsx";
 
 const app = new Hono();
 
@@ -349,6 +350,12 @@ app.use(`${PREFIX}/*`, rateLimit({
   windowMs: 60 * 1000,
   message: "Too many requests from this IP. Please slow down.",
 }));
+
+// ---------------------------------------------------------------------------
+// Calisthenics tab — HBAR-gated workout routes (mounted under PREFIX/cali/*)
+// Sits behind the global CORS + rate-limit middleware above.
+// ---------------------------------------------------------------------------
+mountCaliRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -777,8 +784,23 @@ app.get(`${PREFIX}/health`, async (c) => {
 const VISIT_HASH_RETENTION_DAYS = 31;
 let lastVisitReapDate = "";
 
+/**
+ * Fail-closed HMAC secret resolver.
+ * Prefers BOTB_HASH_SALT (dedicated rotation-friendly secret); falls back to
+ * SUPABASE_SERVICE_ROLE_KEY for backward compatibility. THROWS if neither is
+ * set — we will not silently fall back to a public literal that would collapse
+ * the anonymity guarantees of visitor/wallet hashing.
+ */
+function getHashSecret(): string {
+  const secret = Deno.env.get("BOTB_HASH_SALT") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!secret || secret.length < 16) {
+    throw new Error("Hash secret unavailable: set BOTB_HASH_SALT or SUPABASE_SERVICE_ROLE_KEY");
+  }
+  return secret;
+}
+
 async function dailyVisitSalt(date: string): Promise<string> {
-  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "botb-fallback-visit-salt";
+  const secret = getHashSecret();
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
@@ -897,7 +919,7 @@ app.post(`${PREFIX}/track-visit`, async (c) => {
 // ---------------------------------------------------------------------------
 
 async function hashWallet(wallet: string, scope: string): Promise<string> {
-  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "botb-fallback-wallet-salt";
+  const secret = getHashSecret();
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],

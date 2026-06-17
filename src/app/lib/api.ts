@@ -75,11 +75,13 @@ async function request<T>(
     sessionToken?: string;
     /** Wallet session token for vote/chat operations (X-Wallet-Session header) */
     walletSessionToken?: string;
+    /** Calisthenics-tab session token (X-Cali-Session header) */
+    caliSessionToken?: string;
     /** Override default request timeout in ms */
     timeoutMs?: number;
   } = {}
 ): Promise<ApiResponse<T>> {
-  const { method = "GET", body, adminWallet, sessionToken, walletSessionToken, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { method = "GET", body, adminWallet, sessionToken, walletSessionToken, caliSessionToken, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${publicAnonKey}`,
@@ -96,6 +98,10 @@ async function request<T>(
 
   if (walletSessionToken) {
     headers["X-Wallet-Session"] = walletSessionToken;
+  }
+
+  if (caliSessionToken) {
+    headers["X-Cali-Session"] = caliSessionToken;
   }
 
   // AbortController for timeout
@@ -699,5 +705,118 @@ export const api = {
     clearIpFlags: (adminWallet: string, sessionToken: string) =>
       request<{ flagsCleared: number }>(
         "/admin/test/clear-ip-flags", { method: "POST", body: {}, adminWallet, sessionToken }),
+
+    /** Calisthenics command-center stats */
+    getCaliStats: (adminWallet: string, sessionToken: string) =>
+      request<{
+        totalProfiles: number;
+        totalWorkouts: number;
+        totalLogs: number;
+        totalSetsLogged: number;
+        totalPRs: number;
+        totalAnchored: number;
+        workoutsLast24h: number;
+        activeWallets: number;
+        topExercises: Array<{ exerciseId: string; name: string; count: number }>;
+        libraryVersion: string;
+      }>("/admin/cali/stats", { adminWallet, sessionToken }),
+  },
+
+  // ---------------------------------------------------------------------------
+  // Calisthenics (HBAR-gated workout tab)
+  // ---------------------------------------------------------------------------
+  //
+  // Auth shape:
+  //   1. cali.challenge(accountId) → { challenge, nonce, expiresAt }
+  //   2. wallet signs `challenge` via wcSignMessage(...)
+  //   3. cali.verify(accountId, nonce, signature) → { sessionToken, expiresAt, eligibility }
+  //   4. All other routes take the sessionToken (X-Cali-Session header)
+  cali: {
+    challenge: (accountId: string) =>
+      request<{ challenge: string; nonce: string; expiresAt: number }>(
+        "/cali/challenge", { method: "POST", body: { accountId } }),
+
+    verify: (accountId: string, nonce: string, signature: string) =>
+      request<{
+        sessionToken: string;
+        expiresAt: number;
+        eligibility: { accountId: string; tinybars: number; checkedAt: number; expiresAt: number };
+      }>("/cali/verify", { method: "POST", body: { accountId, nonce, signature } }),
+
+    me: (caliSessionToken: string) =>
+      request<{
+        accountId: string;
+        eligibility: { accountId: string; tinybars: number; checkedAt: number; expiresAt: number };
+      }>("/cali/session/me", { caliSessionToken }),
+
+    refresh: (caliSessionToken: string) =>
+      request<{
+        sessionToken: string;
+        expiresAt: number;
+        eligibility: { accountId: string; tinybars: number; checkedAt: number; expiresAt: number };
+      }>("/cali/session/refresh", { method: "POST", caliSessionToken }),
+
+    getProfile: (caliSessionToken: string) =>
+      request<{ profile: any }>("/cali/profile", { caliSessionToken }),
+
+    updateProfile: (caliSessionToken: string, patch: { level?: 1 | 2 | 3; equipment?: string[]; displayName?: string }) =>
+      request<{ profile: any }>("/cali/profile", { method: "PUT", body: patch, caliSessionToken }),
+
+    generate: (caliSessionToken: string, overrides?: { level?: 1 | 2 | 3; equipment?: string[] }) =>
+      request<{ workout: any }>("/cali/workout/generate", { method: "POST", body: overrides ?? {}, caliSessionToken }),
+
+    regenerate: (caliSessionToken: string, previousWorkoutId?: string, overrides?: { level?: 1 | 2 | 3; equipment?: string[] }) =>
+      request<{ workout: any }>("/cali/workout/regenerate", {
+        method: "POST",
+        body: { previousWorkoutId, ...(overrides ?? {}) },
+        caliSessionToken,
+      }),
+
+    getWorkout: (caliSessionToken: string, workoutId: string) =>
+      request<{ workout: any }>(`/cali/workout/${encodeURIComponent(workoutId)}`, { caliSessionToken }),
+
+    logSets: (
+      caliSessionToken: string,
+      workoutId: string,
+      sets: Array<{
+        blockIndex: number;
+        itemIndex: number;
+        setIndex: number;
+        value: number;
+        rpe?: number;
+        note?: string;
+      }>,
+      opts?: { completed?: boolean; completedAt?: string },
+    ) =>
+      request<{ log: any; prChanges: any[]; streak: any }>(
+        `/cali/workout/${encodeURIComponent(workoutId)}/log`,
+        { method: "POST", body: { sets, ...(opts ?? {}) }, caliSessionToken },
+      ),
+
+    history: (caliSessionToken: string, params?: { limit?: number; before?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.before) qs.set("before", params.before);
+      const suffix = qs.toString() ? `?${qs}` : "";
+      return request<{ items: any[]; nextCursor: string | null; total: number }>(
+        `/cali/history${suffix}`, { caliSessionToken });
+    },
+
+    prs: (caliSessionToken: string) =>
+      request<{ prs: any[]; count: number }>("/cali/prs", { caliSessionToken }),
+
+    streak: (caliSessionToken: string) =>
+      request<{ streak: { current: number; longest: number; lastDate: string; updatedAt: number } }>(
+        "/cali/streak", { caliSessionToken }),
+
+    anchor: (caliSessionToken: string, workoutId: string) =>
+      request<{ txId: string; sequenceNumber: number; consensusTs: string }>(
+        `/cali/workout/${encodeURIComponent(workoutId)}/anchor`,
+        { method: "POST", caliSessionToken },
+      ),
+
+    verifyAnchor: (caliSessionToken: string, workoutId: string) =>
+      request<{ ok: boolean; consensusTs: string; hashMatches: boolean }>(
+        `/cali/verify-anchor/${encodeURIComponent(workoutId)}`, { caliSessionToken }),
   },
 };
