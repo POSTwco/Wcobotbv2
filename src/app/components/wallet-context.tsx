@@ -93,7 +93,7 @@ export interface WalletState {
   /** Raw NFT array from mirror node */
   rawNfts: MirrorNFT[];
 
-  connect: () => void;
+  connect: () => Promise<string | null>;
   disconnect: () => void;
   clearError: () => void;
   refreshBalances: () => void;
@@ -129,7 +129,7 @@ const defaultState: WalletState = {
   nftCategories: null,
   rawNfts: [],
   walletSessionToken: null,
-  connect: () => {},
+  connect: async () => null,
   disconnect: () => {},
   clearError: () => {},
   refreshBalances: () => {},
@@ -413,8 +413,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // ------------------------------------------------------------------
   // Connect — Official WalletConnect Modal
   // ------------------------------------------------------------------
-  const connect = useCallback(async () => {
-    if (isConnecting || connected) return;
+  const connect = useCallback(async (): Promise<string | null> => {
+    if (connected && accountId) return accountId;
+    if (isConnecting) return null;
 
     setIsConnecting(true);
     setError(null);
@@ -431,7 +432,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const { session: sess, accountId: acctId, network: net } = proposal.existingSession;
         setConnectedState(sess, acctId, net);
         setIsConnecting(false);
-        return;
+        return acctId;
       }
 
       // Open the OFFICIAL WalletConnect modal with the pairing URI
@@ -464,13 +465,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       if (connectCancelledRef.current) {
         console.log("[BOTB Wallet Context] Connection was cancelled");
-        return;
+        return null;
       }
 
       // Success — close WC modal and update state
       closeWCModal();
       setConnectedState(result.session, result.accountId, result.network);
       console.log(`[BOTB Wallet Context] Connected! Account: ${result.accountId}`);
+      return result.accountId;
 
     } catch (err: any) {
       const message = err?.message ?? "Failed to connect wallet";
@@ -494,7 +496,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setIsConnecting(false);
       cancelApprovalRef.current = null;
     }
-  }, [isConnecting, connected, setConnectedState]);
+    return null;
+  }, [isConnecting, connected, accountId, setConnectedState]);
 
   // ------------------------------------------------------------------
   // Disconnect

@@ -164,17 +164,17 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
   // ── Enter flow ──────────────────────────────────────────────────────────
   const enter = useCallback(async () => {
     setError(null);
-    if (!wallet.connected || !wallet.accountId) {
+    let accountId = wallet.accountId;
+    if (!wallet.connected || !accountId) {
       setPhase("connecting");
       try {
-        await wallet.connect();
+        accountId = await wallet.connect();
       } catch (err: any) {
         setError(err?.message || "Wallet connection failed.");
         setPhase("error");
         return;
       }
     }
-    const accountId = wallet.accountId;
     if (!accountId) {
       setError("No wallet connected.");
       setPhase("error");
