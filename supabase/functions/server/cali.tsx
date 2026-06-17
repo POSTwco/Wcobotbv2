@@ -1306,7 +1306,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   // ─────────────────────────────────────────────────────────────────────────
   // GET /cali/verify-anchor/:workoutId — STUB matching the future shape
   // ─────────────────────────────────────────────────────────────────────────
-  app.get(`${PREFIX}/cali/verify-anchor/:id`, requireCaliSession, async (c) => {
+  app.get(`${PREFIX}/cali/verify-anchor/:id`, async (c) => {
     const accountId = c.get("caliAccountId") as string;
     const rl = await checkRateLimit(`cali-vanchor:${accountId}`, 30, 60_000);
     if (rl.limited) {
