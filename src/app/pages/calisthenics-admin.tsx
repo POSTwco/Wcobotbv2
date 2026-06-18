@@ -156,7 +156,7 @@ export function CalisthenicsAdminPage() {
   const openNewEditor = () => {
     const newId = `custom_${Date.now().toString(36)}`;
     setSelectedId(newId);
-    setEditBuffer({ id: newId, name: '', description: '', category: 'push', pattern: 'horizontal_push', level: 1, difficulty: 5, equipment: 'none', unilateral: false, metric: 'reps', defaultDose: [3,4,8,12], cues: ['Perform with control'], previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null });
+    setEditBuffer({ id: newId, name: '', description: '', category: 'push', pattern: 'horizontal_push', level: 1, difficulty: 5, equipment: 'none', unilateral: false, metric: 'reps', defaultDose: [3,4,8,12], cues: ['Perform with control'], previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null, tempoHint: '', scalingDownName: '', scalingUpName: '' });
     setDirty(false);
     // Force a library load right when the pane (and its scroll selector) opens.
     // This guarantees the full 111+ list appears in the dropdown/scroll even if earlier mount timing missed.
@@ -356,6 +356,20 @@ export function CalisthenicsAdminPage() {
   const saveFromBuffer = async () => {
     if (!editBuffer || !selectedId) return;
 
+    // === PHASE 0 DEFENSIVE GUARD: detect stale frontend bundle (root cause of "saveCaliOverride is not a function") ===
+    // This is the #1 reason saves fail on live after function-only pushes. Vercel serves the old Vite bundle.
+    // If this fires: git push (full), wait for Vercel build, hard-refresh the admin page, confirm in Network tab that the loaded JS contains the method.
+    const hasCaliAdmin = typeof (api as any)?.admin?.saveCaliOverride === 'function' &&
+                         typeof (api as any)?.admin?.addCaliExercise === 'function' &&
+                         typeof (api as any)?.admin?.getCaliLibrary === 'function';
+    if (!hasCaliAdmin) {
+      const adminKeys = Object.keys(((api as any)?.admin) || {}).filter((k: string) => /cali/i.test(k) || /Cali/.test(k));
+      const msg = `FRONTEND BUNDLE STALE — saveCali* methods missing. Present cali keys: ${adminKeys.join(', ') || 'none'}. ACTION: cd Wcobotbv2 && npm run build && git add/commit/push then wait Vercel deploy + hard refresh. Do NOT rely on Supabase fn push alone.`;
+      toast.error(msg);
+      console.error('[calisthenics-admin] STALE BUNDLE', { adminKeys, apiAdmin: Object.keys(((api as any)?.admin) || {}) });
+      return;
+    }
+
     const tok = sessionToken || passedSessionToken || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminSessionToken') : null);
     const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || 'session';
     if (!tok) {
@@ -384,25 +398,38 @@ export function CalisthenicsAdminPage() {
       }
     }
 
-    const payload = { ...editBuffer, id, name, cues, description: (editBuffer.description || '').trim() || undefined };
+    // Full payload for roundtrip safety (preserve every field the UI can show)
+    const payload = {
+      ...editBuffer,
+      id,
+      name,
+      cues,
+      description: (editBuffer.description || '').trim() || undefined,
+      tempoHint: editBuffer.tempoHint || undefined,
+      scalingDown: editBuffer.scalingDown || editBuffer.scalingDownName || undefined,
+      scalingUp: editBuffer.scalingUp || editBuffer.scalingUpName || undefined,
+    };
+
+    // Detailed logging for smoke diagnostics (visible in console on live too)
+    console.log('[calisthenics-admin] save attempt', { isNew, id, name, hasTok: !!tok, hasMale: !!payload.previewImageRefMale, hasFemale: !!payload.previewImageRefFemale, cueCount: cues.length });
 
     setIsSaving(true);
     try {
-      let saveOk = false;
+      // Use single response var to avoid scope bugs on error reporting path (r vs res)
+      let saveRes: any;
       if (isNew) {
-        const r = await api.admin.addCaliExercise(w, tok, { exercise: payload });
-        if (r.success) {
+        saveRes = await api.admin.addCaliExercise(w, tok, { exercise: payload });
+        if (saveRes?.success) {
           toast.success(`Added ${name} — live in engine`);
-          saveOk = true;
         }
       } else {
-        const res = await api.admin.saveCaliOverride(w, tok, { override: payload });
-        if (res.success) {
+        saveRes = await api.admin.saveCaliOverride(w, tok, { override: payload });
+        if (saveRes?.success) {
           toast.success(`Saved ${name} — live in engine`);
-          saveOk = true;
         }
       }
 
+      const saveOk = !!saveRes?.success;
       if (saveOk) {
         // Strong live confirmation + fun
         setShowLiveBanner(true);
@@ -413,32 +440,48 @@ export function CalisthenicsAdminPage() {
 
         // Force full reload of the real list
         await loadLibrary();
-        // Re-select the saved item with fresh server data
+
+        // Re-select the saved item with fresh server data + explicit roundtrip assert for images/desc/cues
         setTimeout(async () => {
           try {
             const lib = await api.admin.getCaliLibrary(w, tok);
-            const fresh = lib.data?.exercises?.find((e: any) => e.id === selectedId) || payload;
+            const fresh = (lib.data?.exercises || []).find((e: any) => e.id === selectedId) || payload;
             const legacy = fresh.previewImageRef || null;
-            setEditBuffer({ 
-              ...fresh, 
-              cues: [...(fresh.cues || [])], 
-              previewImageRefMale: fresh.previewImageRefMale || legacy, 
-              previewImageRefFemale: fresh.previewImageRefFemale || null 
+            setEditBuffer({
+              ...fresh,
+              cues: [...(fresh.cues || [])],
+              previewImageRefMale: fresh.previewImageRefMale || legacy,
+              previewImageRefFemale: fresh.previewImageRefFemale || null,
+              tempoHint: fresh.tempoHint || payload.tempoHint,
+              scalingDown: fresh.scalingDown || fresh.scalingDownName,
+              scalingUp: fresh.scalingUp || fresh.scalingUpName,
             });
             setDirty(false);
-          } catch {}
+
+            // Roundtrip balance check (images + core text)
+            const hadImage = !!(payload.previewImageRefMale || payload.previewImageRefFemale || payload.previewImageRef);
+            const freshHasImage = !!(fresh.previewImageRefMale || fresh.previewImageRefFemale || fresh.previewImageRef || legacy);
+            if (hadImage && !freshHasImage) {
+              console.warn('[calisthenics-admin] roundtrip: image URL present in payload but missing in fresh library response');
+            }
+            if ((payload.description || payload.cues?.length) && !(fresh.description || (fresh.cues||[]).length)) {
+              console.warn('[calisthenics-admin] roundtrip: core coaching data may not have persisted');
+            }
+          } catch (re) {
+            console.warn('[calisthenics-admin] post-save reselect failed (non-fatal)', re);
+          }
         }, 80);
 
         // Light stats refresh
         loadStatsOnly();
       } else {
-        const errMsg = isNew ? (r?.error || 'Save failed') : (res?.error || 'Save failed');
+        const errMsg = saveRes?.error || (isNew ? 'Add failed (no error detail from server)' : 'Override failed (no error detail from server)');
         toast.error(`Save failed: ${errMsg}`);
-        console.error('[calisthenics-admin] save error response', isNew ? r : res);
+        console.error('[calisthenics-admin] save error response', saveRes);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('[calisthenics-admin] save exception', e);
-      const errDetail = e?.response?.error || e?.error || e?.message || e || 'Unknown error';
+      const errDetail = e?.response?.error || e?.error || e?.message || String(e) || 'Unknown error';
       toast.error(`Save failed: ${errDetail}`);
     } finally {
       setIsSaving(false);
@@ -889,6 +932,34 @@ export function CalisthenicsAdminPage() {
                     </Tooltip>
                     {(editBuffer.defaultDose||[3,4,8,12]).map((n:number,i:number)=> <input key={i} type="number" value={n} onChange={e=>{const d=[...(editBuffer.defaultDose||[])]; d[i]=parseInt(e.target.value)||0; updateBuffer('defaultDose',d);}} className="w-12 bg-black/40 border px-1 rounded"/> )}
                   </div>
+
+                  {/* New parity fields: tempo + scaling names (user-visible in cards + ladder) */}
+                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-2 pt-1 text-xs">
+                    <div>
+                      <label className="text-[10px] text-[#8494A7] flex items-center gap-1">Tempo Hint
+                        <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger>
+                          <TooltipContent>Optional. Shown in user card as "Tempo: 3-0-1-0". Override for custom pacing notes on this exercise. Appears below name when present.</TooltipContent>
+                        </Tooltip>
+                      </label>
+                      <input value={editBuffer.tempoHint || ''} onChange={e=>updateBuffer('tempoHint', e.target.value || undefined)} placeholder="3-0-1-0 or 5s descent" className="w-full bg-black/40 border border-white/10 px-2 py-0.5 rounded text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[#8494A7] flex items-center gap-1">Scaling Beginner
+                        <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger>
+                          <TooltipContent>Name shown in ladder as the easier variant. Used in "Beginner" column of user coaching card. Often a simpler progression of this movement.</TooltipContent>
+                        </Tooltip>
+                      </label>
+                      <input value={editBuffer.scalingDownName || editBuffer.scalingDown || ''} onChange={e=>updateBuffer('scalingDownName', e.target.value || undefined)} placeholder="e.g. push_wall" className="w-full bg-black/40 border border-white/10 px-2 py-0.5 rounded text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[#8494A7] flex items-center gap-1">Scaling Advanced
+                        <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger>
+                          <TooltipContent>Name shown in ladder as the harder variant. Used in "Advanced" column. Leave blank to hide that column.</TooltipContent>
+                        </Tooltip>
+                      </label>
+                      <input value={editBuffer.scalingUpName || editBuffer.scalingUp || ''} onChange={e=>updateBuffer('scalingUpName', e.target.value || undefined)} placeholder="e.g. push_diamond" className="w-full bg-black/40 border border-white/10 px-2 py-0.5 rounded text-xs" />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -915,6 +986,7 @@ export function CalisthenicsAdminPage() {
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold">{editBuffer.name || 'Untitled Exercise'}</div>
                       <div className="text-[10px] text-[#6AA3E0]">{(editBuffer.defaultDose||[3,4,8,12]).slice(0,2).join('-')} sets × {(editBuffer.defaultDose||[3,4,8,12])[2]}-{(editBuffer.defaultDose||[3,4,8,12])[3]} {(editBuffer.defaultDose||[])[2] > 20 ? 's' : 'reps'}</div>
+                      {(editBuffer.tempoHint) && <div className="text-[9px] text-[#D4A843]/80">Tempo: {editBuffer.tempoHint}</div>}
                     </div>
                   </div>
                   {(editBuffer.description || '').trim() && (
