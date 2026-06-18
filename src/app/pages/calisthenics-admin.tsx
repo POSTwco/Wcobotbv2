@@ -437,7 +437,9 @@ export function CalisthenicsAdminPage() {
         console.error('[calisthenics-admin] save error response', isNew ? r : res);
       }
     } catch (e) {
-      toast.error("Save failed");
+      console.error('[calisthenics-admin] save exception', e);
+      const errDetail = e?.response?.error || e?.error || e?.message || e || 'Unknown error';
+      toast.error(`Save failed: ${errDetail}`);
     } finally {
       setIsSaving(false);
     }
