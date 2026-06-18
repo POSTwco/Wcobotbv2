@@ -862,21 +862,28 @@ if (typeof window !== 'undefined') {
   try {
     const adminObj: any = (api as any).admin || {};
     const caliKeys = Object.keys(adminObj).filter((k: string) => /cali/i.test(k));
-    console.log('[API] cali admin methods registered on load:', caliKeys.length ? caliKeys : 'NONE');
+    const rootCaliKeys = Object.keys(api || {}).filter((k: string) => /cali/i.test(k));
+    console.log('[API] cali admin methods registered on load:', caliKeys.length ? caliKeys : 'NONE', 'root cali keys:', rootCaliKeys);
     (window as any).__WCO_API = api;
   } catch (e) { /* ignore */ }
 }
 
 // Runtime bridge: ensure cali admin methods are directly on api.admin
-// (handles any nesting issues from edits)
+// This is the reliable "big guns" fix — we explicitly attach them after the object literal
+// in case the source placement during edits put them on root or inside testTools.
 try {
   if (typeof api !== 'undefined' && api && api.admin) {
     const a: any = api.admin;
+    const root = api;
     const tt = a.testTools || {};
     const caliMethodNames = ['getCaliStats', 'getCaliLibrary', 'saveCaliOverride', 'getCaliPhotos', 'saveCaliPhotos', 'saveCaliCustomRoutine', 'getCaliCustomRoutines', 'addCaliExercise'];
     caliMethodNames.forEach(name => {
-      if (!a[name] && tt[name]) {
-        a[name] = tt[name];
+      if (!a[name]) {
+        if (root[name]) {
+          a[name] = root[name];
+        } else if (tt[name]) {
+          a[name] = tt[name];
+        }
       }
     });
   }
