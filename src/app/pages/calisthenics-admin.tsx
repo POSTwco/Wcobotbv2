@@ -147,6 +147,18 @@ export function CalisthenicsAdminPage() {
   // Admin Envelope (anodized blue) — same style as other admin panels
   const [showCaliEnvelope, setShowCaliEnvelope] = useState(false);
 
+  // Critical: detect if the current running bundle actually exported the cali admin methods.
+  // On local dev this often means "Vite didn't HMR the api.ts module — fully restart the dev server".
+  // On live it means the Vercel build from the last git push hasn't finished or you need a hard refresh.
+  const adminApi: any = (api as any)?.admin || {};
+  const hasCaliMethods =
+    typeof adminApi.getCaliLibrary === 'function' &&
+    typeof adminApi.saveCaliOverride === 'function' &&
+    typeof adminApi.addCaliExercise === 'function' &&
+    typeof adminApi.getCaliStats === 'function';
+
+  const [showApiWarning, setShowApiWarning] = useState(!hasCaliMethods);
+
   // Wonderful editor state: selected exercise + controlled edit buffer
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editBuffer, setEditBuffer] = useState<any>(null);
@@ -171,6 +183,10 @@ export function CalisthenicsAdminPage() {
   // The session token (from panel or persisted storage) is authoritative on the backend.
   // We attempt the call whenever we have a tok — server derives the wallet from the validated session.
   const loadLibrary = useCallback(async () => {
+    if (!hasCaliMethods) {
+      console.warn('[calisthenics-admin] skipping library load — api.admin.getCaliLibrary not present in this bundle');
+      return false;
+    }
     // Always attempt to fetch the library. The backend now returns the full base list (111+)
     // even without a session token (for the selector to always show everything editable).
     // With a valid token we get the live enriched version (overrides + added + current URLs).
@@ -210,6 +226,10 @@ export function CalisthenicsAdminPage() {
 
   // Separate light stats load (never blocks library)
   const loadStatsOnly = useCallback(async () => {
+    if (!hasCaliMethods) {
+      console.warn('[calisthenics-admin] skipping stats load — api.admin.getCaliStats not present');
+      return;
+    }
     const tok = sessionToken || passedSessionToken || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminSessionToken') : null);
     const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || 'session';
     if (!tok) return;
@@ -295,9 +315,11 @@ export function CalisthenicsAdminPage() {
     if (!tok) return;
     const id = setInterval(() => {
       if (document.visibilityState === "visible") {
-        api.admin.getCaliStats(w, tok).then((r) => {
-          if (r.success && r.data) setStats(r.data);
-        }).catch(() => {});
+        if (typeof adminApi.getCaliStats === 'function') {
+          adminApi.getCaliStats(w, tok).then((r: any) => {
+            if (r.success && r.data) setStats(r.data);
+          }).catch(() => {});
+        }
       }
     }, 45000);
     return () => clearInterval(id);
@@ -356,16 +378,13 @@ export function CalisthenicsAdminPage() {
   const saveFromBuffer = async () => {
     if (!editBuffer || !selectedId) return;
 
-    // === PHASE 0 DEFENSIVE GUARD: detect stale frontend bundle (root cause of "saveCaliOverride is not a function") ===
-    // This is the #1 reason saves fail on live after function-only pushes. Vercel serves the old Vite bundle.
-    // If this fires: git push (full), wait for Vercel build, hard-refresh the admin page, confirm in Network tab that the loaded JS contains the method.
-    const hasCaliAdmin = typeof (api as any)?.admin?.saveCaliOverride === 'function' &&
-                         typeof (api as any)?.admin?.addCaliExercise === 'function' &&
-                         typeof (api as any)?.admin?.getCaliLibrary === 'function';
-    if (!hasCaliAdmin) {
+    // === DEFENSIVE GUARD: detect stale frontend bundle ===
+    // This is the main reason "save does nothing". The guard we added surfaces it loudly.
+    if (!hasCaliMethods) {
       const adminKeys = Object.keys(((api as any)?.admin) || {}).filter((k: string) => /cali/i.test(k) || /Cali/.test(k));
-      const msg = `FRONTEND BUNDLE STALE — saveCali* methods missing. Present cali keys: ${adminKeys.join(', ') || 'none'}. ACTION: cd Wcobotbv2 && npm run build && git add/commit/push then wait Vercel deploy + hard refresh. Do NOT rely on Supabase fn push alone.`;
+      const msg = `FRONTEND BUNDLE STALE — saveCali* methods missing. Present cali keys: ${adminKeys.join(', ') || 'none'}. ACTION: For LOCAL: stop "npm run dev", run it again, then hard-refresh browser. For LIVE: wait for Vercel build after git push + hard refresh.`;
       toast.error(msg);
+      setShowApiWarning(true);
       console.error('[calisthenics-admin] STALE BUNDLE', { adminKeys, apiAdmin: Object.keys(((api as any)?.admin) || {}) });
       return;
     }
@@ -563,6 +582,25 @@ export function CalisthenicsAdminPage() {
           </div>
         </div>
 
+        {/* PROMINENT API BUNDLE WARNING — this is the #1 reason saves "do nothing" */}
+        {!hasCaliMethods && (
+          <div className="mb-4 p-4 rounded-xl border-2 border-red-500/70 bg-red-950/40 text-red-200">
+            <div className="font-bold text-lg mb-1 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> CALI ADMIN API METHODS MISSING IN THIS BUNDLE
+            </div>
+            <div className="text-sm mb-2">
+              The running JavaScript does not see <code>api.admin.getCaliLibrary / saveCaliOverride / getCaliStats</code>.<br />
+              <strong>Local dev:</strong> Vite HMR often fails to pick up changes to <code>api.ts</code>. <strong>FULLY RESTART the dev server</strong> (Ctrl+C in terminal, then <code>npm run dev</code> again).<br />
+              <strong>Live:</strong> The latest git push may not have finished building on Vercel yet, or you need a hard refresh (Ctrl+Shift+R).
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => window.location.reload()} className="px-3 py-1 bg-red-600 text-white text-xs rounded">Hard Reload This Page</button>
+              <button onClick={() => { console.log('Current api.admin keys:', Object.keys(((api as any)?.admin) || {})); toast.info('See console for debug keys'); }} className="px-3 py-1 border border-red-400 text-xs rounded">Log api.admin keys to console</button>
+            </div>
+            <div className="text-[10px] mt-1 opacity-75">After restarting dev server, hard-refresh the browser tab too.</div>
+          </div>
+        )}
+
         {/* Live Stats Header (sign ins + gens) */}
       <div className="mb-4 rounded-xl border border-[#D4A843]/20 bg-[#0B1120]/60 p-4">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
@@ -652,8 +690,9 @@ export function CalisthenicsAdminPage() {
                 <button onClick={cancelEdit} className="text-xs px-3 py-1 border border-white/20 rounded">Close</button>
                 <button
                   onClick={saveFromBuffer}
-                  disabled={isSaving}
+                  disabled={isSaving || !hasCaliMethods}
                   className="text-xs px-3 py-1 bg-[#D4A843] text-black rounded flex items-center gap-1 disabled:opacity-60"
+                  title={!hasCaliMethods ? "API methods missing in current bundle — see red warning above" : ""}
                 >
                   <Save className="w-3 h-3" />{isSaving ? 'Saving...' : 'Save to Live Engine'}
                 </button>
