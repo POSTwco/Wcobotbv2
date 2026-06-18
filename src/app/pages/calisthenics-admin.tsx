@@ -18,6 +18,12 @@ import { api } from "../lib/api";
 import { useWallet } from "../components/wallet-context";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 
+// Import the authoritative exercise library directly from the server source.
+// This guarantees the admin editor scroll selector always has the complete list
+// (all 111+ exercises with their cues, descriptions, etc.) even if the backend
+// call for live overrides fails or no admin token is present on direct access.
+import { EXERCISES as SERVER_BASE_EXERCISES } from "../../../supabase/functions/make-server-57fcb0ee/cali_library";
+
 const ORBIT = { fontFamily: "Orbitron, sans-serif" } as const;
 const DMS = { fontFamily: "'DM Sans', sans-serif" } as const;
 
@@ -59,8 +65,10 @@ interface Exercise {
   previewImageRef?: string | null;
 }
 
-// Fallback list of real exercises for display when library load doesn't return data (e.g. direct access).
-// When opened from Admin Command Center with valid token, the full live list (base + overrides + custom) will load from backend.
+// Small fallback used only for new exercise creation defaults and as last-resort
+// when the imported server list is somehow unavailable. The main list for the
+// EDIT/NEW scroll selector now comes from the authoritative SERVER_BASE_EXERCISES
+// import so it is always the complete set (no more 5-item limit).
 const DEFAULT_EXERCISES: Exercise[] = [
   { id: "push_standard", name: "Push-Up", category: "push", pattern: "horizontal_push", level: 1, difficulty: 4, equipment: "none", unilateral: false, metric: "reps", defaultDose: [3, 5, 5, 15], cues: ["Hands under shoulders", "Squeeze glutes, brace abs", "Full lockout at the top"], description: "The classic push-up. Build chest, shoulders and triceps.", previewImageRef: null },
   { id: "legs_bw_squat", name: "Bodyweight Squat", category: "legs", pattern: "squat", level: 1, difficulty: 2, equipment: "none", unilateral: false, metric: "reps", defaultDose: [3, 4, 10, 20], cues: ["Feet shoulder-width", "Hips back, knees track over toes", "Chest tall, full depth"], description: "Fundamental squat pattern for legs and core.", previewImageRef: null },
@@ -121,7 +129,10 @@ export function CalisthenicsAdminPage() {
   }, [passedSessionToken, sessionToken]);
 
   const [stats, setStats] = useState<any>(null);
-  const [exercises, setExercises] = useState<Exercise[]>(DEFAULT_EXERCISES);
+  // Start with the full authoritative list from the server source so the
+  // EDIT/NEW scroll selector immediately shows all exercises (no more "only 5").
+  const FULL_BASE_LIST = SERVER_BASE_EXERCISES as unknown as Exercise[];
+  const [exercises, setExercises] = useState<Exercise[]>(FULL_BASE_LIST);
   const [overrides, setOverrides] = useState<any>({});
   const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
   const [customRoutines, setCustomRoutines] = useState<any[]>([]);
@@ -180,9 +191,9 @@ export function CalisthenicsAdminPage() {
       console.warn('[calisthenics-admin] library load error (will keep current list)', e);
     }
 
-    // Only fall back to the tiny 5-item DEFAULT if we truly have nothing and never succeeded.
+    // Only fall back to the base list if we truly have nothing and never succeeded.
     if (!hasFullLibraryRef.current && exercises.length === 0) {
-      setExercises(DEFAULT_EXERCISES);
+      setExercises(FULL_BASE_LIST);
       setLibrarySource('fallback');
     }
     return false;

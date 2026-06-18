@@ -2,7 +2,7 @@
   "version": 1,
   "frameCount": 4,
   "ready": {
-    "male": ["stretch", "horizontal_push"],
-    "female": []
+    "male": ["horizontal_push", "stretch"],
+    "female": ["horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull", "squat", "lunge", "hinge", "anti_extension", "anti_rotation", "flexion", "iso_hold", "locomotion", "plyo", "stretch"]
   }
 }
