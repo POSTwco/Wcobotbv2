@@ -16,6 +16,7 @@ import { api } from "../lib/api";
 import { useWallet } from "../components/wallet-context";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
+import { BlueEnvelopeButton, CalisthenicsAdminEnvelopeModal } from "../components/cali-admin-envelope";
 
 // Import the authoritative exercise library directly from the server source.
 // This guarantees the admin editor scroll selector always has the complete list
@@ -150,6 +151,9 @@ export function CalisthenicsAdminPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showLiveBanner, setShowLiveBanner] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  // Admin Envelope (anodized blue) — same style as other admin panels
+  const [showCaliEnvelope, setShowCaliEnvelope] = useState(false);
 
   // Wonderful editor state: selected exercise + controlled edit buffer
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -478,15 +482,21 @@ export function CalisthenicsAdminPage() {
   // The editor and list are always visible for workflow.
 
   return (
-    <div className="max-w-[1200px] mx-auto p-4 sm:p-6 pb-24 text-[#E8ECF0]">
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => navigate("/governance")} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded border border-[#4274B9]/30 hover:bg-white/5">
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Admin Command Center
-        </button>
-        <div style={ORBIT} className="text-sm tracking-widest text-[#D4A843]">WCO CALISTHENICS ROUTINE OPERATOR CONSOLE</div>
-      </div>
+    <>
+      <div className="max-w-[1200px] mx-auto p-4 sm:p-6 pb-24 text-[#E8ECF0]">
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={() => navigate("/governance")} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded border border-[#4274B9]/30 hover:bg-white/5">
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Admin Command Center
+          </button>
+          <div style={ORBIT} className="text-sm tracking-widest text-[#D4A843]">WCO CALISTHENICS ROUTINE OPERATOR CONSOLE</div>
 
-      {/* Live Stats Header (sign ins + gens) */}
+          {/* Admin Envelope — Anodized Blue (same style as other admin panels) */}
+          <div className="ml-auto">
+            <BlueEnvelopeButton onClick={() => setShowCaliEnvelope(true)} />
+          </div>
+        </div>
+
+        {/* Live Stats Header (sign ins + gens) */}
       <div className="mb-4 rounded-xl border border-[#D4A843]/20 bg-[#0B1120]/60 p-4">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
           <div>
@@ -874,7 +884,11 @@ export function CalisthenicsAdminPage() {
       </section>
 
       <div className="text-center text-[10px] text-[#8494A7] mt-8">WCO Calisthenics Routine Operator Console — educational tooltips • live simulate • overrides instantly live for users • 111+ exercises • 250 max</div>
-    </div>
+      </div>
+
+      {/* Anodized Blue Admin Envelope Modal — motivational speech + technical manual + smoke test guide */}
+      <CalisthenicsAdminEnvelopeModal open={showCaliEnvelope} onClose={() => setShowCaliEnvelope(false)} />
+    </>
   );
 }
 

@@ -53,6 +53,7 @@ import { SponsorsTab } from "./sponsors-tab";
 import { GoldenEnvelopeButton, CEOLetterModal } from "./ceo-letter";
 import { SilverEnvelopeButton, VotingArchitectureModal } from "./voting-architecture";
 import { BronzeEnvelopeButton, FundingModelModal } from "./funding-model";
+import { BlueEnvelopeButton, CalisthenicsAdminEnvelopeModal } from "./cali-admin-envelope";
 import { TestToolsTab } from "./test-tools-tab";
 import { LaunchGuideTab } from "./launch-guide-tab";
 import { AdminWelcomeOverlay } from "./admin-welcome";
@@ -1031,6 +1032,7 @@ function ManualTab() {
   const [showCEOLetter, setShowCEOLetter] = useState(false);
   const [showVotingArchitecture, setShowVotingArchitecture] = useState(false);
   const [showFundingModel, setShowFundingModel] = useState(false);
+  const [showCaliEnvelope, setShowCaliEnvelope] = useState(false);
 
   const sections = [
     {
@@ -1193,11 +1195,13 @@ function ManualTab() {
           <GoldenEnvelopeButton onClick={() => setShowCEOLetter(true)} />
           <SilverEnvelopeButton onClick={() => setShowVotingArchitecture(true)} />
           <BronzeEnvelopeButton onClick={() => setShowFundingModel(true)} />
+          <BlueEnvelopeButton onClick={() => setShowCaliEnvelope(true)} />
         </div>
       </div>
       <CEOLetterModal open={showCEOLetter} onClose={() => setShowCEOLetter(false)} />
       <VotingArchitectureModal open={showVotingArchitecture} onClose={() => setShowVotingArchitecture(false)} />
       <FundingModelModal open={showFundingModel} onClose={() => setShowFundingModel(false)} />
+      <CalisthenicsAdminEnvelopeModal open={showCaliEnvelope} onClose={() => setShowCaliEnvelope(false)} />
     </div>
   );
 }
