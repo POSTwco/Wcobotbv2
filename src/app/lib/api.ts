@@ -719,7 +719,41 @@ export const api = {
         activeWallets: number;
         topExercises: Array<{ exerciseId: string; name: string; count: number }>;
         libraryVersion: string;
+        // Live ops numbers for sign-ins + generated (new zone + dedicated admin page)
+        caliSignInsToday?: number;
+        caliSignInsTotal?: number;
+        workoutsGeneratedTotal?: number;
       }>("/admin/cali/stats", { adminWallet, sessionToken }),
+
+    // --- Full manual control for workouts + photos (ops console) ---
+    getCaliLibrary: (adminWallet: string, sessionToken: string) =>
+      request<{ libraryVersion: string; exercises: any[]; overrides: any; photoMap: any; count: number; addedCount?: number; totalCount?: number; maxTotal?: number }>(
+        "/admin/cali/library", { adminWallet, sessionToken }),
+
+    saveCaliOverride: (adminWallet: string, sessionToken: string, payload: { override?: any; overrides?: Record<string, any> }) =>
+      request<{ saved: number }>(
+        "/admin/cali/override", { method: "POST", body: payload, adminWallet, sessionToken }),
+
+    getCaliPhotos: (adminWallet: string, sessionToken: string) =>
+      request<{ photoMap: Record<string, string>; knownRefs: string[] }>(
+        "/admin/cali/photos", { adminWallet, sessionToken }),
+
+    saveCaliPhotos: (adminWallet: string, sessionToken: string, photoMap: Record<string, string>) =>
+      request<{ assigned: number }>(
+        "/admin/cali/photos", { method: "POST", body: { photoMap }, adminWallet, sessionToken }),
+
+    saveCaliCustomRoutine: (adminWallet: string, sessionToken: string, routine: any) =>
+      request<{ id: string }>(
+        "/admin/cali/custom-routine", { method: "POST", body: routine, adminWallet, sessionToken }),
+
+    getCaliCustomRoutines: (adminWallet: string, sessionToken: string) =>
+      request<{ routines: any[] }>(
+        "/admin/cali/custom-routines", { adminWallet, sessionToken }),
+
+    // Add a completely new exercise to the engine
+    addCaliExercise: (adminWallet: string, sessionToken: string, payload: { exercise: any }) =>
+      request<{ id: string; total: number }>(
+        "/admin/cali/exercise", { method: "POST", body: payload, adminWallet, sessionToken }),
   },
 
   // ---------------------------------------------------------------------------

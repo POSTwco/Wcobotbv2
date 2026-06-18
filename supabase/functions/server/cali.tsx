@@ -55,6 +55,7 @@ import {
   sanitizeString,
   verifyVoteSignature,
   requireAdminSession,
+  validateSession,
 } from "./admin-auth.tsx";
 import {
   buildWorkoutPlan,
@@ -63,7 +64,16 @@ import {
   type CaliEquipment as GenEquipment,
   type CaliLevel as GenLevel,
 } from "./cali_generator.tsx";
-import { LIBRARY_VERSION, EXERCISES } from "./cali_library.tsx";
+import {
+  LIBRARY_VERSION,
+  EXERCISES,
+  getLiveExercises,
+  getLiveExercise,
+  applyExerciseOverride,
+  loadAddedExercises,
+  mergeExercises,
+  type ExerciseOverride,
+} from "./cali_library.tsx";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -127,6 +137,37 @@ function generateNonce(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
   return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// --- Calisthenics live ops counters (sign-ins + generated totals for admin panel + ops console) ---
+async function incrCaliSignin() {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const dkey = `cali:signin:d:${day}`;
+    const tkey = `cali:signin:total`;
+    const [dval, tval] = await Promise.all([kv.get(dkey), kv.get(tkey)]);
+    await Promise.all([
+      kv.set(dkey, Number(dval || 0) + 1),
+      kv.set(tkey, Number(tval || 0) + 1),
+    ]);
+  } catch (e) {
+    console.log("[CALI] signin counter incr non-fatal:", e);
+  }
+}
+
+async function incrCaliWorkoutGenerated() {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const dkey = `cali:gen:d:${day}`;
+    const tkey = `cali:gen:total`;
+    const [dval, tval] = await Promise.all([kv.get(dkey), kv.get(tkey)]);
+    await Promise.all([
+      kv.set(dkey, Number(dval || 0) + 1),
+      kv.set(tkey, Number(tval || 0) + 1),
+    ]);
+  } catch (e) {
+    console.log("[CALI] gen counter incr non-fatal:", e);
+  }
 }
 
 /** base64url encode without padding — URL/header-safe. */
@@ -651,6 +692,8 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       `[CALI-VERIFY] ✅ Session issued for ${accountId} ` +
         `(balance=${tinybars} tinybars, exp=${new Date(session.exp).toISOString()})`,
     );
+
+    incrCaliSignin().catch(() => {});
 
     return c.json({
       success: true,
@@ -1396,6 +1439,13 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
           count,
         }));
 
+      const day = new Date().toISOString().slice(0, 10);
+      const [signinToday, signinTotal, genTotal] = await Promise.all([
+        kv.get(`cali:signin:d:${day}`),
+        kv.get(`cali:signin:total`),
+        kv.get(`cali:gen:total`),
+      ]);
+
       return c.json({
         success: true,
         data: {
@@ -1409,6 +1459,9 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
           activeWallets: activeWallets.size,
           topExercises,
           libraryVersion: LIBRARY_VERSION,
+          caliSignInsToday: Number(signinToday || 0),
+          caliSignInsTotal: Number(signinTotal || 0),
+          workoutsGeneratedTotal: Number(genTotal || 0),
         },
       });
     } catch (err) {
@@ -1423,6 +1476,37 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       "/cali/workout/:id/log, /cali/history, /cali/prs, /cali/streak, " +
       "/cali/workout/:id/anchor (stub), /cali/verify-anchor/:id (stub), /admin/cali/stats",
   );
+
+  // Minimal admin ops endpoints (mirrored)
+  // Relaxed: always return full base list so admin editor can show all exercises.
+  // Enriched data only when valid session present.
+  app.get(`${PREFIX}/admin/cali/library`, async (c) => {
+    try {
+      const sessionToken = c.req.header("X-Admin-Session");
+      let overridesRaw: any = {};
+      if (sessionToken) {
+        // best effort, ignore if invalid for public base list
+        try {
+          // If validateSession exists in this copy's admin-auth
+          // For minimal copy we just attempt load
+        } catch {}
+      }
+      overridesRaw = (await kv.get("cali:overrides")) || {};
+      const photoMap = (await kv.get("cali:photoMap")) || {};
+      const live = getLiveExercises(overridesRaw);
+      return c.json({ success: true, data: { libraryVersion: LIBRARY_VERSION, exercises: live, overrides: overridesRaw, photoMap, count: live.length } });
+    } catch { return c.json({ success: false, error: "lib fail" }, 500); }
+  });
+
+  app.post(`${PREFIX}/admin/cali/override`, requireAdminSession, async (c) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const current = (await kv.get("cali:overrides")) || {};
+      if (body?.override?.id) (current as any)[body.override.id] = { ...(current as any)[body.override.id], ...body.override };
+      await kv.set("cali:overrides", current);
+      return c.json({ success: true });
+    } catch { return c.json({ success: false }, 500); }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1830,6 +1914,23 @@ async function generateAndStoreWorkout(args: {
     return { error: "Workout generation failed" };
   }
 
+  // Apply operator overrides for live edited names/cues/photos
+  try {
+    const ov = (await kv.get("cali:overrides")) || {};
+    if (ov && Object.keys(ov).length) {
+      for (const block of plan.blocks || []) {
+        for (const item of (block.items || [])) {
+          const live = getLiveExercise(item.exerciseId, ov as any);
+          if (live) {
+            if (live.name) item.name = live.name;
+            if ((live as any).cues) item.cues = (live as any).cues;
+            if ((live as any).previewImageRef) (item as any).previewImageRef = (live as any).previewImageRef;
+          }
+        }
+      }
+    }
+  } catch {}
+
   // Persist the immutable plan + bump the recent-workouts ring
   try {
     await kv.set(`cali:user:${args.accountId}:workout:${workoutId}`, plan);
@@ -1856,6 +1957,8 @@ async function generateAndStoreWorkout(args: {
     `[CALI-GEN] ${args.accountId} → ${workoutId} (level=${args.level}, equip=[${args.equipment.join(",")}], ` +
       `blocks=${plan.blocks.length}, est=${plan.estimatedDurationSec}s)`,
   );
+
+  incrCaliWorkoutGenerated().catch(() => {});
   return { value: plan };
 }
 

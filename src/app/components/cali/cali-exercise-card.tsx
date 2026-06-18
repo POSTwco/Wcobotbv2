@@ -80,17 +80,19 @@ export function CaliExerciseCard({
             <h3 className="text-base sm:text-lg font-bold text-white" style={dmSans}>{item.name}</h3>
           </div>
           <div className="flex items-start gap-2 flex-shrink-0">
-            <span
-              className="lg:hidden"
-            >
-              <CaliMotionCoachPopover item={item}>
-                <CaliAvatarMotion
-                  pattern={item.pattern}
-                  category={item.category}
-                  gender={gender}
-                  size="compact"
-                />
-              </CaliMotionCoachPopover>
+            <span className="lg:hidden">
+              {(item as any).previewImageRef && ((item as any).previewImageRef.startsWith("http") || (item as any).previewImageRef.startsWith("data:")) ? (
+                <img src={(item as any).previewImageRef} className="w-12 h-12 object-contain rounded border border-white/10" alt={item.name} />
+              ) : (
+                <CaliMotionCoachPopover item={item}>
+                  <CaliAvatarMotion
+                    pattern={item.pattern}
+                    category={item.category}
+                    gender={gender}
+                    size="compact"
+                  />
+                </CaliMotionCoachPopover>
+              )}
             </span>
             <span
               className="text-[0.65rem] font-bold px-2.5 py-1 rounded-lg"

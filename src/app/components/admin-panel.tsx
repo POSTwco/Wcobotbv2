@@ -31,6 +31,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Shield, Lock, Unlock, Clock, LogOut, Users, Swords, Trophy,
@@ -94,6 +95,7 @@ const TABS: { id: AdminTab; label: string; icon: React.ReactNode; description: s
 export function AdminPanel() {
   const wallet = useWallet();
   const { accountId, isAdmin, connected, signMessage } = wallet;
+  const navigate = useNavigate();
 
   // Session state (in-memory only — never persisted)
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -417,8 +419,24 @@ export function AdminPanel() {
         {/* Live unique-IP visit counter — privacy-preserving traffic gauge */}
         <VisitCounter wallet={session.wallet} sessionToken={session.token} />
 
-        {/* Calisthenics tab metrics — DAU, generations, anchors, top exercises */}
-        <CaliAdminStats wallet={session.wallet} sessionToken={session.token} />
+        {/* CALISTHENICS OPS ZONE (new) + clickable existing states panel.
+            Per requirements: live sign-ins + workouts generated now shown inside.
+            Click opens dedicated full-page calisthenics routine generation + photo/workout admin tools. */}
+        <div className="border-b border-[#D4A843]/10 bg-[#0B1120]/30 px-4 sm:px-5 py-1">
+          <div className="text-[0.5rem] uppercase tracking-[1.5px] text-[#D4A843] font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>
+            CALISTHENICS OPS ZONE — click panel for full manual routine + photo controls
+          </div>
+        </div>
+        <CaliAdminStats
+          wallet={session.wallet}
+          sessionToken={session.token}
+          onClick={() => navigate("/calisthenics/admin", { 
+            state: { 
+              sessionToken: session.token, 
+              wallet: session.wallet 
+            } 
+          })}
+        />
 
         {/* Tab Navigation */}
         <div className="border-b border-[#D4A843]/10 overflow-x-auto">

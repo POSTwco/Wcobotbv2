@@ -85,6 +85,24 @@ export interface Exercise {
   scalingUp?: string;
 }
 
+/**
+ * Operator overrides (stored in KV by admin ops console).
+ * Allows full manual control of names, descriptions, cues, patterns (for photo pose),
+ * and photo assignment without changing source EXERCISES or requiring deploy.
+ * These are merged at runtime for generate + admin library views.
+ */
+export interface ExerciseOverride {
+  id: string;
+  name?: string;
+  description?: string; // surfaced in admin + future previews
+  cues?: string[];
+  pattern?: CaliPattern;
+  defaultDose?: [number, number, number, number];
+  level?: 1 | 2 | 3;
+  difficulty?: number;
+  previewImageRef?: string; // filename from refs/ e.g. "push up F.jpg" for exact photo control
+}
+
 // ---------------------------------------------------------------------------
 // PUSH (13)
 // ---------------------------------------------------------------------------
@@ -1634,4 +1652,47 @@ export function getExercise(id: string): Exercise | undefined {
 
 export function exercisesByCategory(cat: CaliCategory): Exercise[] {
   return EXERCISES.filter((e) => e.category === cat);
+}
+
+// ---------------------------------------------------------------------------
+// Operator override merge (powers the admin ops console full manual control)
+// ---------------------------------------------------------------------------
+
+/** Apply overrides to a base exercise. Returns a shallow-merged copy safe for runtime. */
+export function applyExerciseOverride(base: Exercise, ov?: ExerciseOverride): Exercise {
+  if (!ov) return base;
+  return {
+    ...base,
+    name: ov.name ?? base.name,
+    cues: ov.cues ?? base.cues,
+    pattern: ov.pattern ?? base.pattern,
+    defaultDose: ov.defaultDose ?? base.defaultDose,
+    level: (ov.level as any) ?? base.level,
+    difficulty: ov.difficulty ?? base.difficulty,
+    ...(ov.previewImageRef ? { previewImageRef: ov.previewImageRef } : {}),
+    ...(ov.description ? { description: ov.description } : {}),
+  } as Exercise & { description?: string; previewImageRef?: string };
+}
+
+/** Return full live list with overrides applied. */
+export function getLiveExercises(overrides?: Record<string, ExerciseOverride>): Exercise[] {
+  const map = overrides || {};
+  return EXERCISES.map((ex) => applyExerciseOverride(ex, map[ex.id]));
+}
+
+/** Safe lookup with override applied. */
+export function getLiveExercise(id: string, overrides?: Record<string, ExerciseOverride>): (Exercise & { description?: string; previewImageRef?: string }) | undefined {
+  const base = EXERCISE_BY_ID.get(id);
+  if (!base) return undefined;
+  return applyExerciseOverride(base, overrides?.[id]) as any;
+}
+
+export async function loadAddedExercises(kv: any): Promise<any[]> {
+  try { return (await kv.get('cali:addedExercises')) || []; } catch { return []; }
+}
+
+export function mergeExercises(base: Exercise[], added: any[], overrides: Record<string, ExerciseOverride> = {}): any[] {
+  const baseLive = base.map(e => applyExerciseOverride(e, overrides[e.id]));
+  const addedLive = (added || []).map((a: any) => ({ ...a, ...(overrides[a.id] || {}), previewImageRef: (overrides[a.id] || {}).previewImageRef || a.previewImageRef }));
+  return [...baseLive, ...addedLive];
 }
