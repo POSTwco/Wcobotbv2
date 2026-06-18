@@ -855,19 +855,6 @@ export const api = {
   },
 };
 
-// Debug aid — run once when api.ts module is evaluated.
-// Helps when you see "getCaliLibrary is not a function" even though the code is in the file.
-// On local: almost always means you must stop the Vite dev server completely and `npm run dev` again.
-if (typeof window !== 'undefined') {
-  try {
-    const adminObj: any = (api as any).admin || {};
-    const caliKeys = Object.keys(adminObj).filter((k: string) => /cali/i.test(k));
-    const rootCaliKeys = Object.keys(api || {}).filter((k: string) => /cali/i.test(k));
-    console.log('[API] cali admin methods registered on load:', caliKeys.length ? caliKeys : 'NONE', 'root cali keys:', rootCaliKeys);
-    (window as any).__WCO_API = api;
-  } catch (e) { /* ignore */ }
-}
-
 // Runtime bridge: ensure cali admin methods are directly on api.admin
 // This is the reliable "big guns" fix — we explicitly attach them after the object literal
 // in case the source placement during edits put them on root or inside testTools.
@@ -888,3 +875,14 @@ try {
     });
   }
 } catch (e) { /* ignore */ }
+
+// Debug aid — run after the bridge so we report the final state.
+if (typeof window !== 'undefined') {
+  try {
+    const adminObj: any = (api as any).admin || {};
+    const caliKeys = Object.keys(adminObj).filter((k: string) => /cali/i.test(k));
+    const rootCaliKeys = Object.keys(api || {}).filter((k: string) => /cali/i.test(k));
+    console.log('[API] cali admin methods registered on load (after bridge):', caliKeys.length ? caliKeys : 'NONE', 'root cali keys:', rootCaliKeys);
+    (window as any).__WCO_API = api;
+  } catch (e) { /* ignore */ }
+}
