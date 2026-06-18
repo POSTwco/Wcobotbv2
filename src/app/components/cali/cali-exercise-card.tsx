@@ -119,6 +119,9 @@ export function CaliExerciseCard({
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-3 space-y-3">
             <p className="text-sm text-[#C8D0DC] leading-relaxed" style={dmSans}>{guide.instructions}</p>
+            {(item as any).description && (
+              <p className="text-xs text-[#A3B0C2] italic" style={dmSans}>Educational: {(item as any).description}</p>
+            )}
 
             <div>
               <p className="text-[0.6rem] font-bold tracking-wider text-[#6AA3E0] mb-1.5 flex items-center gap-1" style={orbitron}>

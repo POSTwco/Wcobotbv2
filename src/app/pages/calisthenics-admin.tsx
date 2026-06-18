@@ -1,28 +1,28 @@
 /**
  * Calisthenics ROUTINE OPERATIONS CONSOLE — Exercise Library Editor
- * Full 111+ exercise list (base + added, max 250) only inside EDIT/NEW scroll selector.
- * Edit name, educational description, all cues, pattern, dose, and — most importantly — the live Supabase WORKOUT BUCKET public URL.
- * Changes wire directly to overrides and appear instantly in generated workouts.
- * Opened exclusively by clicking the CALISTHENICS panel in the Admin Command Center (inherits session token).
- * Production-grade, theme-matched, no engine or auth changes.
+ * Full 111+ list only inside EDIT/NEW scroll. Every field (cues, educational description, bucket URL, dose...) has inline educational tooltips explaining exactly where it appears for users.
+ * Live "Simulate User View" + strong save feedback. Overrides are instantly live in generated workouts (wired end-to-end).
+ * Production polished, self-documenting, fun & trustworthy for operators.
  */
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import {
   ArrowLeft, RefreshCw, Save, Plus, Trash2, Upload, CheckCircle2,
-  AlertTriangle, Search, Users, Play, Dumbbell, Loader2,
+  AlertTriangle, Search, Users, Play, Dumbbell, Loader2, Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { useWallet } from "../components/wallet-context";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 
 // Import the authoritative exercise library directly from the server source.
 // This guarantees the admin editor scroll selector always has the complete list
 // (all 111+ exercises with their cues, descriptions, etc.) even if the backend
 // call for live overrides fails or no admin token is present on direct access.
 import { EXERCISES as SERVER_BASE_EXERCISES } from "../../../supabase/functions/make-server-57fcb0ee/cali_library";
+import confetti from "canvas-confetti";
 
 const ORBIT = { fontFamily: "Orbitron, sans-serif" } as const;
 const DMS = { fontFamily: "'DM Sans', sans-serif" } as const;
@@ -146,6 +146,11 @@ export function CalisthenicsAdminPage() {
   const [bucketImages, setBucketImages] = useState<string[]>([]);
   const [bucketLoading, setBucketLoading] = useState(false);
 
+  // Pro UX state
+  const [isSaving, setIsSaving] = useState(false);
+  const [showLiveBanner, setShowLiveBanner] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
   // Wonderful editor state: selected exercise + controlled edit buffer
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editBuffer, setEditBuffer] = useState<any>(null);
@@ -156,6 +161,7 @@ export function CalisthenicsAdminPage() {
     const newId = `custom_${Date.now().toString(36)}`;
     setSelectedId(newId);
     setEditBuffer({ id: newId, name: '', description: '', category: 'push', pattern: 'horizontal_push', level: 1, difficulty: 5, equipment: 'none', unilateral: false, metric: 'reps', defaultDose: [3,4,8,12], cues: ['Perform with control'], previewImageRef: null });
+    setDirty(false);
     // Force a library load right when the pane (and its scroll selector) opens.
     // This guarantees the full 111+ list appears in the dropdown/scroll even if earlier mount timing missed.
     // Use timeout so we don't hit TDZ if this definition appears before loadLibrary in source.
@@ -317,15 +323,19 @@ export function CalisthenicsAdminPage() {
   const startEdit = (ex: any) => {
     setSelectedId(ex.id);
     setEditBuffer({ ...ex, cues: [...(ex.cues || [])], previewImageRef: ex.previewImageRef || null });
+    setDirty(false);
   };
 
   const updateBuffer = (k: string, v: any) => {
+    setDirty(true);
     setEditBuffer((b: any) => ({ ...b, [k]: v }));
   };
 
   const cancelEdit = () => {
     setSelectedId(null);
     setEditBuffer(null);
+    setDirty(false);
+    setShowLiveBanner(false);
   };
 
   // Small helper for new exercise ids (safe, non-destructive)
@@ -367,6 +377,7 @@ export function CalisthenicsAdminPage() {
 
     const payload = { ...editBuffer, id, name, cues, description: (editBuffer.description || '').trim() || undefined };
 
+    setIsSaving(true);
     try {
       if (isNew) {
         const r = await api.admin.addCaliExercise(w, tok, { exercise: payload });
@@ -378,14 +389,22 @@ export function CalisthenicsAdminPage() {
         if (res.success) toast.success(`Saved ${name} — live in engine`);
       }
 
+      // Strong live confirmation + fun
+      setShowLiveBanner(true);
+      setTimeout(() => setShowLiveBanner(false), 4200);
+      try {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#D4A843", "#4274B9"] });
+      } catch {}
+
       // Force full reload of the real list
       await loadLibrary();
-      // Re-select the saved item with fresh server data (use effective w here too)
+      // Re-select the saved item with fresh server data
       setTimeout(async () => {
         try {
           const lib = await api.admin.getCaliLibrary(w, tok);
           const fresh = lib.data?.exercises?.find((e: any) => e.id === selectedId) || payload;
           setEditBuffer({ ...fresh, cues: [...(fresh.cues || [])], previewImageRef: fresh.previewImageRef || null });
+          setDirty(false);
         } catch {}
       }, 80);
 
@@ -393,6 +412,8 @@ export function CalisthenicsAdminPage() {
       loadStatsOnly();
     } catch (e) {
       toast.error("Save failed");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -421,6 +442,24 @@ export function CalisthenicsAdminPage() {
       return null;
     }
   };
+
+  // Keyboard pro-ops: Ctrl/Cmd+S to save, Esc to close editor.
+  // Depends only on editBuffer so the effect re-subscribes when the form content changes.
+  // The called functions are closed over from the render that attached the listener.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!editBuffer) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveFromBuffer();
+      }
+      if (e.key === 'Escape') {
+        cancelEdit();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editBuffer]);
 
   if (!connected || !isAdmin) {
     return (
@@ -483,7 +522,7 @@ export function CalisthenicsAdminPage() {
         </div>
 
         <div className="mb-3 text-xs text-[#8494A7]">
-          Admin session active. The full exercise library (111+ with cues, descriptions and bucket URLs) loads here. Click EDIT / NEW EXERCISE to see and edit the complete scrollable list.
+          Hover any ⓘ for simple explanations of what changes and where users see it. Everything saved here updates live workouts instantly.
         </div>
 
         <div className="mb-2 flex items-center gap-2">
@@ -503,7 +542,7 @@ export function CalisthenicsAdminPage() {
           <button onClick={() => { loadLibrary(); loadBucketImages(); }} className="px-2 py-1 text-xs border border-white/10 rounded hover:bg-white/5 flex items-center gap-1">
             <RefreshCw className="w-3 h-3" /> Refresh Library
           </button>
-          <span className="text-[10px] text-[#8494A7] ml-1">Scroll list appears only inside the editor pane</span>
+          <span className="text-[10px] text-[#8494A7] ml-1">Full list + editor only visible when pane is open</span>
         </div>
 
         <div className="flex gap-2 mb-2 items-center flex-wrap">
@@ -525,36 +564,62 @@ export function CalisthenicsAdminPage() {
         {/* Wonderful live editor pane — EDIT/NEW unified. The full scroll list of ALL exercises is hidden until this pane is open. */}
         {editBuffer && selectedId ? (
           <div className="mt-1 p-4 border border-[#D4A843]/40 bg-[#111827] rounded">
-            <div className="flex justify-between mb-3">
-              <div className="font-bold" style={ORBIT}>{selectedId.startsWith('custom_') ? 'NEW EXERCISE' : 'EDIT EXERCISE'}: {editBuffer.name || 'Untitled'}</div>
+            {/* Header + status */}
+            <div className="flex justify-between mb-2">
+              <div className="font-bold flex items-center gap-2" style={ORBIT}>
+                {selectedId.startsWith('custom_') ? 'NEW EXERCISE' : 'EDIT EXERCISE'}: {editBuffer.name || 'Untitled'}
+                {dirty && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">UNSAVED</span>}
+              </div>
               <div className="flex gap-2">
                 <button onClick={openNewEditor} className="text-xs px-3 py-1 bg-emerald-600 text-black rounded">Switch to NEW</button>
                 <button onClick={cancelEdit} className="text-xs px-3 py-1 border border-white/20 rounded">Close</button>
-                <button onClick={saveFromBuffer} className="text-xs px-3 py-1 bg-[#D4A843] text-black rounded flex items-center gap-1"><Save className="w-3 h-3"/>Save to Live Engine</button>
+                <button
+                  onClick={saveFromBuffer}
+                  disabled={isSaving}
+                  className="text-xs px-3 py-1 bg-[#D4A843] text-black rounded flex items-center gap-1 disabled:opacity-60"
+                >
+                  <Save className="w-3 h-3" />{isSaving ? 'Saving...' : 'Save to Live Engine'}
+                </button>
               </div>
+            </div>
+
+            {/* Live impact banner (educational + reassuring) */}
+            {showLiveBanner && (
+              <div className="mb-3 px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs">
+                ✓ Override stored. Changes (cues, description, image URL, name) are live — new workouts for all users will use them immediately.
+              </div>
+            )}
+
+            {/* How overrides work (educational) */}
+            <div className="mb-2 text-[10px] text-[#8494A7]">
+              All edits are overrides. They are merged at generation time. <span className="text-[#D4A843]">New workout generations see them instantly.</span>
             </div>
 
             {/* Scroll selector — only visible inside EDIT/NEW pane (dropdown + scroll style). Full list when loaded via panel. */}
             <div className="mb-3">
               <div className="text-[10px] text-[#8494A7] mb-1 flex items-center justify-between">
-                <span>FULL LIBRARY — scroll &amp; click to load (all cues + descriptions + current bucket URL)</span>
+                <span>FULL LIBRARY — scroll &amp; click any to edit (hover for more)</span>
                 <span>{exercises.length} total • max 250</span>
               </div>
               <div className="border border-white/10 rounded p-1 max-h-52 overflow-y-auto bg-black/30 text-xs">
                 {(() => {
                   const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+                  const hasOverride = (id: string) => !!overrides[id];
                   return sorted.length > 0 ? sorted.map((ex) => {
                     const img = getImageSrc(ex.previewImageRef);
                     const firstCue = (ex.cues && ex.cues[0]) || (ex.description || '').slice(0, 60);
                     const hasUrl = !!ex.previewImageRef;
+                    const isOver = hasOverride(ex.id);
                     return (
                       <div
                         key={ex.id}
                         onClick={() => {
                           setSelectedId(ex.id);
                           setEditBuffer({ ...ex, cues: [...(ex.cues || [])], description: ex.description || '', previewImageRef: ex.previewImageRef || null });
+                          setDirty(false);
                         }}
                         className={`flex items-start gap-2 p-1.5 cursor-pointer rounded hover:bg-[#D4A843]/10 ${selectedId === ex.id ? 'bg-[#D4A843]/20 ring-1 ring-[#D4A843]/40' : ''}`}
+                        title="Click to load full current cues + description + URL into the editor"
                       >
                         {img ? (
                           <img src={img} className="w-8 h-8 object-contain border border-white/10 rounded flex-shrink-0 mt-0.5" alt="" />
@@ -562,88 +627,122 @@ export function CalisthenicsAdminPage() {
                           <div className="w-8 h-8 border border-white/10 rounded flex-shrink-0 mt-0.5 flex items-center justify-center text-[10px] text-[#8494A7]">IMG</div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium leading-tight">{ex.name} <span className="text-[#8494A7] font-mono text-[10px]">({ex.id})</span></div>
-                          <div className="text-[10px] text-[#8494A7] truncate">{ex.category} / {ex.pattern} {hasUrl ? '• ✓ URL' : ''}</div>
+                          <div className="font-medium leading-tight flex items-center gap-1">
+                            {ex.name} <span className="text-[#8494A7] font-mono text-[10px]">({ex.id})</span>
+                            {isOver && <span className="text-[9px] px-1 rounded bg-[#D4A843]/30 text-[#D4A843]">custom</span>}
+                          </div>
+                          <div className="text-[10px] text-[#8494A7] truncate">{ex.category} / {ex.pattern} {hasUrl ? '• ✓ URL' : ''} • { (ex.cues||[]).length } cues</div>
                           {firstCue && <div className="text-[10px] opacity-80 truncate mt-0.5">“{firstCue}”</div>}
                         </div>
                       </div>
                     );
-                  }) : <div className="p-1 text-[#8494A7]">No matches — adjust search or open from Admin panel for full library.</div>;
+                  }) : <div className="p-1 text-[#8494A7]">No matches — adjust search or filters.</div>;
                 })()}
               </div>
-              <div className="text-[9px] text-[#8494A7] mt-1">Search &amp; category filters apply to this list. Full library (111+ exercises with all cues, descriptions and current bucket URLs) is loaded using the admin session.</div>
+              <div className="text-[9px] text-[#8494A7] mt-1">Search &amp; filters apply here. Custom = has operator override from this console.</div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-3 text-sm">
-              {/* Name / ID */}
-              <div>
-                <label className="text-[10px] text-[#8494A7]">Name</label>
-                <input value={editBuffer.name || ''} onChange={e => updateBuffer('name', e.target.value)} className="w-full bg-black/40 border border-white/10 px-2 py-1 rounded" />
-              </div>
-              <div>
-                <label className="text-[10px] text-[#8494A7]">ID (unique, no spaces)</label>
-                <input value={editBuffer.id || ''} onChange={e => updateBuffer('id', e.target.value)} disabled={!selectedId.startsWith('custom_')} className="w-full bg-black/40 border border-white/10 px-2 py-1 rounded disabled:opacity-60" />
-              </div>
-
-              {/* Description */}
-              <div className="md:col-span-2">
-                <label className="text-[10px] text-[#8494A7]">Description (educational)</label>
-                <textarea value={editBuffer.description || ''} onChange={e => updateBuffer('description', e.target.value)} className="w-full h-16 bg-black/40 border border-white/10 px-2 py-1 rounded" />
-              </div>
-
-              {/* Cues - rich editor */}
-              <div className="md:col-span-2">
-                <label className="text-[10px] text-[#8494A7]">Cues (click to edit, X to remove)</label>
-                <div className="flex flex-wrap gap-1 mb-1">
-                  {(editBuffer.cues || []).map((c: string, i: number) => (
-                    <div key={i} className="flex items-center bg-white/5 px-2 py-0.5 rounded text-xs">
-                      <input value={c} onChange={e => {
-                        const newCues = [...editBuffer.cues]; newCues[i] = e.target.value; updateBuffer('cues', newCues);
-                      }} className="bg-transparent border-0 p-0 text-xs w-40" />
-                      <button onClick={() => { const nc=[...(editBuffer.cues||[])]; nc.splice(i,1); updateBuffer('cues', nc); }} className="ml-1 text-red-400">×</button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input id="newcue" placeholder="New cue" className="flex-1 bg-black/40 border border-white/10 px-2 py-1 text-xs rounded" onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      const val = (e.target as HTMLInputElement).value.trim(); if (val) { updateBuffer('cues', [...(editBuffer.cues||[]), val]); (e.target as HTMLInputElement).value=''; }
-                    }
-                  }} />
-                  <button onClick={() => {
-                    const inp = document.getElementById('newcue') as HTMLInputElement; const val = inp?.value.trim(); if (val) { updateBuffer('cues', [...(editBuffer.cues||[]), val]); inp.value=''; }
-                  }} className="text-xs px-2 bg-[#4274B9]/30 rounded">Add Cue</button>
+            {/* Form — grouped professional sections with educational tooltips */}
+            <div className="space-y-4">
+              {/* Identity */}
+              <div className="border border-white/10 rounded p-3 bg-black/20">
+                <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-2 flex items-center gap-1">Identity</div>
+                <div className="grid md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <label className="text-[10px] text-[#8494A7] flex items-center gap-1">
+                      Name
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3 h-3 text-[#6AA3E0] cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>Name shown as title in every generated workout, cards, and history. Edit freely — ID stays stable.</TooltipContent>
+                      </Tooltip>
+                    </label>
+                    <input value={editBuffer.name || ''} onChange={e => updateBuffer('name', e.target.value)} className="w-full bg-black/40 border border-white/10 px-2 py-1 rounded" placeholder="e.g. Hip 90/90" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#8494A7] flex items-center gap-1">
+                      ID (unique, no spaces)
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3 h-3 text-[#6AA3E0] cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>Stable internal key for generation, logging, overrides. Locked after first save. Used by engine to match the exercise.</TooltipContent>
+                      </Tooltip>
+                    </label>
+                    <input value={editBuffer.id || ''} onChange={e => updateBuffer('id', e.target.value)} disabled={!selectedId.startsWith('custom_')} className="w-full bg-black/40 border border-white/10 px-2 py-1 rounded disabled:opacity-60 font-mono text-xs" />
+                  </div>
                 </div>
               </div>
 
-              {/* Pattern / Category */}
-              <select value={editBuffer.pattern} onChange={e=>updateBuffer('pattern', e.target.value)} className="bg-black/40 border border-white/10 px-2 py-1 rounded">
-                {["horizontal_push","vertical_push","horizontal_pull","vertical_pull","squat","lunge","hinge","anti_extension","anti_rotation","flexion","iso_hold","locomotion","plyo","stretch"].map(p=><option key={p} value={p}>{p}</option>)}
-              </select>
-              <select value={editBuffer.category} onChange={e=>updateBuffer('category', e.target.value)} className="bg-black/40 border border-white/10 px-2 py-1 rounded">
-                {["push","pull","core","legs","conditioning","mobility"].map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
+              {/* Educational + Coaching (the heart of operator control) */}
+              <div className="border border-white/10 rounded p-3 bg-black/20">
+                <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-2 flex items-center gap-1">Educational &amp; Coaching Cues</div>
+                <div className="md:col-span-2 mb-3">
+                  <label className="text-[10px] text-[#8494A7] flex items-center gap-1">
+                    Description (educational)
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-[#6AA3E0] cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>Operator-written note. Will appear to users in the workout card (newly wired) as an educational lead-in. Use for why it matters or scaling tips.</TooltipContent>
+                    </Tooltip>
+                  </label>
+                  <textarea value={editBuffer.description || ''} onChange={e => updateBuffer('description', e.target.value)} className="w-full h-14 bg-black/40 border border-white/10 px-2 py-1 rounded text-sm" placeholder="Short educational blurb shown to users..." />
+                </div>
 
-              {/* Dose, level etc */}
-              <div className="flex gap-2 items-center text-xs">
-                <span>Level</span><input type="number" value={editBuffer.level||1} onChange={e=>updateBuffer('level', parseInt(e.target.value)||1)} className="w-12 bg-black/40 border px-1 rounded" />
-                <span>Diff</span><input type="number" value={editBuffer.difficulty||5} onChange={e=>updateBuffer('difficulty', parseInt(e.target.value)||5)} className="w-12 bg-black/40 border px-1 rounded" />
-              </div>
-              <div className="flex gap-1 items-center text-xs">
-                <span>Dose</span>
-                {(editBuffer.defaultDose||[3,4,8,12]).map((n:number,i:number)=> <input key={i} type="number" value={n} onChange={e=>{const d=[...(editBuffer.defaultDose||[])]; d[i]=parseInt(e.target.value)||0; updateBuffer('defaultDose',d);}} className="w-12 bg-black/40 border px-1 rounded"/> )}
+                <div>
+                  <label className="text-[10px] text-[#8494A7] flex items-center gap-1">
+                    Cues (shown live to users)
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-[#6AA3E0] cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent>1-5 short actionable lines. These replace defaults and appear exactly under “FORM CUES” in every user’s collapsible coaching guide during workouts.</TooltipContent>
+                    </Tooltip>
+                  </label>
+                  <div className="flex flex-wrap gap-1 mb-1">
+                    {(editBuffer.cues || []).map((c: string, i: number) => (
+                      <div key={i} className="flex items-center bg-white/5 px-2 py-0.5 rounded text-xs">
+                        <input value={c} onChange={e => {
+                          const newCues = [...editBuffer.cues]; newCues[i] = e.target.value; updateBuffer('cues', newCues);
+                        }} className="bg-transparent border-0 p-0 text-xs w-40" />
+                        <button onClick={() => { const nc=[...(editBuffer.cues||[])]; nc.splice(i,1); updateBuffer('cues', nc); }} className="ml-1 text-red-400">×</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input id="newcue" placeholder="New cue — press Enter" className="flex-1 bg-black/40 border border-white/10 px-2 py-1 text-xs rounded" onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = (e.target as HTMLInputElement).value.trim(); if (val) { updateBuffer('cues', [...(editBuffer.cues||[]), val]); (e.target as HTMLInputElement).value=''; }
+                      }
+                    }} />
+                    <button onClick={() => {
+                      const inp = document.getElementById('newcue') as HTMLInputElement; const val = inp?.value.trim(); if (val) { updateBuffer('cues', [...(editBuffer.cues||[]), val]); inp.value=''; }
+                    }} className="text-xs px-2 bg-[#4274B9]/30 rounded">Add Cue</button>
+                  </div>
+                  <div className="text-[9px] text-[#8494A7] mt-0.5">Recommended: 3–5 cues. Keep them specific and scannable.</div>
+                </div>
               </div>
 
-              {/* Image live - editable Supabase URL for both edit and new (first-class operator control) */}
-              <div className="md:col-span-2">
-                <div className="text-[10px] text-[#8494A7] mb-1 font-medium">Supabase WORKOUT BUCKET URL (paste or pick — upload to bucket then share URL here)</div>
+              {/* Visual Asset — first class bucket URL control */}
+              <div className="border border-white/10 rounded p-3 bg-black/20">
+                <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-2 flex items-center gap-1">
+                  Visual Asset (Supabase WORKOUT BUCKET)
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3 h-3 text-[#6AA3E0] cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>Public https URL. When present, users see this exact photo on mobile workout cards instead of the generic motion silhouette. Upload in Supabase dashboard → WORKOUT BUCKET → share public link here.</TooltipContent>
+                  </Tooltip>
+                </div>
 
                 <div className="flex items-center gap-2 flex-wrap mb-1.5">
                   <input 
                     type="text" 
                     value={editBuffer.previewImageRef || ''} 
                     onChange={e => updateBuffer('previewImageRef', e.target.value || null)}
-                    placeholder="https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/WORKOUT%20BUCKET/your-file.jpg"
+                    placeholder="https://...supabase.co/storage/v1/object/public/WORKOUT%20BUCKET/your-file.jpg"
                     className="flex-1 min-w-[240px] bg-black/40 border border-white/10 px-2 py-1 text-xs font-mono rounded"
                   />
                   {getImageSrc(editBuffer.previewImageRef) && (
@@ -694,17 +793,87 @@ export function CalisthenicsAdminPage() {
 
                   <button onClick={() => updateBuffer('previewImageRef', null)} className="text-xs px-2 py-1">Clear</button>
                 </div>
+                <div className="text-[10px] text-[#6AA3E0]">Upload in Supabase → WORKOUT BUCKET → copy public URL → paste/pick. Live for EDIT + NEW on Save.</div>
+              </div>
 
-                <div className="text-[10px] text-[#6AA3E0]">Operator flow: upload in Supabase Storage → WORKOUT BUCKET → copy public URL → paste or pick here. Applies to both EDIT and NEW. Saved value is used in live routines.</div>
-                {!getImageSrc(editBuffer.previewImageRef) && editBuffer.previewImageRef && <div className="text-[10px] text-amber-400 mt-0.5">Note: replace legacy ref with full bucket public URL.</div>}
+              {/* Generator Tuning */}
+              <div className="border border-white/10 rounded p-3 bg-black/20">
+                <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-2 flex items-center gap-1">Generator Tuning</div>
+                <div className="grid md:grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                  <div>
+                    <label className="text-[10px] text-[#8494A7] flex items-center gap-1">Pattern <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger><TooltipContent>Determines motion family + which block it can be chosen for (push/pull/core etc). Match your bucket image pose to the pattern.</TooltipContent></Tooltip></label>
+                    <select value={editBuffer.pattern} onChange={e=>updateBuffer('pattern', e.target.value)} className="w-full bg-black/40 border border-white/10 px-2 py-1 rounded text-xs">
+                      {["horizontal_push","vertical_push","horizontal_pull","vertical_pull","squat","lunge","hinge","anti_extension","anti_rotation","flexion","iso_hold","locomotion","plyo","stretch"].map(p=><option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#8494A7] flex items-center gap-1">Category <Tooltip><TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger><TooltipContent>High-level bucket for warmup vs main blocks. Mobility goes to warm-up automatically.</TooltipContent></Tooltip></label>
+                    <select value={editBuffer.category} onChange={e=>updateBuffer('category', e.target.value)} className="w-full bg-black/40 border border-white/10 px-2 py-1 rounded text-xs">
+                      {["push","pull","core","legs","conditioning","mobility"].map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2 items-center text-xs">
+                    <span>Level</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger>
+                      <TooltipContent>Minimum workout level this exercise is eligible for (L1/L2/L3 users).</TooltipContent>
+                    </Tooltip>
+                    <input type="number" value={editBuffer.level||1} onChange={e=>updateBuffer('level', parseInt(e.target.value)||1)} className="w-12 bg-black/40 border px-1 rounded" />
+                    <span className="ml-2">Diff</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger>
+                      <TooltipContent>Fine weight inside the level band. Higher = picked more often for harder sessions.</TooltipContent>
+                    </Tooltip>
+                    <input type="number" value={editBuffer.difficulty||5} onChange={e=>updateBuffer('difficulty', parseInt(e.target.value)||5)} className="w-12 bg-black/40 border px-1 rounded" />
+                  </div>
+                  <div className="flex gap-1 items-center text-xs">
+                    <span>Dose</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="w-3 h-3 text-[#6AA3E0] cursor-help" /></TooltipTrigger>
+                      <TooltipContent>Generator starting range hint [setsMin, setsMax, repsOrSecMin, repsOrSecMax]. Can be tuned per level in generator.</TooltipContent>
+                    </Tooltip>
+                    {(editBuffer.defaultDose||[3,4,8,12]).map((n:number,i:number)=> <input key={i} type="number" value={n} onChange={e=>{const d=[...(editBuffer.defaultDose||[])]; d[i]=parseInt(e.target.value)||0; updateBuffer('defaultDose',d);}} className="w-12 bg-black/40 border px-1 rounded"/> )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Simulate — what the athlete actually sees (educational & fun) */}
+              <div className="border border-[#D4A843]/30 rounded p-3 bg-black/30">
+                <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-1.5">Simulate User View (live preview)</div>
+                <div className="text-xs text-[#8494A7] mb-2">This is roughly what appears in a real workout card when this exercise is generated.</div>
+                <div className="rounded-xl border border-[#4274B9]/30 p-3 bg-[#0B1120]/70 text-sm">
+                  <div className="flex items-start gap-2">
+                    {getImageSrc(editBuffer.previewImageRef) ? (
+                      <img src={getImageSrc(editBuffer.previewImageRef)} className="w-11 h-11 object-contain border border-white/10 rounded" alt="" />
+                    ) : (
+                      <div className="w-11 h-11 rounded border border-white/10 flex items-center justify-center text-[10px] text-[#8494A7]">IMG</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold">{editBuffer.name || 'Untitled Exercise'}</div>
+                      <div className="text-[10px] text-[#6AA3E0]">{(editBuffer.defaultDose||[3,4,8,12]).slice(0,2).join('-')} sets × {(editBuffer.defaultDose||[3,4,8,12])[2]}-{(editBuffer.defaultDose||[3,4,8,12])[3]} {(editBuffer.defaultDose||[])[2] > 20 ? 's' : 'reps'}</div>
+                    </div>
+                  </div>
+                  {(editBuffer.description || '').trim() && (
+                    <div className="mt-2 text-xs text-[#C8D0DC] italic border-t border-white/10 pt-1.5">Educational: {(editBuffer.description || '').slice(0, 140)}{(editBuffer.description||'').length > 140 ? '…' : ''}</div>
+                  )}
+                  <div className="mt-2">
+                    <div className="text-[10px] font-bold text-[#6AA3E0] mb-0.5">FORM CUES (exact)</div>
+                    <ul className="text-xs text-[#A3B0C2] space-y-0.5">
+                      {((editBuffer.cues || []).slice(0, 4).length ? (editBuffer.cues || []).slice(0, 4) : ['(add cues above)']).map((c: string, i: number) => (
+                        <li key={i} className="flex gap-1">✓ {c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         ) : null}
-        <div className="text-[10px] text-[#8494A7] mt-1">Click EDIT / NEW EXERCISE to reveal the full scrollable library selector + editor. All changes to cues, descriptions, and bucket URLs are live for the workout engine.</div>
+        <div className="text-[10px] text-[#8494A7] mt-1">Click EDIT / NEW EXERCISE to open the scrollable library and editor. Every saved change (cues, educational description, bucket image) flows directly into user workouts via the live override system.</div>
       </section>
 
-      <div className="text-center text-[10px] text-[#8494A7] mt-8">WCO Calisthenics Routine Operator Console — full library scroll inside EDIT/NEW • editable Supabase URLs • 250 max</div>
+      <div className="text-center text-[10px] text-[#8494A7] mt-8">WCO Calisthenics Routine Operator Console — educational tooltips • live simulate • overrides instantly live for users • 111+ exercises • 250 max</div>
     </div>
   );
 }

@@ -355,7 +355,7 @@ function normalizeEquipment(eq: CaliEquipment[]): CaliEquipment[] {
 // Main entry — buildWorkoutPlan
 // ---------------------------------------------------------------------------
 
-export function buildWorkoutPlan(input: GeneratorInput): WorkoutPlan {
+export function buildWorkoutPlan(input: GeneratorInput, exercisesOverride?: Exercise[]): WorkoutPlan {
   if (input.level !== 1 && input.level !== 2 && input.level !== 3) {
     throw new Error(`buildWorkoutPlan: invalid level ${input.level}`);
   }
@@ -374,6 +374,8 @@ export function buildWorkoutPlan(input: GeneratorInput): WorkoutPlan {
   const rung = RUNGS[input.level];
   const specs = buildBlockSpecs(input.level);
 
+  const exercises = (exercisesOverride && exercisesOverride.length > 0) ? exercisesOverride : EXERCISES;
+
   // Track patterns already picked across the entire workout to penalize reuse.
   const patternsSeen = new Map<CaliPattern, number>();
   const idsSeen = new Set<string>();
@@ -385,7 +387,7 @@ export function buildWorkoutPlan(input: GeneratorInput): WorkoutPlan {
 
     for (let pickIdx = 0; pickIdx < spec.count; pickIdx++) {
       // Pass 1: fully filtered candidates (including no-pattern-collision pref)
-      const baseCandidates = EXERCISES.filter((e) =>
+      const baseCandidates = exercises.filter((e: any) =>
         isEligible(e, spec, input.level, availableEquip, excludeIds, idsSeen),
       );
 
@@ -393,16 +395,16 @@ export function buildWorkoutPlan(input: GeneratorInput): WorkoutPlan {
       // If excludes wiped the pool, relax excludes — better to repeat one
       // recent exercise than to ship a workout with a missing block.
       if (candidates.length === 0) {
-        candidates = EXERCISES.filter((e) =>
+        candidates = exercises.filter((e: any) =>
           isEligible(e, spec, input.level, availableEquip, new Set(), idsSeen),
         );
       }
       // Last-resort: relax the block filter to category only, ignoring pattern
       // sub-constraints (e.g. cooldown stretches). Should be extremely rare.
       if (candidates.length === 0) {
-        candidates = EXERCISES.filter(
-          (e) =>
-            e.level <= input.level &&
+        candidates = exercises.filter(
+          (e: any) =>
+            (e.level || 1) <= input.level &&
             availableEquip.has(e.equipment) &&
             !idsSeen.has(e.id) &&
             spec.filter(e),
