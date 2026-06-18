@@ -151,11 +151,12 @@ export function CalisthenicsAdminPage() {
   // On local dev this often means "Vite didn't HMR the api.ts module — fully restart the dev server".
   // On live it means the Vercel build from the last git push hasn't finished or you need a hard refresh.
   const adminApi: any = (api as any)?.admin || {};
+  const rootApi: any = api as any;
   const hasCaliMethods =
-    typeof adminApi.getCaliLibrary === 'function' &&
-    typeof adminApi.saveCaliOverride === 'function' &&
-    typeof adminApi.addCaliExercise === 'function' &&
-    typeof adminApi.getCaliStats === 'function';
+    (typeof adminApi.getCaliLibrary === 'function' || typeof rootApi.getCaliLibrary === 'function') &&
+    (typeof adminApi.saveCaliOverride === 'function' || typeof rootApi.saveCaliOverride === 'function') &&
+    (typeof adminApi.addCaliExercise === 'function' || typeof rootApi.addCaliExercise === 'function') &&
+    (typeof adminApi.getCaliStats === 'function' || typeof rootApi.getCaliStats === 'function');
 
   const [showApiWarning, setShowApiWarning] = useState(!hasCaliMethods);
 
@@ -194,7 +195,12 @@ export function CalisthenicsAdminPage() {
     const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || '';
 
     try {
-      const lib = await api.admin.getCaliLibrary(w || 'public', tok || '');
+      const getLib = adminApi.getCaliLibrary || (rootApi as any).getCaliLibrary;
+      if (!getLib) {
+        console.warn('[calisthenics-admin] no getCaliLibrary available');
+        return false;
+      }
+      const lib = await getLib(w || 'public', tok || '');
       if (lib.success && lib.data && Array.isArray(lib.data.exercises) && lib.data.exercises.length > 0) {
         console.log('[calisthenics-admin] loaded full library:', lib.data.exercises.length, 'items (source of truth from server)');
         setExercises(lib.data.exercises);
@@ -234,8 +240,11 @@ export function CalisthenicsAdminPage() {
     const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || 'session';
     if (!tok) return;
     try {
-      const s = await api.admin.getCaliStats(w, tok);
-      if (s.success && s.data) setStats(s.data);
+      const getStats = adminApi.getCaliStats || (rootApi as any).getCaliStats;
+      if (getStats) {
+        const s = await getStats(w, tok);
+        if (s.success && s.data) setStats(s.data);
+      }
     } catch {}
   }, [effectiveWallet, sessionToken, passedSessionToken, passedWallet]);
 
@@ -436,13 +445,15 @@ export function CalisthenicsAdminPage() {
     try {
       // Use single response var to avoid scope bugs on error reporting path (r vs res)
       let saveRes: any;
+      const addFn = adminApi.addCaliExercise || (rootApi as any).addCaliExercise;
+      const saveFn = adminApi.saveCaliOverride || (rootApi as any).saveCaliOverride;
       if (isNew) {
-        saveRes = await api.admin.addCaliExercise(w, tok, { exercise: payload });
+        saveRes = await addFn(w, tok, { exercise: payload });
         if (saveRes?.success) {
           toast.success(`Added ${name} — live in engine`);
         }
       } else {
-        saveRes = await api.admin.saveCaliOverride(w, tok, { override: payload });
+        saveRes = await saveFn(w, tok, { override: payload });
         if (saveRes?.success) {
           toast.success(`Saved ${name} — live in engine`);
         }
@@ -463,7 +474,8 @@ export function CalisthenicsAdminPage() {
         // Re-select the saved item with fresh server data + explicit roundtrip assert for images/desc/cues
         setTimeout(async () => {
           try {
-            const lib = await api.admin.getCaliLibrary(w, tok);
+            const getLib2 = adminApi.getCaliLibrary || (rootApi as any).getCaliLibrary;
+            const lib = await getLib2(w, tok);
             const fresh = (lib.data?.exercises || []).find((e: any) => e.id === selectedId) || payload;
             const legacy = fresh.previewImageRef || null;
             setEditBuffer({
