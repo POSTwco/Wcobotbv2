@@ -9,8 +9,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import type { AvatarGender } from "../../lib/cali-avatar-prefs";
 import { getExerciseGuide, CATEGORY_COLORS, type WorkoutExerciseItem } from "../../lib/cali-exercise-guide";
-import { CaliAvatarMotion } from "./cali-avatar-motion";
-import { CaliMotionCoachPopover } from "./cali-motion-coach-popover";
+
 import { CaliSetLogger } from "./cali-set-logger";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
@@ -81,18 +80,17 @@ export function CaliExerciseCard({
           </div>
           <div className="flex items-start gap-2 flex-shrink-0">
             <span className="lg:hidden">
-              {(item as any).previewImageRef && ((item as any).previewImageRef.startsWith("http") || (item as any).previewImageRef.startsWith("data:")) ? (
-                <img src={(item as any).previewImageRef} className="w-12 h-12 object-contain rounded border border-white/10" alt={item.name} />
-              ) : (
-                <CaliMotionCoachPopover item={item}>
-                  <CaliAvatarMotion
-                    pattern={item.pattern}
-                    category={item.category}
-                    gender={gender}
-                    size="compact"
-                  />
-                </CaliMotionCoachPopover>
-              )}
+              {(() => {
+                const gPrev = gender === 'female' ? (item as any).previewImageRefFemale || (item as any).previewImageRef : (item as any).previewImageRefMale || (item as any).previewImageRef;
+                return gPrev && (String(gPrev).startsWith("http") || String(gPrev).startsWith("data:")) ? (
+                  <img src={gPrev} className="w-12 h-12 object-contain rounded border border-white/10" alt={item.name} />
+                ) : (
+                  <div className="w-12 h-12 rounded border border-white/10 bg-[#0B1120]/60 flex flex-col items-center justify-center text-center p-1">
+                    <div className="text-[#8494A7] text-[8px]">No custom image</div>
+                    <div className="text-[#6AA3E0] text-[7px] leading-none mt-0.5">Upload via<br />Admin panel</div>
+                  </div>
+                );
+              })()}
             </span>
             <span
               className="text-[0.65rem] font-bold px-2.5 py-1 rounded-lg"

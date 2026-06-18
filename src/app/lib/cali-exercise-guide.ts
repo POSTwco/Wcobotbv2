@@ -20,6 +20,10 @@ export interface WorkoutExerciseItem {
   benefit?: string;
   scalingDownName?: string;
   scalingUpName?: string;
+  /** Custom Supabase image URL set via admin — overrides motion previews when present */
+  previewImageRef?: string;
+  /** Educational description set via admin */
+  description?: string;
 }
 
 export interface ExerciseGuide {

@@ -4,8 +4,6 @@
 
 import type { AvatarGender } from "../../lib/cali-avatar-prefs";
 import { CATEGORY_COLORS, type WorkoutExerciseItem } from "../../lib/cali-exercise-guide";
-import { CaliAvatarMotion } from "./cali-avatar-motion";
-import { CaliMotionCoachPopover } from "./cali-motion-coach-popover";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -24,6 +22,13 @@ interface Props {
 export function CaliMotionRail({ item, gender, onGenderChange }: Props) {
   const accent = CATEGORY_COLORS[item.category] ?? "#4274B9";
 
+  const getGenderPreview = (g: AvatarGender) => {
+    if (g === 'female') return (item as any).previewImageRefFemale || (item as any).previewImageRef;
+    return (item as any).previewImageRefMale || (item as any).previewImageRef;
+  };
+  const previewRef = getGenderPreview(gender);
+  const useCustomImage = previewRef && (String(previewRef).startsWith('http') || String(previewRef).startsWith('data:'));
+
   return (
     <aside className="hidden lg:block w-[180px] flex-shrink-0">
       <div className="sticky top-[88px] space-y-3">
@@ -31,14 +36,18 @@ export function CaliMotionRail({ item, gender, onGenderChange }: Props) {
           Movement Preview
         </p>
 
-        <CaliMotionCoachPopover item={item}>
-          <CaliAvatarMotion
-            pattern={item.pattern}
-            category={item.category}
-            gender={gender}
-            size="rail"
+        {useCustomImage ? (
+          <img
+            src={previewRef}
+            className="w-full aspect-square object-contain rounded-lg border border-white/10 bg-black/20"
+            alt={item.name}
           />
-        </CaliMotionCoachPopover>
+        ) : (
+          <div className="w-full aspect-square rounded-lg border border-white/10 bg-[#0B1120]/60 flex flex-col items-center justify-center text-center p-3">
+            <div className="text-[#8494A7] text-[10px] font-medium">No custom image set</div>
+            <div className="text-[#6AA3E0] text-[9px] mt-1 leading-tight">Upload via the Admin panel<br />to display here</div>
+          </div>
+        )}
 
         <p className="text-[0.6rem] text-[#8494A7] text-center" style={dmSans}>
           Hover for coaching tips

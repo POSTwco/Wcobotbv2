@@ -1529,6 +1529,8 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       const enriched = live.map((ex: any) => ({
         ...ex,
         previewImageRef: (overridesRaw as any)[ex.id]?.previewImageRef || (photoMap as any)[ex.id] || ex.previewImageRef || null,
+        previewImageRefMale: (overridesRaw as any)[ex.id]?.previewImageRefMale || (overridesRaw as any)[ex.id]?.previewImageRef || (photoMap as any)[ex.id] || ex.previewImageRefMale || ex.previewImageRef || null,
+        previewImageRefFemale: (overridesRaw as any)[ex.id]?.previewImageRefFemale || (overridesRaw as any)[ex.id]?.previewImageRef || (photoMap as any)[ex.id] || ex.previewImageRefFemale || ex.previewImageRef || null,
       }));
 
       return c.json({
@@ -2118,6 +2120,9 @@ async function generateAndStoreWorkout(args: {
             if ((live as any).cues) item.cues = (live as any).cues;
             if ((live as any).description) (item as any).description = (live as any).description;
             if ((live as any).previewImageRef) (item as any).previewImageRef = (live as any).previewImageRef;
+            if ((live as any).previewImageRefMale) (item as any).previewImageRefMale = (live as any).previewImageRefMale;
+            if ((live as any).previewImageRefFemale) (item as any).previewImageRefFemale = (live as any).previewImageRefFemale;
+            if ((live as any).category) item.category = (live as any).category;
           }
         }
       }

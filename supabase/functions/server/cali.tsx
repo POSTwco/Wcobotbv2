@@ -1924,7 +1924,9 @@ async function generateAndStoreWorkout(args: {
           if (live) {
             if (live.name) item.name = live.name;
             if ((live as any).cues) item.cues = (live as any).cues;
+            if ((live as any).description) (item as any).description = (live as any).description;
             if ((live as any).previewImageRef) (item as any).previewImageRef = (live as any).previewImageRef;
+            if ((live as any).category) item.category = (live as any).category;
           }
         }
       }

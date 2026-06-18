@@ -78,6 +78,10 @@ export interface WorkoutBlockItem {
   /** Human-readable easier/harder variants for scaling ladder */
   scalingDownName?: string;
   scalingUpName?: string;
+  /** Custom image from admin Supabase upload — overrides default motion preview when present */
+  previewImageRef?: string;
+  /** Educational description from admin — for coaching UI */
+  description?: string;
 }
 
 export type BlockKind =
@@ -445,6 +449,9 @@ export function buildWorkoutPlan(input: GeneratorInput, exercisesOverride?: Exer
         scalingUpName: chosen.scalingUp
           ? getExercise(chosen.scalingUp)?.name
           : undefined,
+        // Wire custom Supabase preview image and description from the (possibly overridden) chosen exercise
+        previewImageRef: chosen.previewImageRef,
+        description: chosen.description,
       });
 
       idsSeen.add(chosen.id);

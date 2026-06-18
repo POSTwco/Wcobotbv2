@@ -96,11 +96,12 @@ export interface ExerciseOverride {
   name?: string;
   description?: string; // surfaced in admin + future previews
   cues?: string[];
+  category?: CaliCategory;
   pattern?: CaliPattern;
   defaultDose?: [number, number, number, number];
   level?: 1 | 2 | 3;
   difficulty?: number;
-  previewImageRef?: string; // filename from refs/ e.g. "push up F.jpg" for exact photo control
+  previewImageRef?: string; // full public Supabase URL for custom photo override
 }
 
 // ---------------------------------------------------------------------------
@@ -1665,6 +1666,7 @@ export function applyExerciseOverride(base: Exercise, ov?: ExerciseOverride): Ex
     ...base,
     name: ov.name ?? base.name,
     cues: ov.cues ?? base.cues,
+    category: ov.category ?? base.category,
     pattern: ov.pattern ?? base.pattern,
     defaultDose: ov.defaultDose ?? base.defaultDose,
     level: (ov.level as any) ?? base.level,

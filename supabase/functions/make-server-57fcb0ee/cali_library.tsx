@@ -96,11 +96,14 @@ export interface ExerciseOverride {
   name?: string;
   description?: string; // surfaced in admin + future previews
   cues?: string[];
+  category?: CaliCategory;
   pattern?: CaliPattern;
   defaultDose?: [number, number, number, number];
   level?: 1 | 2 | 3;
   difficulty?: number;
-  previewImageRef?: string; // filename from refs/ e.g. "push up F.jpg" for exact photo control
+  previewImageRef?: string; // legacy single
+  previewImageRefMale?: string; // full public Supabase URL for male custom photo
+  previewImageRefFemale?: string; // full public Supabase URL for female custom photo
 }
 
 // ---------------------------------------------------------------------------
@@ -1665,15 +1668,17 @@ export function applyExerciseOverride(base: Exercise, ov?: ExerciseOverride): Ex
     ...base,
     name: ov.name ?? base.name,
     cues: ov.cues ?? base.cues,
+    category: ov.category ?? base.category,
     pattern: ov.pattern ?? base.pattern,
     defaultDose: ov.defaultDose ?? base.defaultDose,
     level: (ov.level as any) ?? base.level,
     difficulty: ov.difficulty ?? base.difficulty,
-    // Non-breaking: attach preview ref for UI cards/rails when present
-    ...(ov.previewImageRef ? { previewImageRef: ov.previewImageRef } : {}),
+    // preview refs for gender-specific custom photos (legacy single falls back)
+    ...(ov.previewImageRefMale ? { previewImageRefMale: ov.previewImageRefMale } : (ov.previewImageRef ? { previewImageRefMale: ov.previewImageRef } : {})),
+    ...(ov.previewImageRefFemale ? { previewImageRefFemale: ov.previewImageRefFemale } : (ov.previewImageRef ? { previewImageRefFemale: ov.previewImageRef } : {})),
     // description is new; attach for admin + future display
     ...(ov.description ? { description: ov.description } : {}),
-  } as Exercise & { description?: string; previewImageRef?: string };
+  } as Exercise & { description?: string; previewImageRef?: string; previewImageRefMale?: string; previewImageRefFemale?: string };
 }
 
 /** Return full live list with overrides applied. Pass empty or null map for defaults. */
@@ -1702,7 +1707,14 @@ export function mergeExercises(base: Exercise[], added: any[], overrides: Record
   const baseLive = base.map(e => applyExerciseOverride(e, overrides[e.id]));
   const addedLive = (added || []).map((a: any) => {
     const ov = overrides[a.id] || {};
-    return { ...a, ...ov, previewImageRef: ov.previewImageRef || a.previewImageRef };
+    const legacy = ov.previewImageRef || a.previewImageRef;
+    return { 
+      ...a, 
+      ...ov, 
+      previewImageRef: legacy,
+      previewImageRefMale: ov.previewImageRefMale || legacy || a.previewImageRefMale,
+      previewImageRefFemale: ov.previewImageRefFemale || legacy || a.previewImageRefFemale,
+    };
   });
   return [...baseLive, ...addedLive];
 }

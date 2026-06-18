@@ -32,23 +32,12 @@ const SUPABASE_URL = `https://${projectId}.supabase.co`;
 const SUPABASE_ANON = publicAnonKey;
 const WORKOUT_BUCKET_NAME = "WORKOUT BUCKET";
 
-// Helper: returns usable src for <img> (Supabase public URL, data URL, or empty)
+// Helper: returns usable src for <img> ONLY from Supabase (http) or data URLs set via admin panel.
+// No local files or old refs. If no URL assigned, callers should show placeholder or motion fallback.
 function getImageSrc(ref: string | null | undefined): string {
   if (!ref) return "";
   if (typeof ref === "string" && (ref.startsWith("http") || ref.startsWith("data:"))) return ref;
   return "";
-}
-
-// For legacy local refs only (fallback during transition)
-const refModules: Record<string, any> = (import.meta as any)?.glob
-  ? (import.meta as any).glob("../assets/cali-motion/refs/*.{jpg,jpeg,png}", { eager: true, import: "default" })
-  : {};
-function resolvePreviewSrc(ref: string | null | undefined): string {
-  const direct = getImageSrc(ref);
-  if (direct) return direct;
-  const keys = Object.keys(refModules || {});
-  const hit = keys.find((k) => k.includes(ref as string) || k.endsWith(ref as string));
-  return hit ? (refModules[hit] as string) : "";
 }
 
 interface Exercise {
@@ -64,6 +53,8 @@ interface Exercise {
   unilateral?: boolean;
   description?: string;
   previewImageRef?: string | null;
+  previewImageRefMale?: string | null;
+  previewImageRefFemale?: string | null;
 }
 
 // Small fallback used only for new exercise creation defaults and as last-resort
@@ -71,11 +62,11 @@ interface Exercise {
 // EDIT/NEW scroll selector now comes from the authoritative SERVER_BASE_EXERCISES
 // import so it is always the complete set (no more 5-item limit).
 const DEFAULT_EXERCISES: Exercise[] = [
-  { id: "push_standard", name: "Push-Up", category: "push", pattern: "horizontal_push", level: 1, difficulty: 4, equipment: "none", unilateral: false, metric: "reps", defaultDose: [3, 5, 5, 15], cues: ["Hands under shoulders", "Squeeze glutes, brace abs", "Full lockout at the top"], description: "The classic push-up. Build chest, shoulders and triceps.", previewImageRef: null },
-  { id: "legs_bw_squat", name: "Bodyweight Squat", category: "legs", pattern: "squat", level: 1, difficulty: 2, equipment: "none", unilateral: false, metric: "reps", defaultDose: [3, 4, 10, 20], cues: ["Feet shoulder-width", "Hips back, knees track over toes", "Chest tall, full depth"], description: "Fundamental squat pattern for legs and core.", previewImageRef: null },
-  { id: "pull_up", name: "Pull-Up", category: "pull", pattern: "vertical_pull", level: 2, difficulty: 6, equipment: "bar", unilateral: false, metric: "reps", defaultDose: [3, 4, 3, 8], cues: ["Dead hang start", "Chin over bar", "Controlled lower"], description: "Vertical pulling strength.", previewImageRef: null },
-  { id: "core_plank", name: "Plank", category: "core", pattern: "iso_hold", level: 1, difficulty: 3, equipment: "none", unilateral: false, metric: "time_sec", defaultDose: [3, 3, 20, 60], cues: ["Body straight", "Brace abs and glutes", "Breathe steadily"], description: "Core anti-extension hold.", previewImageRef: null },
-  { id: "sprint_30", name: "30s Sprint", category: "conditioning", pattern: "locomotion", level: 1, difficulty: 4, equipment: "none", unilateral: false, metric: "time_sec", defaultDose: [3, 3, 30, 30], cues: ["High knees", "Powerful arm drive", "Stay tall"], description: "High intensity locomotion.", previewImageRef: null },
+  { id: "push_standard", name: "Push-Up", category: "push", pattern: "horizontal_push", level: 1, difficulty: 4, equipment: "none", unilateral: false, metric: "reps", defaultDose: [3, 5, 5, 15], cues: ["Hands under shoulders", "Squeeze glutes, brace abs", "Full lockout at the top"], description: "The classic push-up. Build chest, shoulders and triceps.", previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null },
+  { id: "legs_bw_squat", name: "Bodyweight Squat", category: "legs", pattern: "squat", level: 1, difficulty: 2, equipment: "none", unilateral: false, metric: "reps", defaultDose: [3, 4, 10, 20], cues: ["Feet shoulder-width", "Hips back, knees track over toes", "Chest tall, full depth"], description: "Fundamental squat pattern for legs and core.", previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null },
+  { id: "pull_up", name: "Pull-Up", category: "pull", pattern: "vertical_pull", level: 2, difficulty: 6, equipment: "bar", unilateral: false, metric: "reps", defaultDose: [3, 4, 3, 8], cues: ["Dead hang start", "Chin over bar", "Controlled lower"], description: "Vertical pulling strength.", previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null },
+  { id: "core_plank", name: "Plank", category: "core", pattern: "iso_hold", level: 1, difficulty: 3, equipment: "none", unilateral: false, metric: "time_sec", defaultDose: [3, 3, 20, 60], cues: ["Body straight", "Brace abs and glutes", "Breathe steadily"], description: "Core anti-extension hold.", previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null },
+  { id: "sprint_30", name: "30s Sprint", category: "conditioning", pattern: "locomotion", level: 1, difficulty: 4, equipment: "none", unilateral: false, metric: "time_sec", defaultDose: [3, 3, 30, 30], cues: ["High knees", "Powerful arm drive", "Stay tall"], description: "High intensity locomotion.", previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null },
 ];
 
 export function CalisthenicsAdminPage() {
@@ -151,6 +142,7 @@ export function CalisthenicsAdminPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showLiveBanner, setShowLiveBanner] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [simGender, setSimGender] = useState<'male' | 'female'>('male');
 
   // Admin Envelope (anodized blue) — same style as other admin panels
   const [showCaliEnvelope, setShowCaliEnvelope] = useState(false);
@@ -164,7 +156,7 @@ export function CalisthenicsAdminPage() {
   const openNewEditor = () => {
     const newId = `custom_${Date.now().toString(36)}`;
     setSelectedId(newId);
-    setEditBuffer({ id: newId, name: '', description: '', category: 'push', pattern: 'horizontal_push', level: 1, difficulty: 5, equipment: 'none', unilateral: false, metric: 'reps', defaultDose: [3,4,8,12], cues: ['Perform with control'], previewImageRef: null });
+    setEditBuffer({ id: newId, name: '', description: '', category: 'push', pattern: 'horizontal_push', level: 1, difficulty: 5, equipment: 'none', unilateral: false, metric: 'reps', defaultDose: [3,4,8,12], cues: ['Perform with control'], previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null });
     setDirty(false);
     // Force a library load right when the pane (and its scroll selector) opens.
     // This guarantees the full 111+ list appears in the dropdown/scroll even if earlier mount timing missed.
@@ -197,6 +189,13 @@ export function CalisthenicsAdminPage() {
         return true;
       }
       console.warn('[calisthenics-admin] library response had no exercises or not success', lib);
+      if (lib.error) {
+        console.warn('[calisthenics-admin] library error detail:', lib.error);
+      }
+      // Better error reporting for debugging 404s etc on local vs deployed
+      if (!lib.success) {
+        console.error('[calisthenics-admin] full library response on failure:', lib);
+      }
     } catch (e) {
       console.warn('[calisthenics-admin] library load error (will keep current list)', e);
     }
@@ -238,7 +237,7 @@ export function CalisthenicsAdminPage() {
           Authorization: `Bearer ${SUPABASE_ANON}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ limit: 500, sortBy: { column: "name", order: "asc" } }),
+        body: JSON.stringify({ prefix: '', limit: 500, sortBy: { column: "name", order: "asc" } }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
@@ -326,7 +325,13 @@ export function CalisthenicsAdminPage() {
   // Wonderful editor helpers
   const startEdit = (ex: any) => {
     setSelectedId(ex.id);
-    setEditBuffer({ ...ex, cues: [...(ex.cues || [])], previewImageRef: ex.previewImageRef || null });
+    const legacy = ex.previewImageRef || null;
+    setEditBuffer({ 
+      ...ex, 
+      cues: [...(ex.cues || [])], 
+      previewImageRefMale: ex.previewImageRefMale || legacy, 
+      previewImageRefFemale: ex.previewImageRefFemale || null 
+    });
     setDirty(false);
   };
 
@@ -383,37 +388,54 @@ export function CalisthenicsAdminPage() {
 
     setIsSaving(true);
     try {
+      let saveOk = false;
       if (isNew) {
         const r = await api.admin.addCaliExercise(w, tok, { exercise: payload });
         if (r.success) {
           toast.success(`Added ${name} — live in engine`);
+          saveOk = true;
         }
       } else {
         const res = await api.admin.saveCaliOverride(w, tok, { override: payload });
-        if (res.success) toast.success(`Saved ${name} — live in engine`);
+        if (res.success) {
+          toast.success(`Saved ${name} — live in engine`);
+          saveOk = true;
+        }
       }
 
-      // Strong live confirmation + fun
-      setShowLiveBanner(true);
-      setTimeout(() => setShowLiveBanner(false), 4200);
-      try {
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#D4A843", "#4274B9"] });
-      } catch {}
-
-      // Force full reload of the real list
-      await loadLibrary();
-      // Re-select the saved item with fresh server data
-      setTimeout(async () => {
+      if (saveOk) {
+        // Strong live confirmation + fun
+        setShowLiveBanner(true);
+        setTimeout(() => setShowLiveBanner(false), 4200);
         try {
-          const lib = await api.admin.getCaliLibrary(w, tok);
-          const fresh = lib.data?.exercises?.find((e: any) => e.id === selectedId) || payload;
-          setEditBuffer({ ...fresh, cues: [...(fresh.cues || [])], previewImageRef: fresh.previewImageRef || null });
-          setDirty(false);
+          confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#D4A843", "#4274B9"] });
         } catch {}
-      }, 80);
 
-      // Light stats refresh
-      loadStatsOnly();
+        // Force full reload of the real list
+        await loadLibrary();
+        // Re-select the saved item with fresh server data
+        setTimeout(async () => {
+          try {
+            const lib = await api.admin.getCaliLibrary(w, tok);
+            const fresh = lib.data?.exercises?.find((e: any) => e.id === selectedId) || payload;
+            const legacy = fresh.previewImageRef || null;
+            setEditBuffer({ 
+              ...fresh, 
+              cues: [...(fresh.cues || [])], 
+              previewImageRefMale: fresh.previewImageRefMale || legacy, 
+              previewImageRefFemale: fresh.previewImageRefFemale || null 
+            });
+            setDirty(false);
+          } catch {}
+        }, 80);
+
+        // Light stats refresh
+        loadStatsOnly();
+      } else {
+        const errMsg = isNew ? (r?.error || 'Save failed') : (res?.error || 'Save failed');
+        toast.error(`Save failed: ${errMsg}`);
+        console.error('[calisthenics-admin] save error response', isNew ? r : res);
+      }
     } catch (e) {
       toast.error("Save failed");
     } finally {
@@ -616,26 +638,41 @@ export function CalisthenicsAdminPage() {
                   const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
                   const hasOverride = (id: string) => !!overrides[id];
                   return sorted.length > 0 ? sorted.map((ex) => {
-                    const img = getImageSrc(ex.previewImageRef);
+                    const maleImg = getImageSrc(ex.previewImageRefMale || ex.previewImageRef);
+                    const femaleImg = getImageSrc(ex.previewImageRefFemale);
                     const firstCue = (ex.cues && ex.cues[0]) || (ex.description || '').slice(0, 60);
-                    const hasUrl = !!ex.previewImageRef;
+                    const hasUrl = !!(ex.previewImageRefMale || ex.previewImageRef || ex.previewImageRefFemale);
                     const isOver = hasOverride(ex.id);
                     return (
                       <div
                         key={ex.id}
                         onClick={() => {
                           setSelectedId(ex.id);
-                          setEditBuffer({ ...ex, cues: [...(ex.cues || [])], description: ex.description || '', previewImageRef: ex.previewImageRef || null });
+                          const legacy = ex.previewImageRef || null;
+                          setEditBuffer({ 
+                            ...ex, 
+                            cues: [...(ex.cues || [])], 
+                            description: ex.description || '', 
+                            previewImageRefMale: ex.previewImageRefMale || legacy, 
+                            previewImageRefFemale: ex.previewImageRefFemale || null 
+                          });
                           setDirty(false);
                         }}
                         className={`flex items-start gap-2 p-1.5 cursor-pointer rounded hover:bg-[#D4A843]/10 ${selectedId === ex.id ? 'bg-[#D4A843]/20 ring-1 ring-[#D4A843]/40' : ''}`}
                         title="Click to load full current cues + description + URL into the editor"
                       >
-                        {img ? (
-                          <img src={img} className="w-8 h-8 object-contain border border-white/10 rounded flex-shrink-0 mt-0.5" alt="" />
-                        ) : (
-                          <div className="w-8 h-8 border border-white/10 rounded flex-shrink-0 mt-0.5 flex items-center justify-center text-[10px] text-[#8494A7]">IMG</div>
-                        )}
+                        <div className="flex gap-0.5 flex-shrink-0 mt-0.5">
+                          {maleImg ? (
+                            <img src={maleImg} className="w-6 h-6 object-contain border border-white/10 rounded" alt="male" title="Male" />
+                          ) : (
+                            <div className="w-6 h-6 border border-white/10 rounded flex items-center justify-center text-[8px] text-[#8494A7]">♂</div>
+                          )}
+                          {femaleImg ? (
+                            <img src={femaleImg} className="w-6 h-6 object-contain border border-white/10 rounded" alt="female" title="Female" />
+                          ) : (
+                            <div className="w-6 h-6 border border-white/10 rounded flex items-center justify-center text-[8px] text-[#8494A7]">♀</div>
+                          )}
+                        </div>
                         <div className="min-w-0 flex-1">
                           <div className="font-medium leading-tight flex items-center gap-1">
                             {ex.name} <span className="text-[#8494A7] font-mono text-[10px]">({ex.id})</span>
@@ -735,75 +772,80 @@ export function CalisthenicsAdminPage() {
                 </div>
               </div>
 
-              {/* Visual Asset — first class bucket URL control */}
+              {/* Visual Asset — gender-specific Supabase URLs, always editable from bucket, no local files */}
               <div className="border border-white/10 rounded p-3 bg-black/20">
                 <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-2 flex items-center gap-1">
-                  Visual Asset (Supabase WORKOUT BUCKET)
+                  Visual Assets (Supabase WORKOUT BUCKET — Male / Female)
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Info className="w-3 h-3 text-[#6AA3E0] cursor-help" />
                     </TooltipTrigger>
-                    <TooltipContent>Public https URL. When present, users see this exact photo on mobile workout cards instead of the generic motion silhouette. Upload in Supabase dashboard → WORKOUT BUCKET → share public link here.</TooltipContent>
+                    <TooltipContent>Set separate editable images per gender. Always pulled from Supabase (no local). If none for gender: shows "Upload an image" placeholder. Females in bucket — set here. Matches UI gender toggle in Movement Preview.</TooltipContent>
                   </Tooltip>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                  <input 
-                    type="text" 
-                    value={editBuffer.previewImageRef || ''} 
-                    onChange={e => updateBuffer('previewImageRef', e.target.value || null)}
-                    placeholder="https://...supabase.co/storage/v1/object/public/WORKOUT%20BUCKET/your-file.jpg"
-                    className="flex-1 min-w-[240px] bg-black/40 border border-white/10 px-2 py-1 text-xs font-mono rounded"
-                  />
-                  {getImageSrc(editBuffer.previewImageRef) && (
-                    <img src={getImageSrc(editBuffer.previewImageRef)} className="w-14 h-14 object-contain border border-white/10 rounded bg-black/40" alt="preview" />
-                  )}
+                <div className="grid md:grid-cols-2 gap-3 text-sm">
+                  {/* Male */}
+                  <div>
+                    <label className="text-[10px] text-[#8494A7] mb-1 block">Male Preview URL</label>
+                    <div className="flex items-center gap-1 flex-wrap mb-1">
+                      <input 
+                        type="text" 
+                        value={editBuffer.previewImageRefMale || ''} 
+                        onChange={e => updateBuffer('previewImageRefMale', e.target.value || null)}
+                        placeholder="https://.../male.jpg"
+                        className="flex-1 min-w-[140px] bg-black/40 border border-white/10 px-1 py-0.5 text-xs font-mono rounded"
+                      />
+                      {getImageSrc(editBuffer.previewImageRefMale) ? (
+                        <img src={getImageSrc(editBuffer.previewImageRefMale)} className="w-7 h-7 object-contain border border-white/10 rounded bg-black/40" alt="m" />
+                      ) : (
+                        <div className="w-7 h-7 rounded border border-dashed border-white/10 flex items-center justify-center text-[7px] text-center text-[#8494A7]">M</div>
+                      )}
+                    </div>
+                    <div className="flex gap-0.5 flex-wrap">
+                      <label className="cursor-pointer text-[8px] px-1 py-0.5 border border-white/20 rounded hover:bg-white/5">Up
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await uploadToBucket(f); if (url) updateBuffer('previewImageRefMale', url); }} />
+                      </label>
+                      <select value={(editBuffer.previewImageRefMale && editBuffer.previewImageRefMale.includes('supabase')) ? editBuffer.previewImageRefMale : ''} onChange={e => updateBuffer('previewImageRefMale', e.target.value || null)} className="text-[8px] bg-black/40 border px-0.5 py-0.5 rounded max-w-[80px]" disabled={bucketLoading}>
+                        <option value="">{bucketLoading ? "..." : "pick"}</option>
+                        {bucketImages.map(url => <option key={url} value={url}>{url.split('/').pop()}</option>)}
+                      </select>
+                      <button onClick={async () => { if (!editBuffer.name) return; const q = editBuffer.name.toLowerCase(); const match = bucketImages.find(u => u.toLowerCase().includes(q)); if (match) { updateBuffer('previewImageRefMale', match); toast.success('Set male'); } }} className="text-[8px] px-1 py-0.5 border border-white/20 rounded">Sug</button>
+                      <button onClick={() => updateBuffer('previewImageRefMale', null)} className="text-[8px] px-1 py-0.5">Clr</button>
+                    </div>
+                  </div>
+
+                  {/* Female */}
+                  <div>
+                    <label className="text-[10px] text-[#8494A7] mb-1 block">Female Preview URL</label>
+                    <div className="flex items-center gap-1 flex-wrap mb-1">
+                      <input 
+                        type="text" 
+                        value={editBuffer.previewImageRefFemale || ''} 
+                        onChange={e => updateBuffer('previewImageRefFemale', e.target.value || null)}
+                        placeholder="https://.../female.jpg"
+                        className="flex-1 min-w-[140px] bg-black/40 border border-white/10 px-1 py-0.5 text-xs font-mono rounded"
+                      />
+                      {getImageSrc(editBuffer.previewImageRefFemale) ? (
+                        <img src={getImageSrc(editBuffer.previewImageRefFemale)} className="w-7 h-7 object-contain border border-white/10 rounded bg-black/40" alt="f" />
+                      ) : (
+                        <div className="w-7 h-7 rounded border border-dashed border-white/10 flex items-center justify-center text-[7px] text-center text-[#8494A7]">F</div>
+                      )}
+                    </div>
+                    <div className="flex gap-0.5 flex-wrap">
+                      <label className="cursor-pointer text-[8px] px-1 py-0.5 border border-white/20 rounded hover:bg-white/5">Up
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const url = await uploadToBucket(f); if (url) updateBuffer('previewImageRefFemale', url); }} />
+                      </label>
+                      <select value={(editBuffer.previewImageRefFemale && editBuffer.previewImageRefFemale.includes('supabase')) ? editBuffer.previewImageRefFemale : ''} onChange={e => updateBuffer('previewImageRefFemale', e.target.value || null)} className="text-[8px] bg-black/40 border px-0.5 py-0.5 rounded max-w-[80px]" disabled={bucketLoading}>
+                        <option value="">{bucketLoading ? "..." : "pick"}</option>
+                        {bucketImages.map(url => <option key={url} value={url}>{url.split('/').pop()}</option>)}
+                      </select>
+                      <button onClick={async () => { if (!editBuffer.name) return; const q = editBuffer.name.toLowerCase(); const match = bucketImages.find(u => u.toLowerCase().includes(q)); if (match) { updateBuffer('previewImageRefFemale', match); toast.success('Set female'); } }} className="text-[8px] px-1 py-0.5 border border-white/20 rounded">Sug</button>
+                      <button onClick={() => updateBuffer('previewImageRefFemale', null)} className="text-[8px] px-1 py-0.5">Clr</button>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                  <label className="cursor-pointer text-xs px-2.5 py-1 border border-white/20 rounded hover:bg-white/5 active:bg-white/10">
-                    Upload to Bucket
-                    <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                      const f = e.target.files?.[0]; if (!f) return;
-                      const url = await uploadToBucket(f);
-                      if (url) updateBuffer('previewImageRef', url);
-                    }} />
-                  </label>
-
-                  <select 
-                    value={editBuffer.previewImageRef && editBuffer.previewImageRef.includes('supabase') ? editBuffer.previewImageRef : ''} 
-                    onChange={e => updateBuffer('previewImageRef', e.target.value || null)} 
-                    className="text-xs bg-black/40 border px-1 py-1 rounded max-w-[210px]"
-                    disabled={bucketLoading}
-                  >
-                    <option value="">{bucketLoading ? "Loading bucket..." : "— pick from current bucket —"}</option>
-                    {bucketImages.map(url => {
-                      const name = url.split('/').pop();
-                      return <option key={url} value={url}>{name}</option>;
-                    })}
-                  </select>
-
-                  <button onClick={async () => {
-                    if (!editBuffer.name) return;
-                    const q = editBuffer.name.toLowerCase();
-                    const match = bucketImages.find(u => u.toLowerCase().includes(q) || q.includes((u.split('/').pop() || '').toLowerCase()));
-                    if (match) { updateBuffer('previewImageRef', match); toast.success("Matched from bucket"); }
-                    else toast("No close name match in bucket");
-                  }} className="text-xs px-2 py-1 border border-white/20 rounded">Suggest</button>
-
-                  <button onClick={async () => {
-                    const url = editBuffer.previewImageRef;
-                    if (url && typeof url === 'string') { await navigator.clipboard?.writeText(url); toast.success('URL copied'); }
-                  }} className="text-xs px-2 py-1 border border-white/20 rounded">Copy</button>
-
-                  <button onClick={() => {
-                    const url = getImageSrc(editBuffer.previewImageRef);
-                    if (url) window.open(url, '_blank');
-                  }} className="text-xs px-2 py-1 border border-white/20 rounded">Open</button>
-
-                  <button onClick={() => updateBuffer('previewImageRef', null)} className="text-xs px-2 py-1">Clear</button>
-                </div>
-                <div className="text-[10px] text-[#6AA3E0]">Upload in Supabase → WORKOUT BUCKET → copy public URL → paste/pick. Live for EDIT + NEW on Save.</div>
+                <div className="text-[9px] text-[#6AA3E0] mt-1">Always Supabase editable. No local. Placeholder if unset for gender. Set female URLs from bucket here.</div>
               </div>
 
               {/* Generator Tuning */}
@@ -850,15 +892,24 @@ export function CalisthenicsAdminPage() {
 
               {/* Live Simulate — what the athlete actually sees (educational & fun) */}
               <div className="border border-[#D4A843]/30 rounded p-3 bg-black/30">
-                <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-1.5">Simulate User View (live preview)</div>
-                <div className="text-xs text-[#8494A7] mb-2">This is roughly what appears in a real workout card when this exercise is generated.</div>
+                <div className="text-[10px] uppercase tracking-widest text-[#D4A843] mb-1.5 flex items-center justify-between">
+                  Simulate User View (live preview)
+                  <div className="flex gap-1 text-[9px]">
+                    <button onClick={() => setSimGender('male')} className={`px-1.5 py-0.5 rounded ${simGender==='male' ? 'bg-[#D4A843] text-black' : 'border border-white/20'}`}>♂</button>
+                    <button onClick={() => setSimGender('female')} className={`px-1.5 py-0.5 rounded ${simGender==='female' ? 'bg-[#D4A843] text-black' : 'border border-white/20'}`}>♀</button>
+                  </div>
+                </div>
+                <div className="text-xs text-[#8494A7] mb-2">This is roughly what appears in a real workout card (gender-matched image from admin).</div>
                 <div className="rounded-xl border border-[#4274B9]/30 p-3 bg-[#0B1120]/70 text-sm">
                   <div className="flex items-start gap-2">
-                    {getImageSrc(editBuffer.previewImageRef) ? (
-                      <img src={getImageSrc(editBuffer.previewImageRef)} className="w-11 h-11 object-contain border border-white/10 rounded" alt="" />
-                    ) : (
-                      <div className="w-11 h-11 rounded border border-white/10 flex items-center justify-center text-[10px] text-[#8494A7]">IMG</div>
-                    )}
+                    {(() => {
+                      const simPrev = simGender === 'female' ? (editBuffer.previewImageRefFemale || editBuffer.previewImageRef) : (editBuffer.previewImageRefMale || editBuffer.previewImageRef);
+                      return getImageSrc(simPrev) ? (
+                        <img src={getImageSrc(simPrev)} className="w-11 h-11 object-contain border border-white/10 rounded" alt="" />
+                      ) : (
+                        <div className="w-11 h-11 rounded border border-dashed border-white/10 flex items-center justify-center text-[9px] text-center text-[#8494A7]">Upload image in admin for {simGender}</div>
+                      );
+                    })()}
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold">{editBuffer.name || 'Untitled Exercise'}</div>
                       <div className="text-[10px] text-[#6AA3E0]">{(editBuffer.defaultDose||[3,4,8,12]).slice(0,2).join('-')} sets × {(editBuffer.defaultDose||[3,4,8,12])[2]}-{(editBuffer.defaultDose||[3,4,8,12])[3]} {(editBuffer.defaultDose||[])[2] > 20 ? 's' : 'reps'}</div>
