@@ -16,9 +16,7 @@ const ARMY = {
   brass: "#C9A227",
   brassLight: "#E8C547",
   navy: "#1B2838",
-  stripeRed: "#B22234",
   stripeWhite: "#F0EDE4",
-  cantonBlue: "#3C3B6E",
 };
 
 function ArmyStars({ className = "" }: { className?: string }) {
@@ -37,30 +35,6 @@ function ArmyStars({ className = "" }: { className?: string }) {
         </text>
       ))}
     </svg>
-  );
-}
-
-function MiniFlagRibbon() {
-  return (
-    <motion.svg
-      viewBox="0 0 80 12"
-      className="w-20 h-3 opacity-80"
-      animate={{ rotate: [-1, 1, -1] }}
-      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-      aria-hidden
-    >
-      {Array.from({ length: 7 }, (_, i) => (
-        <rect
-          key={i}
-          x={0}
-          y={i * (12 / 7)}
-          width={80}
-          height={12 / 7 + 0.2}
-          fill={i % 2 === 0 ? ARMY.stripeRed : ARMY.stripeWhite}
-        />
-      ))}
-      <rect x={0} y={0} width={32} height={7} fill={ARMY.cantonBlue} />
-    </motion.svg>
   );
 }
 
@@ -131,6 +105,12 @@ export function AdminAuthEnvelope({
               className="h-10 sm:h-12 w-auto object-contain mx-auto drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
             />
             <ArmyStars className="w-full mt-2 opacity-70" />
+            <p
+              className="mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.35em] text-center"
+              style={{ color: ARMY.brass, fontFamily: "'Oswald', sans-serif" }}
+            >
+              Command Center
+            </p>
           </div>
         </motion.div>
 
@@ -231,17 +211,6 @@ export function AdminAuthEnvelope({
               <line x1="520" y1="340" x2="260" y2="92" stroke={ARMY.brass} strokeWidth="1" strokeOpacity="0.25" />
             </svg>
 
-            {/* USA stripe band — 250th anniversary accent */}
-            <div className="absolute bottom-0 left-0 right-0 h-8 flex items-end justify-center gap-0 overflow-hidden opacity-90">
-              {Array.from({ length: 13 }, (_, i) => (
-                <div
-                  key={i}
-                  className="flex-1 h-full"
-                  style={{ background: i % 2 === 0 ? ARMY.stripeRed : ARMY.stripeWhite }}
-                />
-              ))}
-            </div>
-
             {/* Brass anniversary seal ring */}
             <motion.div
               className="absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 z-30"
@@ -328,25 +297,13 @@ export function AdminAuthEnvelope({
           />
           <div
             className="absolute -bottom-2 -left-2 w-8 h-8 border-b-2 border-l-2 rounded-bl-lg pointer-events-none"
-            style={{ borderColor: ARMY.stripeRed }}
+            style={{ borderColor: ARMY.brass }}
           />
           <div
             className="absolute -bottom-2 -right-2 w-8 h-8 border-b-2 border-r-2 rounded-br-lg pointer-events-none"
-            style={{ borderColor: ARMY.stripeRed }}
+            style={{ borderColor: ARMY.brass }}
           />
         </motion.div>
-
-        {/* Subtle ribbon under envelope */}
-        <div className="mt-5 flex items-center gap-3 opacity-70">
-          <MiniFlagRibbon />
-          <motion.div
-            className="w-2 h-2 rotate-45"
-            style={{ background: ARMY.brass, boxShadow: `0 0 6px ${ARMY.brass}` }}
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          <MiniFlagRibbon />
-        </div>
       </div>
 
       <style>{`
