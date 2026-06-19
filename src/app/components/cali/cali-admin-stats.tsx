@@ -37,8 +37,13 @@ export function CaliAdminStats({
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const res = await api.admin.getCaliStats(wallet, sessionToken);
-    if (res.success && res.data) setStats(res.data);
+    try {
+      const res = await api.admin.getCaliStats(wallet, sessionToken);
+      if (res.success && res.data) setStats(res.data);
+    } catch (e) {
+      console.warn('[CaliAdminStats] load failed', e);
+      // leave stats null so it shows unavailable or previous
+    }
     setLoading(false);
   }, [wallet, sessionToken]);
 
@@ -63,7 +68,7 @@ export function CaliAdminStats({
       onClick={handleClick}
       className={`px-4 sm:px-5 py-3 border-b border-[#D4A843]/10 bg-[#0B1120]/40 ${onClick ? "cursor-pointer hover:bg-[#0B1120]/70 active:bg-[#162033] transition-colors" : ""}`}
       role={onClick ? "button" : undefined}
-      aria-label={onClick ? "Open Calisthenics Routine Operator Console" : undefined}
+      aria-label={onClick ? "Toggle Calisthenics Routine Editor (embedded dropdown)" : undefined}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -77,7 +82,7 @@ export function CaliAdminStats({
             <span className="text-[0.55rem] text-[#8494A7] font-mono">{stats.libraryVersion}</span>
           )}
           {onClick && (
-            <span className="text-[0.5rem] ml-1 px-1.5 py-0.5 rounded bg-[#D4A843]/10 text-[#D4A843] tracking-wider">OPEN OPS →</span>
+            <span className="text-[0.5rem] ml-1 px-1.5 py-0.5 rounded bg-[#D4A843]/10 text-[#D4A843] tracking-wider">TOGGLE EDITOR</span>
           )}
         </div>
         <button
@@ -115,7 +120,7 @@ export function CaliAdminStats({
               ))}
             </div>
           )}
-          {onClick && <div className="text-[0.5rem] text-[#D4A843] mt-1">Click panel to open full routine generation + photo/workout controls</div>}
+          {onClick && <div className="text-[0.5rem] text-[#D4A843] mt-1">Click panel to toggle the full routine editor (dropdown under stats — stays inside admin)</div>}
         </>
       ) : loading ? (
         <p className="text-[0.65rem] text-[#8494A7]">Loading stats…</p>

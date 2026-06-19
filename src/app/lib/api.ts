@@ -367,6 +367,8 @@ export const api = {
         total: number;
         walletsConnected: number;
         walletsVoted: number;
+        workoutsGenerated: number;
+        userWallets: number;
         breakdown: { date: string; count: number }[];
         retentionDays: number;
         privacyNote: string;

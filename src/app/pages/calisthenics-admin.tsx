@@ -9,14 +9,14 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import {
   ArrowLeft, RefreshCw, Save, Plus, Trash2, Upload, CheckCircle2,
-  AlertTriangle, Search, Users, Play, Dumbbell, Loader2, Info,
+  AlertTriangle, Users, Play, Dumbbell, Loader2, Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { useWallet } from "../components/wallet-context";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
-import { BlueEnvelopeButton, CalisthenicsAdminEnvelopeModal } from "../components/cali-admin-envelope";
+
 
 // Import the authoritative exercise library directly from the server source.
 // This guarantees the admin editor scroll selector always has the complete list
@@ -69,58 +69,67 @@ const DEFAULT_EXERCISES: Exercise[] = [
   { id: "sprint_30", name: "30s Sprint", category: "conditioning", pattern: "locomotion", level: 1, difficulty: 4, equipment: "none", unilateral: false, metric: "time_sec", defaultDose: [3, 3, 30, 30], cues: ["High knees", "Powerful arm drive", "Stay tall"], description: "High intensity locomotion.", previewImageRef: null, previewImageRefMale: null, previewImageRefFemale: null },
 ];
 
-export function CalisthenicsAdminPage() {
-  const wallet = useWallet();
-  const { accountId, isAdmin, connected } = wallet;
+export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSessionToken, wallet: propWallet }: { embedded?: boolean; sessionToken?: string; wallet?: string } = {}) {
+  const walletCtx = useWallet();
+  const { accountId, isAdmin, connected } = walletCtx;
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get the original admin session token created when the user signed into the main Admin Command Center.
-  // We do NOT perform any extra challenge/sign here to avoid rate limits.
+  // Prefer live props (when rendered as dropdown inside Admin Command Center) over
+  // navigation state or storage. This is the key to reliable saves without leaving the protected panel.
   const passedSessionToken = location.state?.sessionToken as string | undefined;
   const passedWallet = location.state?.wallet as string | undefined;
 
-  // Persist the admin session (token + wallet) to sessionStorage so the full 111 list works
-  // even if the user refreshes /calisthenics/admin or lands here directly after one successful panel open.
-  // This re-uses the original session key from the Admin Command Center gate — no new signatures.
-  const storedSessionToken = typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminSessionToken') : null;
-  const storedWallet = typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null;
+  const storedSessionToken = typeof window !== 'undefined' 
+    ? (sessionStorage.getItem('caliAdminSessionToken') || sessionStorage.getItem('adminSessionToken')) 
+    : null;
+  const storedWallet = typeof window !== 'undefined' 
+    ? (sessionStorage.getItem('caliAdminWallet') || sessionStorage.getItem('adminSessionWallet')) 
+    : null;
 
-  // Effective identity prefers (in order): live context, navigation state from panel, last stored value.
-  const effectiveWallet = (accountId || passedWallet || storedWallet || '').trim();
+  // Effective values: live props (from parent AdminPanel session) win when present.
+  const effectiveWallet = (propWallet || accountId || passedWallet || storedWallet || '').trim();
 
-  // Seed sessionToken from navigation OR persisted storage so we keep the ability to call the protected library endpoint.
-  const [sessionToken, setSessionToken] = useState<string | null>(passedSessionToken || storedSessionToken || null);
+  const [sessionToken, setSessionToken] = useState<string | null>(propSessionToken || passedSessionToken || storedSessionToken || null);
+
+  // Keep internal token in sync with the live prop passed from AdminPanel.
+  // This prevents falling back to short/stale tokens from storage when used as dropdown.
+  useEffect(() => {
+    if (propSessionToken) {
+      setSessionToken(propSessionToken);
+    }
+  }, [propSessionToken]);
 
   // Persist whenever we have a good token/wallet (survives refresh, no extra auth).
+  // Store under both cali-specific and standard admin keys for compatibility.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (passedSessionToken) {
-      sessionStorage.setItem('caliAdminSessionToken', passedSessionToken);
-      if (passedWallet) sessionStorage.setItem('caliAdminWallet', passedWallet);
+    const tokenToStore = propSessionToken || passedSessionToken || sessionToken;
+    const walletToStore = propWallet || passedWallet || effectiveWallet;
+    if (tokenToStore) {
+      sessionStorage.setItem('caliAdminSessionToken', tokenToStore);
+      sessionStorage.setItem('adminSessionToken', tokenToStore);
     }
-    if (sessionToken) {
-      sessionStorage.setItem('caliAdminSessionToken', sessionToken);
+    if (walletToStore) {
+      sessionStorage.setItem('caliAdminWallet', walletToStore);
+      sessionStorage.setItem('adminSessionWallet', walletToStore);
     }
-    const w = effectiveWallet;
-    if (w) sessionStorage.setItem('caliAdminWallet', w);
-  }, [passedSessionToken, passedWallet, sessionToken, effectiveWallet]);
+  }, [propSessionToken, propWallet, passedSessionToken, passedWallet, sessionToken, effectiveWallet]);
 
-  // Adopt token from navigation state if provided (kept for backward compat).
-  // Also kick a load if we just adopted from storage or passed so the full list appears immediately.
+  // Adopt token from props (preferred) or navigation state if provided.
+  // Kick a load so the full list appears immediately when inside the admin panel dropdown.
   useEffect(() => {
-    if (passedSessionToken && !sessionToken) {
+    if (propSessionToken && !sessionToken) {
+      setSessionToken(propSessionToken);
+    } else if (passedSessionToken && !sessionToken) {
       setSessionToken(passedSessionToken);
     }
-    // If we have a token from storage or just received one, ensure we pull the real library.
-    const hasTok = passedSessionToken || sessionToken || (typeof window !== 'undefined' && sessionStorage.getItem('caliAdminSessionToken'));
+    const hasTok = propSessionToken || passedSessionToken || sessionToken || (typeof window !== 'undefined' && (sessionStorage.getItem('caliAdminSessionToken') || sessionStorage.getItem('adminSessionToken')));
     if (hasTok) {
-      // Defer slightly so state settles
       setTimeout(() => loadLibrary(), 10);
     }
-  }, [passedSessionToken, sessionToken]);
+  }, [propSessionToken, passedSessionToken, sessionToken]);
 
-  const [stats, setStats] = useState<any>(null);
   // Start with the full authoritative list from the server source so the
   // EDIT/NEW scroll selector immediately shows all exercises (no more "only 5").
   const FULL_BASE_LIST = SERVER_BASE_EXERCISES as unknown as Exercise[];
@@ -129,7 +138,6 @@ export function CalisthenicsAdminPage() {
   const [photoMap, setPhotoMap] = useState<Record<string, string>>({});
   const [customRoutines, setCustomRoutines] = useState<any[]>([]);
 
-  const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [librarySource, setLibrarySource] = useState<'full' | 'fallback'>('fallback');
@@ -144,8 +152,7 @@ export function CalisthenicsAdminPage() {
   const [dirty, setDirty] = useState(false);
   const [simGender, setSimGender] = useState<'male' | 'female'>('male');
 
-  // Admin Envelope (anodized blue) — same style as other admin panels
-  const [showCaliEnvelope, setShowCaliEnvelope] = useState(false);
+
 
   // Critical: detect if the current running bundle actually exported the cali admin methods.
   // On local dev this often means "Vite didn't HMR the api.ts module — fully restart the dev server".
@@ -188,11 +195,10 @@ export function CalisthenicsAdminPage() {
       console.warn('[calisthenics-admin] skipping library load — api.admin.getCaliLibrary not present in this bundle');
       return false;
     }
-    // Always attempt to fetch the library. The backend now returns the full base list (111+)
-    // even without a session token (for the selector to always show everything editable).
-    // With a valid token we get the live enriched version (overrides + added + current URLs).
-    const tok = sessionToken || passedSessionToken || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminSessionToken') : null);
-    const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || '';
+    // Always attempt to fetch the library. Prefer live props passed from inside AdminPanel.
+    const effectiveTok = propSessionToken || sessionToken || passedSessionToken || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminSessionToken') || sessionStorage.getItem('adminSessionToken')) : null);
+    const tok = effectiveTok;
+    const w = propWallet || effectiveWallet || passedWallet || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminWallet') || sessionStorage.getItem('adminSessionWallet')) : null) || '';
 
     try {
       const getLib = adminApi.getCaliLibrary || (rootApi as any).getCaliLibrary;
@@ -228,32 +234,9 @@ export function CalisthenicsAdminPage() {
       setLibrarySource('fallback');
     }
     return false;
-  }, [effectiveWallet, sessionToken, passedSessionToken, passedWallet]);
+  }, [propWallet, propSessionToken, effectiveWallet, sessionToken, passedSessionToken, passedWallet]);
 
-  // Separate light stats load (never blocks library)
-  const loadStatsOnly = useCallback(async () => {
-    if (!hasCaliMethods) {
-      console.warn('[calisthenics-admin] skipping stats load — api.admin.getCaliStats not present');
-      return;
-    }
-    const tok = sessionToken || passedSessionToken || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminSessionToken') : null);
-    const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || 'session';
-    if (!tok) return;
-    try {
-      const getStats = adminApi.getCaliStats || (rootApi as any).getCaliStats;
-      if (getStats) {
-        const s = await getStats(w, tok);
-        if (s.success && s.data) setStats(s.data);
-      }
-    } catch {}
-  }, [effectiveWallet, sessionToken, passedSessionToken, passedWallet]);
 
-  // Wrapper for Refresh button (library + bucket + stats)
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    await Promise.allSettled([loadLibrary(), loadStatsOnly()]);
-    setLoading(false);
-  }, [loadLibrary, loadStatsOnly]);
 
   // Supabase Storage helpers for WORKOUT BUCKET (using REST for no extra dep) - defined early
   const loadBucketImages = useCallback(async () => {
@@ -297,7 +280,6 @@ export function CalisthenicsAdminPage() {
   useEffect(() => {
     loadLibrary();
     loadBucketImages();
-    loadStatsOnly();
   }, [connected, isAdmin, sessionToken, passedSessionToken, accountId, passedWallet, loadLibrary]);
 
   // Always attempt to load the (now publicly readable base) full library on mount.
@@ -317,38 +299,11 @@ export function CalisthenicsAdminPage() {
     }
   }, [passedSessionToken, passedWallet]);
 
-  // Live poll stats only (never blocks library view)
-  useEffect(() => {
-    const tok = sessionToken || passedSessionToken || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminSessionToken') : null);
-    const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || 'session';
-    if (!tok) return;
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        if (typeof adminApi.getCaliStats === 'function') {
-          adminApi.getCaliStats(w, tok).then((r: any) => {
-            if (r.success && r.data) setStats(r.data);
-          }).catch(() => {});
-        }
-      }
-    }, 45000);
-    return () => clearInterval(id);
-  }, [effectiveWallet, sessionToken, passedSessionToken, passedWallet]);
+  // No stats polling here anymore (redundant with main admin panel's CaliAdminStats; see hasCaliMethods for API readiness only).
 
   const filtered = exercises.filter((e) => {
-    const q = search.toLowerCase().trim();
-    if (!q) {
-      const catOk = filterCat === "all" || e.category === filterCat;
-      return catOk;
-    }
-    const inName = e.name.toLowerCase().includes(q);
-    const inId = e.id.toLowerCase().includes(q);
-    const inDesc = (e.description || "").toLowerCase().includes(q);
-    const inCues = (e.cues || []).join(" ").toLowerCase().includes(q);
-    const inCat = e.category.toLowerCase().includes(q);
-    const inPattern = e.pattern.toLowerCase().includes(q);
-    const match = inName || inId || inDesc || inCues || inCat || inPattern;
-    const catOk = filterCat === "all" || e.category === filterCat;
-    return match && catOk;
+    // Category filter only (search field removed — it was shown before the list pane and didn't apply until edit was open)
+    return filterCat === "all" || e.category === filterCat;
   });
 
   // Legacy helpers removed (URL editor + unified saveFromBuffer handle everything now).
@@ -398,12 +353,12 @@ export function CalisthenicsAdminPage() {
       return;
     }
 
-    const tok = sessionToken || passedSessionToken || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminSessionToken') : null);
-    const w = effectiveWallet || passedWallet || (typeof window !== 'undefined' ? sessionStorage.getItem('caliAdminWallet') : null) || 'session';
-    if (!tok) {
-      toast.error("Admin session missing — open from the Admin Command Center to get a fresh session");
-      return;
-    }
+    const effectiveTok = propSessionToken || sessionToken || passedSessionToken || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminSessionToken') || sessionStorage.getItem('adminSessionToken')) : null);
+    const tok = effectiveTok;
+    const w = propWallet || effectiveWallet || passedWallet || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminWallet') || sessionStorage.getItem('adminSessionWallet')) : null) || 'session';
+    // Note: we no longer block writes on missing tok. If the connected wallet (w) is an admin wallet, 
+    // the backend requireAdmin (via X-Admin-Wallet header) will allow the edit. The full admin session token
+    // is preferred when available (from main admin), but admin wallet signed-in is now sufficient.
 
     const name = (editBuffer.name || '').trim();
     const id = (editBuffer.id || '').trim();
@@ -439,7 +394,7 @@ export function CalisthenicsAdminPage() {
     };
 
     // Detailed logging for smoke diagnostics (visible in console on live too)
-    console.log('[calisthenics-admin] save attempt', { isNew, id, name, hasTok: !!tok, hasMale: !!payload.previewImageRefMale, hasFemale: !!payload.previewImageRefFemale, cueCount: cues.length });
+    console.log('[calisthenics-admin] save attempt', { isNew, id, name, hasTok: !!tok, tokLen: tok?.length || 0, w, hasMale: !!payload.previewImageRefMale, hasFemale: !!payload.previewImageRefFemale, cueCount: cues.length });
 
     setIsSaving(true);
     try {
@@ -461,50 +416,62 @@ export function CalisthenicsAdminPage() {
 
       const saveOk = !!saveRes?.success;
       if (saveOk) {
-        // Strong live confirmation + fun
-        setShowLiveBanner(true);
-        setTimeout(() => setShowLiveBanner(false), 4200);
-        try {
-          confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#D4A843", "#4274B9"] });
-        } catch {}
+        const libraryReloaded = await loadLibrary();
 
-        // Force full reload of the real list
-        await loadLibrary();
-
-        // Re-select the saved item with fresh server data + explicit roundtrip assert for images/desc/cues
-        setTimeout(async () => {
+        let roundtripOk = libraryReloaded;
+        if (libraryReloaded) {
           try {
             const getLib2 = adminApi.getCaliLibrary || (rootApi as any).getCaliLibrary;
             const lib = await getLib2(w, tok);
-            const fresh = (lib.data?.exercises || []).find((e: any) => e.id === selectedId) || payload;
-            const legacy = fresh.previewImageRef || null;
-            setEditBuffer({
-              ...fresh,
-              cues: [...(fresh.cues || [])],
-              previewImageRefMale: fresh.previewImageRefMale || legacy,
-              previewImageRefFemale: fresh.previewImageRefFemale || null,
-              tempoHint: fresh.tempoHint || payload.tempoHint,
-              scalingDown: fresh.scalingDown || fresh.scalingDownName,
-              scalingUp: fresh.scalingUp || fresh.scalingUpName,
-            });
-            setDirty(false);
+            const fresh = (lib.data?.exercises || []).find((e: any) => e.id === (isNew ? id : selectedId));
+            if (!fresh) {
+              roundtripOk = false;
+              console.warn('[calisthenics-admin] roundtrip: saved exercise missing from library response');
+            } else {
+              const legacy = fresh.previewImageRef || null;
+              setEditBuffer({
+                ...fresh,
+                cues: [...(fresh.cues || [])],
+                previewImageRefMale: fresh.previewImageRefMale || legacy,
+                previewImageRefFemale: fresh.previewImageRefFemale || null,
+                tempoHint: fresh.tempoHint || payload.tempoHint,
+                scalingDown: fresh.scalingDown || fresh.scalingDownName,
+                scalingUp: fresh.scalingUp || fresh.scalingUpName,
+              });
+              setDirty(false);
 
-            // Roundtrip balance check (images + core text)
-            const hadImage = !!(payload.previewImageRefMale || payload.previewImageRefFemale || payload.previewImageRef);
-            const freshHasImage = !!(fresh.previewImageRefMale || fresh.previewImageRefFemale || fresh.previewImageRef || legacy);
-            if (hadImage && !freshHasImage) {
-              console.warn('[calisthenics-admin] roundtrip: image URL present in payload but missing in fresh library response');
-            }
-            if ((payload.description || payload.cues?.length) && !(fresh.description || (fresh.cues||[]).length)) {
-              console.warn('[calisthenics-admin] roundtrip: core coaching data may not have persisted');
+              if (fresh.name !== name) {
+                roundtripOk = false;
+                console.warn('[calisthenics-admin] roundtrip: name mismatch', { expected: name, got: fresh.name });
+              }
+              const hadImage = !!(payload.previewImageRefMale || payload.previewImageRefFemale || payload.previewImageRef);
+              const freshHasImage = !!(fresh.previewImageRefMale || fresh.previewImageRefFemale || fresh.previewImageRef || legacy);
+              if (hadImage && !freshHasImage) {
+                roundtripOk = false;
+                console.warn('[calisthenics-admin] roundtrip: image URL present in payload but missing in fresh library response');
+              }
+              if ((payload.description || payload.cues?.length) && !(fresh.description || (fresh.cues || []).length)) {
+                roundtripOk = false;
+                console.warn('[calisthenics-admin] roundtrip: core coaching data may not have persisted');
+              }
             }
           } catch (re) {
-            console.warn('[calisthenics-admin] post-save reselect failed (non-fatal)', re);
+            roundtripOk = false;
+            console.warn('[calisthenics-admin] post-save roundtrip failed', re);
           }
-        }, 80);
+        }
 
-        // Light stats refresh
-        loadStatsOnly();
+        if (libraryReloaded && roundtripOk) {
+          setShowLiveBanner(true);
+          setTimeout(() => setShowLiveBanner(false), 4200);
+          try {
+            confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#D4A843", "#4274B9"] });
+          } catch {}
+        } else if (libraryReloaded) {
+          toast.warning("Saved to server but roundtrip verification failed — refresh library and confirm changes");
+        } else {
+          toast.warning("Saved to server but library reload failed — changes may not be visible in the editor yet");
+        }
       } else {
         const errMsg = saveRes?.error || (isNew ? 'Add failed (no error detail from server)' : 'Override failed (no error detail from server)');
         toast.error(`Save failed: ${errMsg}`);
@@ -563,35 +530,45 @@ export function CalisthenicsAdminPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [editBuffer]);
 
+  // When rendered as embedded dropdown inside the already-unlocked Admin Command Center we receive
+  // a live sessionToken prop. In that case we trust the parent panel's protection and allow the UI.
+  const canUseEmbedded = embedded && !!propSessionToken;
   if (!connected || !isAdmin) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center p-8 text-center">
-        <div>
-          <AlertTriangle className="mx-auto mb-3 text-[#D4A843]" />
-          <div style={ORBIT} className="text-xl mb-2">ADMIN ONLY</div>
-          <p className="text-[#8494A7]">Connect an admin wallet and unlock the Admin Command Center, then click the CALISTHENICS panel.</p>
-          <button onClick={() => navigate("/governance")} className="mt-4 px-4 py-2 bg-[#D4A843] text-black rounded">Back to Governance</button>
+    if (!canUseEmbedded) {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center p-8 text-center">
+          <div>
+            <AlertTriangle className="mx-auto mb-3 text-[#D4A843]" />
+            <div style={ORBIT} className="text-xl mb-2">ADMIN ONLY</div>
+            <p className="text-[#8494A7]">Connect an admin wallet and unlock the Admin Command Center, then click the CALISTHENICS panel.</p>
+            <button onClick={() => navigate("/governance")} className="mt-4 px-4 py-2 bg-[#D4A843] text-black rounded">Back to Governance</button>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
 
   // Note: For full live library (beyond defaults) and saving, open via the CALISTHENICS panel in Admin Command Center to pass the session token.
   // The editor and list are always visible for workflow.
 
+  // When embedded inside Admin Command Center (dropdown under live stats), use a contained
+  // wrapper so it fits cleanly without fighting the parent panel card. "Just as it is" otherwise.
+  const rootClass = embedded
+    ? "w-full text-[#E8ECF0]"
+    : "max-w-[1200px] mx-auto p-4 sm:p-6 pb-24 text-[#E8ECF0]";
+
   return (
     <>
-      <div className="max-w-[1200px] mx-auto p-4 sm:p-6 pb-24 text-[#E8ECF0]">
+      <div className={rootClass}>
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => navigate("/governance")} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded border border-[#4274B9]/30 hover:bg-white/5">
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Admin Command Center
-          </button>
-          <div style={ORBIT} className="text-sm tracking-widest text-[#D4A843]">WCO CALISTHENICS ROUTINE OPERATOR CONSOLE</div>
-
-          {/* Admin Envelope — Anodized Blue (same style as other admin panels) */}
-          <div className="ml-auto">
-            <BlueEnvelopeButton onClick={() => setShowCaliEnvelope(true)} />
-          </div>
+          {!embedded && (
+            <button onClick={() => navigate("/governance")} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded border border-[#4274B9]/30 hover:bg-white/5">
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Admin Command Center
+            </button>
+          )}
+          {!embedded && (
+            <div style={ORBIT} className="text-sm tracking-widest text-[#D4A843]">WCO CALISTHENICS ROUTINE OPERATOR CONSOLE</div>
+          )}
         </div>
 
         {/* PROMINENT API BUNDLE WARNING — this is the #1 reason saves "do nothing" */}
@@ -613,36 +590,13 @@ export function CalisthenicsAdminPage() {
           </div>
         )}
 
-        {/* Live Stats Header (sign ins + gens) */}
-      <div className="mb-4 rounded-xl border border-[#D4A843]/20 bg-[#0B1120]/60 p-4">
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
-          <div>
-            <div className="uppercase text-[0.55rem] tracking-widest text-[#8494A7]">LIVE — PEOPLE SIGNING IN</div>
-            <div className="text-3xl font-bold tabular-nums" style={ORBIT}>{(stats?.caliSignInsToday || 0).toLocaleString()} <span className="text-base text-[#8494A7]">today</span></div>
-            <div className="text-xs text-[#6AA3E0]">{(stats?.caliSignInsTotal || 0).toLocaleString()} total</div>
-          </div>
-          <div>
-            <div className="uppercase text-[0.55rem] tracking-widest text-[#8494A7]">WORKOUTS GENERATED TOTAL</div>
-            <div className="text-3xl font-bold tabular-nums" style={ORBIT}>{(stats?.workoutsGeneratedTotal || 0).toLocaleString()}</div>
-            <div className="text-xs text-[#6AA3E0]">all-time (operator visible)</div>
-          </div>
-          <div className="ml-auto text-right text-xs text-[#8494A7]">
-            {stats?.libraryVersion}<br />{exercises.length} exercises in live library
-          </div>
-          <button onClick={() => { loadAll(); loadBucketImages(); }} className="px-3 py-1.5 text-xs border border-white/10 rounded hover:bg-white/5 flex items-center gap-1">
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh All + Bucket
-          </button>
-        </div>
-        <div className="text-[10px] text-[#8494A7] mt-2">This page gives complete manual control. Use it to reach 100% perfect photo + name match on every routine.</div>
-      </div>
-
       {/* EXERCISE EDITOR */}
       <section className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <div style={ORBIT} className="uppercase text-xs tracking-widest">ROUTINE OPERATIONS — Edit or Add Exercises</div>
           <div className="flex items-center gap-2 text-[10px]">
-            <span className={`px-1.5 py-0.5 rounded ${librarySource === 'full' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-[#8494A7]'}`}>
-              {exercises.length} / 250 {librarySource === 'full' ? 'LIVE' : 'exercises'}
+            <span className={`px-1.5 py-0.5 rounded ${librarySource === 'full' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+              {exercises.length} / 250 {librarySource === 'full' ? 'LIVE' : 'OFFLINE LIBRARY'}
             </span>
             <span className="text-[#8494A7]">Bucket: {bucketImages.length}</span>
           </div>
@@ -672,21 +626,7 @@ export function CalisthenicsAdminPage() {
           <span className="text-[10px] text-[#8494A7] ml-1">Full list + editor only visible when pane is open</span>
         </div>
 
-        <div className="flex gap-2 mb-2 items-center flex-wrap">
-          <div className="flex-1 min-w-[180px] relative">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, id, cue, desc..." className="w-full bg-[#111827] border border-white/10 rounded px-3 py-1.5 text-sm" />
-            <Search className="absolute right-3 top-2 w-4 h-4 text-[#8494A7]" />
-          </div>
-          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="bg-[#111827] border border-white/10 rounded px-2 text-sm">
-            <option value="all">All categories</option>
-            <option value="push">push</option>
-            <option value="pull">pull</option>
-            <option value="core">core</option>
-            <option value="legs">legs</option>
-            <option value="conditioning">conditioning</option>
-            <option value="mobility">mobility</option>
-          </select>
-        </div>
+
 
         {/* Wonderful live editor pane — EDIT/NEW unified. The full scroll list of ALL exercises is hidden until this pane is open. */}
         {editBuffer && selectedId ? (
@@ -702,9 +642,9 @@ export function CalisthenicsAdminPage() {
                 <button onClick={cancelEdit} className="text-xs px-3 py-1 border border-white/20 rounded">Close</button>
                 <button
                   onClick={saveFromBuffer}
-                  disabled={isSaving || !hasCaliMethods}
+                  disabled={isSaving || !hasCaliMethods || librarySource !== 'full'}
                   className="text-xs px-3 py-1 bg-[#D4A843] text-black rounded flex items-center gap-1 disabled:opacity-60"
-                  title={!hasCaliMethods ? "API methods missing in current bundle — see red warning above" : ""}
+                  title={!hasCaliMethods ? "API methods missing in current bundle — see red warning above" : librarySource !== 'full' ? "Load LIVE library first (Refresh Library)" : ""}
                 >
                   <Save className="w-3 h-3" />{isSaving ? 'Saving...' : 'Save to Live Engine'}
                 </button>
@@ -725,9 +665,25 @@ export function CalisthenicsAdminPage() {
 
             {/* Scroll selector — only visible inside EDIT/NEW pane (dropdown + scroll style). Full list when loaded via panel. */}
             <div className="mb-3">
-              <div className="text-[10px] text-[#8494A7] mb-1 flex items-center justify-between">
+              <div className="text-[10px] text-[#8494A7] mb-1 flex items-center justify-between gap-2">
                 <span>FULL LIBRARY — scroll &amp; click any to edit (hover for more)</span>
-                <span>{exercises.length} total • max 250</span>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={filterCat}
+                    onChange={(e) => setFilterCat(e.target.value)}
+                    className="bg-[#111827] border border-white/10 rounded px-2 py-0.5 text-xs"
+                    title="Filter by category (affects the list below)"
+                  >
+                    <option value="all">All categories</option>
+                    <option value="push">push</option>
+                    <option value="pull">pull</option>
+                    <option value="core">core</option>
+                    <option value="legs">legs</option>
+                    <option value="conditioning">conditioning</option>
+                    <option value="mobility">mobility</option>
+                  </select>
+                  <span>{exercises.length} total • max 250</span>
+                </div>
               </div>
               <div className="border border-white/10 rounded p-1 max-h-52 overflow-y-auto bg-black/30 text-xs">
                 {(() => {
@@ -1056,14 +1012,12 @@ export function CalisthenicsAdminPage() {
             </div>
           </div>
         ) : null}
-        <div className="text-[10px] text-[#8494A7] mt-1">Click EDIT / NEW EXERCISE to open the scrollable library and editor. Every saved change (cues, educational description, bucket image) flows directly into user workouts via the live override system.</div>
+        <div className="text-[10px] text-[#8494A7] mt-1">Click EDIT / NEW EXERCISE to open the scrollable library and editor (with category filter). Every saved change flows directly into user workouts via the live override system.</div>
       </section>
 
       <div className="text-center text-[10px] text-[#8494A7] mt-8">WCO Calisthenics Routine Operator Console — educational tooltips • live simulate • overrides instantly live for users • 111+ exercises • 250 max</div>
       </div>
 
-      {/* Anodized Blue Admin Envelope Modal — motivational speech + technical manual + smoke test guide */}
-      <CalisthenicsAdminEnvelopeModal open={showCaliEnvelope} onClose={() => setShowCaliEnvelope(false)} />
     </>
   );
 }

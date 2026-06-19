@@ -48,6 +48,7 @@
 import type { Context, Next } from "npm:hono";
 import type { Hono } from "npm:hono";
 import * as kv from "./kv_store.tsx";
+import { acquireLock } from "./scaling.tsx";
 import {
   isValidHederaAccountId,
   verifyWalletOnMirrorNode,
@@ -55,6 +56,7 @@ import {
   sanitizeString,
   verifyVoteSignature,
   requireAdminSession,
+  requireAdmin,
   validateSession,
 } from "./admin-auth.tsx";
 import {
@@ -74,6 +76,23 @@ import {
   mergeExercises,
   type ExerciseOverride,
 } from "./cali_library.tsx";
+
+/**
+ * Slim id → display projection of the library, built once at module load.
+ * Used by stats for top exercises names.
+ */
+const libExercises: Map<string, { name: string; category: string }> = (() => {
+  const m = new Map<string, { name: string; category: string }>();
+  for (const e of EXERCISES) m.set(e.id, { name: e.name, category: e.category });
+  return m;
+})();
+
+/**
+ * Safe library lookup.
+ */
+function getExerciseSafe(id: string) {
+  return libExercises.get(id);
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -167,6 +186,39 @@ async function incrCaliWorkoutGenerated() {
     ]);
   } catch (e) {
     console.log("[CALI] gen counter incr non-fatal:", e);
+  }
+}
+
+/** HMAC-hash a wallet for privacy-preserving dedupe markers (mirrors index.tsx hashWallet). */
+async function hashCaliWallet(wallet: string, scope: string): Promise<string> {
+  const secret = getCaliHashSecret();
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${scope}|${wallet}`));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Increment all-time unique workout-section wallets (idempotent per accountId). */
+async function recordCaliUserWallet(accountId: string): Promise<void> {
+  try {
+    if (!accountId) return;
+    const hash = await hashCaliWallet(accountId, "caliuser");
+    const markerKey = `caliuser:${hash}`;
+    if (await kv.get(markerKey)) return;
+
+    const release = await acquireLock("caliuser:total");
+    try {
+      if (await kv.get(markerKey)) return;
+      await kv.set(markerKey, 1);
+      const total = (Number(await kv.get("caliuser:total")) || 0) + 1;
+      await kv.set("caliuser:total", total);
+    } finally {
+      release();
+    }
+  } catch (err) {
+    console.log(`[CALI] user wallet counter error (non-fatal): ${err}`);
   }
 }
 
@@ -439,6 +491,51 @@ function getClientIp(c: Context): string {
  * platform-wide CORS, logger, and per-prefix rate limiting already in place.
  */
 export function mountCaliRoutes(app: Hono, PREFIX: string) {
+  /** Register cali admin routes on both bare and PREFIX paths (frontend hits PREFIX). */
+  const registerAdmin = (method: "get" | "post", path: string, ...handlers: any[]) => {
+    (app as any)[method](path, ...handlers);
+    (app as any)[method](`${PREFIX}${path}`, ...handlers);
+  };
+
+  // ========================================================================
+  // CRITICAL ADMIN ROUTES FOR EDITOR — registered FIRST to guarantee availability
+  // even if later code in this mount function has issues.
+  // Client calls go to BASE + /admin/cali/xxx (bare after function name).
+  // ========================================================================
+
+  // Minimal inline override for save (the main failing path). Full logic duplicated
+  // from below to ensure this critical write endpoint is always wired on startup.
+  const saveCaliOverrideHandlerEarly = async (c: any) => {
+    const adminWallet = (c.get("adminWallet") as string) ?? "admin";
+    const rl = await checkRateLimit(`cali-admin-override:${adminWallet}`, 60, 60_000);
+    if (rl.limited) return c.json({ success: false, error: "Rate limited" }, 429);
+
+    let body: any = {};
+    try { body = await c.req.json(); } catch {}
+
+    const single = body?.override as any;
+    const batch = body?.overrides as any;
+
+    try {
+      const current = (await kv.get("cali:overrides")) || {};
+      if (single && single.id) {
+        (current as any)[single.id] = { ...(current as any)[single.id], ...single };
+      }
+      if (batch) {
+        for (const [id, ov] of Object.entries(batch)) {
+          (current as any)[id] = { ...(current as any)[id], ...ov, id };
+        }
+      }
+      await kv.set("cali:overrides", current);
+      return c.json({ success: true, data: { saved: Object.keys(batch || (single ? { [single.id]: 1 } : {})).length } });
+    } catch (e) {
+      console.log("[ADMIN-CALI] override save error", e);
+      return c.json({ success: false, error: "Save failed" }, 500);
+    }
+  };
+  app.post(`/admin/cali/override`, requireAdmin, saveCaliOverrideHandlerEarly);
+  app.post(`${PREFIX}/admin/cali/override`, requireAdmin, saveCaliOverrideHandlerEarly);
+
   // ─────────────────────────────────────────────────────────────────────────
   // POST /cali/challenge — issue a challenge nonce for the wallet to sign
   // ─────────────────────────────────────────────────────────────────────────
@@ -695,6 +792,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
 
     // Track live sign-in for admin operations panel (sign-ins + generated counts)
     incrCaliSignin().catch(() => {});
+    recordCaliUserWallet(accountId).catch(() => {});
 
     return c.json({
       success: true,
@@ -1388,7 +1486,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   // until the user base grows large; revisit with a denormalized counter then.
   // All counts are integer; topExercises is the 5 most-logged exercise ids.
   // ─────────────────────────────────────────────────────────────────────────
-  app.get(`${PREFIX}/admin/cali/stats`, requireAdminSession, async (c) => {
+  registerAdmin("get", `/admin/cali/stats`, requireAdmin, async (c) => {
     // Admin-only + full-prefix scan; throttle hard so a stuck-on-refresh
     // browser tab can't beat KV with O(N) reads.
     const adminWallet = (c.get("adminWallet") as string) ?? "admin";
@@ -1441,22 +1539,37 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
         }
       }
 
-      const topExercises = Array.from(exerciseCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([exerciseId, count]) => ({
-          exerciseId,
-          name: getExerciseSafe(exerciseId)?.name ?? exerciseId,
-          count,
-        }));
+      let topExercises: any[] = [];
+      try {
+        topExercises = Array.from(exerciseCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([exerciseId, count]) => ({
+            exerciseId,
+            name: getExerciseSafe(exerciseId)?.name ?? exerciseId,
+            count,
+          }));
+      } catch (e) {
+        console.log(`[CALI-ADMIN] top exercises computation failed: ${e}`);
+      }
 
       // Live ops counters (sign-ins for "how many people are signing in", gens for "workouts generated total")
-      const day = new Date().toISOString().slice(0, 10);
-      const [signinToday, signinTotal, genTotal] = await Promise.all([
-        kv.get(`cali:signin:d:${day}`),
-        kv.get(`cali:signin:total`),
-        kv.get(`cali:gen:total`),
-      ]);
+      let signinToday = 0;
+      let signinTotal = 0;
+      let genTotal = 0;
+      try {
+        const day = new Date().toISOString().slice(0, 10);
+        const [sToday, sTotal, gTotal] = await Promise.all([
+          kv.get(`cali:signin:d:${day}`),
+          kv.get(`cali:signin:total`),
+          kv.get(`cali:gen:total`),
+        ]);
+        signinToday = Number(sToday || 0);
+        signinTotal = Number(sTotal || 0);
+        genTotal = Number(gTotal || 0);
+      } catch (e) {
+        console.log(`[CALI-ADMIN] counters fetch failed: ${e}`);
+      }
 
       return c.json({
         success: true,
@@ -1472,9 +1585,9 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
           topExercises,
           libraryVersion: LIBRARY_VERSION,
           // NEW for admin ops live zone + dedicated calisthenics admin page
-          caliSignInsToday: Number(signinToday || 0),
-          caliSignInsTotal: Number(signinTotal || 0),
-          workoutsGeneratedTotal: Number(genTotal || 0),
+          caliSignInsToday: signinToday,
+          caliSignInsTotal: signinTotal,
+          workoutsGeneratedTotal: genTotal,
         },
       });
     } catch (err) {
@@ -1499,7 +1612,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   // scroll selector can always show and let the operator pick every exercise.
   // Private operator data (overrides, added, photoMap) only included when a valid
   // X-Admin-Session is provided. No auth required for the base names/ids/cues.
-  app.get(`${PREFIX}/admin/cali/library`, async (c) => {
+  registerAdmin("get", `/admin/cali/library`, async (c) => {
     let adminWallet = "public";
     let overridesRaw: any = {};
     let photoMap: any = {};
@@ -1552,7 +1665,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   });
 
   // POST /admin/cali/override — save one or more exercise overrides (name, cues, pattern, photo etc)
-  app.post(`${PREFIX}/admin/cali/override`, requireAdminSession, async (c) => {
+  const saveCaliOverrideHandler = async (c: any) => {
     const adminWallet = (c.get("adminWallet") as string) ?? "admin";
     const rl = await checkRateLimit(`cali-admin-override:${adminWallet}`, 60, 60_000);
     if (rl.limited) return c.json({ success: false, error: "Rate limited" }, 429);
@@ -1579,10 +1692,14 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       console.log("[ADMIN-CALI] override save error", e);
       return c.json({ success: false, error: "Save failed" }, 500);
     }
-  });
+  };
+  // NOTE: primary registration moved early in mountCaliRoutes for guaranteed availability (see top of function).
+  // These are kept for reference / if early block is removed.
+  // app.post(`/admin/cali/override`, requireAdmin, saveCaliOverrideHandler);
+  // app.post(`${PREFIX}/admin/cali/override`, requireAdmin, saveCaliOverrideHandler);
 
   // POST /admin/cali/exercise — add a brand new custom exercise (operator can extend the engine)
-  app.post(`${PREFIX}/admin/cali/exercise`, requireAdminSession, async (c) => {
+  const addCaliExerciseHandler = async (c: any) => {
     const adminWallet = (c.get("adminWallet") as string) ?? "admin";
     const rl = await checkRateLimit(`cali-admin-add-ex:${adminWallet}`, 30, 60_000);
     if (rl.limited) return c.json({ success: false, error: "Rate limited" }, 429);
@@ -1630,10 +1747,11 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       console.log("[ADMIN-CALI] add exercise error", e);
       return c.json({ success: false, error: "Failed to add exercise" }, 500);
     }
-  });
+  };
+  registerAdmin("post", `/admin/cali/exercise`, requireAdmin, addCaliExerciseHandler);
 
   // GET /admin/cali/photos — list assignments + known refs for gallery UI
-  app.get(`${PREFIX}/admin/cali/photos`, requireAdminSession, async (c) => {
+  registerAdmin("get", `/admin/cali/photos`, requireAdmin, async (c) => {
     try {
       const photoMap = (await kv.get("cali:photoMap")) || {};
       // Known female refs (hardcoded from assets for ops UI; add new by filename on disk)
@@ -1654,7 +1772,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   });
 
   // POST /admin/cali/photos — save photo assignment map (exerciseId -> ref filename)
-  app.post(`${PREFIX}/admin/cali/photos`, requireAdminSession, async (c) => {
+  registerAdmin("post", `/admin/cali/photos`, requireAdmin, async (c) => {
     const adminWallet = (c.get("adminWallet") as string) ?? "admin";
     const rl = await checkRateLimit(`cali-admin-photos:${adminWallet}`, 40, 60_000);
     if (rl.limited) return c.json({ success: false, error: "Rate limited" }, 429);
@@ -1678,7 +1796,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   });
 
   // POST /admin/cali/custom-routine — save a hand-crafted routine template
-  app.post(`${PREFIX}/admin/cali/custom-routine`, requireAdminSession, async (c) => {
+  registerAdmin("post", `/admin/cali/custom-routine`, requireAdmin, async (c) => {
     let body: any = {};
     try { body = await c.req.json(); } catch {}
     const id = (body?.id as string) || `custom-${Date.now()}`;
@@ -1692,7 +1810,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   });
 
   // GET /admin/cali/custom-routines — list saved hand made routines
-  app.get(`${PREFIX}/admin/cali/custom-routines`, requireAdminSession, async (c) => {
+  registerAdmin("get", `/admin/cali/custom-routines`, requireAdmin, async (c) => {
     try {
       const all = (await kv.getByPrefix("cali:custom:") || []) as any[];
       return c.json({ success: true, data: { routines: all } });
@@ -1742,25 +1860,7 @@ function projectHistoryItem(l: WorkoutLog): HistoryItem {
   };
 }
 
-/**
- * Slim id → display projection of the library, built once at module load.
- * PR/history responses use this to attach names + categories without shipping
- * cues/dose data the frontend doesn't need.
- */
-const libExercises: Map<string, { name: string; category: string }> = (() => {
-  const m = new Map<string, { name: string; category: string }>();
-  for (const e of EXERCISES) m.set(e.id, { name: e.name, category: e.category });
-  return m;
-})();
-
-/**
- * Safe library lookup — returns undefined for legacy ids (e.g. a log written
- * under an older LIBRARY_VERSION whose id was later removed). Callers fall
- * back to the raw id string for display.
- */
-function getExerciseSafe(id: string) {
-  return libExercises.get(id);
-}
+// (libExercises and getExerciseSafe moved to top of module for reliable scope)
 
 // ---------------------------------------------------------------------------
 // Log model + validation

@@ -28,17 +28,23 @@
  *   Manual    — Operator instruction guide
  *   Test Tools— Debugging and testing tools
  *   Launch    — Launch guide and instructions
+ *
+ * CALISTHENICS EDITOR:
+ *   The full routine operator console (111+ list + editor form + bucket uploads + simulate)
+ *   is now embedded directly under LIVE TRAFFIC / CALISTHENICS stats as a dropdown.
+ *   Click the CALISTHENICS stats panel to expand. Uses the live admin session token.
+ *   No navigation away from the protected panel → saves are reliable and permanent.
+ *   Secondary access still available via the "Cali Editor" bottom tab.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Shield, Lock, Unlock, Clock, LogOut, Users, Swords, Trophy,
   Vote, Camera, BookOpen, AlertTriangle, CheckCircle, Loader2,
   ChevronDown, Database, Fingerprint, Timer, X,
   ClipboardList, ExternalLink, Youtube, Download,
-  Megaphone, Rocket, Activity,
+  Megaphone, Rocket, Activity, Dumbbell,
 } from "lucide-react";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 import { useWallet } from "./wallet-context";
@@ -56,6 +62,7 @@ import { BronzeEnvelopeButton, FundingModelModal } from "./funding-model";
 import { BlueEnvelopeButton, CalisthenicsAdminEnvelopeModal } from "./cali-admin-envelope";
 import { TestToolsTab } from "./test-tools-tab";
 import { LaunchGuideTab } from "./launch-guide-tab";
+import { CalisthenicsAdminPage } from "../pages/calisthenics-admin";
 import { AdminWelcomeOverlay } from "./admin-welcome";
 import { AthleteOnboardedOverlay } from "./athlete-onboarded-overlay";
 import { SnapshotsTab } from "./snapshots-tab";
@@ -65,7 +72,7 @@ import { CaliAdminStats } from "./cali/cali-admin-stats";
 // Types
 // ---------------------------------------------------------------------------
 
-type AdminTab = "athletes" | "brackets" | "battles" | "proposals" | "sponsors" | "snapshots" | "manual" | "test-tools" | "launch";
+type AdminTab = "athletes" | "brackets" | "battles" | "proposals" | "sponsors" | "snapshots" | "manual" | "test-tools" | "launch" | "cali-editor";
 
 interface AdminSession {
   token: string;
@@ -87,6 +94,7 @@ const TABS: { id: AdminTab; label: string; icon: React.ReactNode; description: s
   { id: "manual", label: "Manual", icon: <BookOpen className="w-4 h-4" />, description: "Operator instructions and guide" },
   { id: "test-tools", label: "Test Tools", icon: <Database className="w-4 h-4" />, description: "Debugging and testing tools" },
   { id: "launch", label: "Launch", icon: <Rocket className="w-4 h-4" />, description: "BOTB token launch guide" },
+  { id: "cali-editor", label: "Cali Editor", icon: <Dumbbell className="w-4 h-4" />, description: "Edit calisthenics exercises and custom images" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -96,7 +104,6 @@ const TABS: { id: AdminTab; label: string; icon: React.ReactNode; description: s
 export function AdminPanel() {
   const wallet = useWallet();
   const { accountId, isAdmin, connected, signMessage } = wallet;
-  const navigate = useNavigate();
 
   // Session state (in-memory only — never persisted)
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -105,6 +112,11 @@ export function AdminPanel() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [activeTab, setActiveTab] = useState<AdminTab>("manual");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Calisthenics editor dropdown (lives directly under live stats / cali ops zone).
+  // Sits silently (collapsed) until admin clicks the CALISTHENICS panel to expand.
+  // Uses the live session object — never navigates away.
+  const [showCaliEditor, setShowCaliEditor] = useState(false);
 
   // Welcome overlay state — triggers after successful auth
   const [showWelcome, setShowWelcome] = useState(false);
@@ -126,6 +138,12 @@ export function AdminPanel() {
       if (remaining <= 0) {
         console.log("[Admin Panel] Session expired — auto-locking");
         setSession(null);
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('adminSessionToken');
+          sessionStorage.removeItem('adminSessionWallet');
+          sessionStorage.removeItem('caliAdminSessionToken');
+          sessionStorage.removeItem('caliAdminWallet');
+        }
         toast.error("Admin session expired. Please re-authenticate.");
       }
     };
@@ -198,6 +216,16 @@ export function AdminPanel() {
 
       setSession(newSession);
       setActiveTab("manual");
+      // Persist to sessionStorage so sub-pages (legacy) or components can re-use the session.
+      // The primary embedded editor (under stats) receives the token directly as props — no reliance on storage for saves.
+      // without requiring re-auth (main admin itself uses in-memory for security).
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('adminSessionToken', newSession.token);
+        sessionStorage.setItem('adminSessionWallet', newSession.wallet);
+        // Also write cali* aliases so any legacy direct page or other consumers see the same token.
+        sessionStorage.setItem('caliAdminSessionToken', newSession.token);
+        sessionStorage.setItem('caliAdminWallet', newSession.wallet);
+      }
       toast.success("Admin authenticated! Session active for 20 minutes.");
       console.log("[Admin Panel] Authentication complete — session active");
 
@@ -420,24 +448,44 @@ export function AdminPanel() {
         {/* Live unique-IP visit counter — privacy-preserving traffic gauge */}
         <VisitCounter wallet={session.wallet} sessionToken={session.token} />
 
-        {/* CALISTHENICS OPS ZONE (new) + clickable existing states panel.
-            Per requirements: live sign-ins + workouts generated now shown inside.
-            Click opens dedicated full-page calisthenics routine generation + photo/workout admin tools. */}
+        {/* CALISTHENICS OPS ZONE — LIVE STATS + INLINE DROPDOWN EDITOR
+            Click the stats area to expand/collapse the full edit tool (library + form).
+            Editor runs inside this same protected panel using the live session token.
+            No navigation away = reliable permanent saves. Sits silently when closed. */}
         <div className="border-b border-[#D4A843]/10 bg-[#0B1120]/30 px-4 sm:px-5 py-1">
           <div className="text-[0.5rem] uppercase tracking-[1.5px] text-[#D4A843] font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>
-            CALISTHENICS OPS ZONE — click panel for full manual routine + photo controls
+            CALISTHENICS OPS ZONE — STATS + DROPDOWN EDITOR (click panel to toggle)
           </div>
         </div>
         <CaliAdminStats
           wallet={session.wallet}
           sessionToken={session.token}
-          onClick={() => navigate("/calisthenics/admin", { 
-            state: { 
-              sessionToken: session.token, 
-              wallet: session.wallet 
-            } 
-          })}
+          onClick={() => setShowCaliEditor(v => !v)}
         />
+
+        {/* Embedded Calisthenics Routine Editor — placed directly under the live stats.
+            Renders the exact same tool (scrollable 111+ list + full form + uploads + simulate).
+            When collapsed it takes zero extra space. Uses live session → saves are permanent. */}
+        {showCaliEditor && (
+          <div className="border-b border-[#D4A843]/10 bg-[#0B1120]/20 px-4 sm:px-5 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <div style={{ fontFamily: "Orbitron, sans-serif" }} className="text-[10px] tracking-widest text-[#D4A843]">
+                ROUTINE OPERATIONS — EDIT OR ADD EXERCISES (inside Admin Command Center)
+              </div>
+              <button
+                onClick={() => setShowCaliEditor(false)}
+                className="text-[10px] px-2 py-0.5 border border-white/20 rounded hover:bg-white/5"
+              >
+                CLOSE EDITOR
+              </button>
+            </div>
+            <CalisthenicsAdminPage
+              embedded
+              sessionToken={session.token}
+              wallet={session.wallet}
+            />
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="border-b border-[#D4A843]/10 overflow-x-auto">
@@ -479,6 +527,7 @@ export function AdminPanel() {
               {activeTab === "manual" && <ManualTab />}
               {activeTab === "test-tools" && <TestToolsTab wallet={session.wallet} sessionToken={session.token} />}
               {activeTab === "launch" && <LaunchGuideTab />}
+              {activeTab === "cali-editor" && <CalisthenicsAdminPage embedded sessionToken={session.token} wallet={session.wallet} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1222,6 +1271,8 @@ function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: 
     total: number;
     walletsConnected: number;
     walletsVoted: number;
+    workoutsGenerated: number;
+    userWallets: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pulse, setPulse] = useState(false);
@@ -1245,6 +1296,8 @@ function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: 
         total: d.total,
         walletsConnected: d.walletsConnected || 0,
         walletsVoted: d.walletsVoted || 0,
+        workoutsGenerated: d.workoutsGenerated || 0,
+        userWallets: d.userWallets || 0,
       });
     }
     setLoading(false);
@@ -1310,6 +1363,8 @@ function VisitCounter({ wallet, sessionToken }: { wallet: string; sessionToken: 
             <Stat label="ALL-TIME IPs" value={fmt(stats.total)} />
             <Stat label="WALLETS CONNECTED" value={fmt(stats.walletsConnected)} accent="gold" />
             <Stat label="WALLETS VOTED" value={fmt(stats.walletsVoted)} accent="gold" />
+            <Stat label="WORKOUTS GENERATED" value={fmt(stats.workoutsGenerated)} accent="gold" />
+            <Stat label="USER WALLETS" value={fmt(stats.userWallets)} accent="gold" />
           </div>
         ) : (
           <span className="text-[#8494A7] text-[0.6rem]">Stats unavailable</span>

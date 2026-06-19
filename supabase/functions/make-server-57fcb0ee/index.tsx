@@ -341,7 +341,7 @@ function safeErrorMsg(operation: string): string {
 // ---------------------------------------------------------------------------
 const PREFIX = "/make-server-57fcb0ee";
 
-app.use(`${PREFIX}/*`, rateLimit({
+app.use(`/*`, rateLimit({
   keyFn: (c) => {
     const forwarded = c.req.header("x-forwarded-for");
     return `global:${forwarded || c.req.header("x-real-ip") || "unknown"}`;
@@ -355,7 +355,10 @@ app.use(`${PREFIX}/*`, rateLimit({
 // Calisthenics tab — HBAR-gated workout routes (mounted under PREFIX/cali/*)
 // Sits behind the global CORS + rate-limit middleware above.
 // ---------------------------------------------------------------------------
-mountCaliRoutes(app, PREFIX);
+// Note: mountCaliRoutes moved to the very end (after all other routes) so that
+// a bug in the cali module does not prevent core admin auth routes (challenge,
+// verify, check, etc.) from being registered. This keeps the Admin Command Center
+// sign-in working even during cali editor maintenance.
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -987,9 +990,11 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
     const total = Number(await kv.get(`vcount:total`)) || 0;
     const last7d = dailyVals.slice(0, 7).reduce((s: number, v: number) => s + v, 0);
     const last30d = dailyVals.reduce((s: number, v: number) => s + v, 0);
-    const [walletsConnected, walletsVoted] = await kv.mget([
+    const [walletsConnected, walletsVoted, workoutsGenerated, userWallets] = await kv.mget([
       `wconn:total`,
       `wvoted:total`,
+      `cali:gen:total`,
+      `caliuser:total`,
     ]);
     return c.json({
       success: true,
@@ -1001,6 +1006,8 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
         total,
         walletsConnected: Number(walletsConnected) || 0,
         walletsVoted: Number(walletsVoted) || 0,
+        workoutsGenerated: Number(workoutsGenerated) || 0,
+        userWallets: Number(userWallets) || 0,
         breakdown: days.map((d, i) => ({ date: d, count: dailyVals[i] || 0 })),
         retentionDays: VISIT_HASH_RETENTION_DAYS,
         privacyNote: "IPs and wallet IDs are HMAC-hashed; raw values are never returned by this endpoint.",
@@ -6107,6 +6114,10 @@ app.post(`${PREFIX}/admin/test/clear-ip-flags`, requireAdminSession, async (c) =
 // ===========================================================================
 // END PHASE 2 TEST TOOLS — Delete entire block above when going fully live
 // ===========================================================================
+
+// Mount cali routes LAST so core functionality (admin auth, etc.) is not affected
+// if cali code has a startup error.
+mountCaliRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);
