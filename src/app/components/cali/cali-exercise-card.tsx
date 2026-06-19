@@ -12,6 +12,7 @@ import type { AvatarGender } from "../../lib/cali-avatar-prefs";
 import { getExerciseGuide, CATEGORY_COLORS, type WorkoutExerciseItem } from "../../lib/cali-exercise-guide";
 
 import { CaliSetLogger } from "./cali-set-logger";
+import { ExerciseYouTubeLink } from "./exercise-youtube-link";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -86,6 +87,7 @@ export function CaliExerciseCard({
             <h3 className="text-base sm:text-lg font-bold text-white" style={dmSans}>{item.name}</h3>
           </div>
           <div className="flex items-start gap-2 flex-shrink-0">
+            <ExerciseYouTubeLink name={item.name} />
             {onSwap && (
               <button
                 type="button"

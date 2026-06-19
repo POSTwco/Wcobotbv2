@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/toolti
 // call for live overrides fails or no admin token is present on direct access.
 import { EXERCISES as SERVER_BASE_EXERCISES } from "../../../supabase/functions/make-server-57fcb0ee/cali_library";
 import confetti from "canvas-confetti";
+import { ExerciseYouTubeLink } from "../components/cali/exercise-youtube-link";
 
 const ORBIT = { fontFamily: "Orbitron, sans-serif" } as const;
 const DMS = { fontFamily: "'DM Sans', sans-serif" } as const;
@@ -1042,7 +1043,10 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
                       );
                     })()}
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold">{editBuffer.name || 'Untitled Exercise'}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold">{editBuffer.name || 'Untitled Exercise'}</div>
+                        <ExerciseYouTubeLink name={editBuffer.name || ''} />
+                      </div>
                       <div className="text-[10px] text-[#6AA3E0]">{(editBuffer.defaultDose||[3,4,8,12]).slice(0,2).join('-')} sets × {(editBuffer.defaultDose||[3,4,8,12])[2]}-{(editBuffer.defaultDose||[3,4,8,12])[3]} {(editBuffer.defaultDose||[])[2] > 20 ? 's' : 'reps'}</div>
                       {(editBuffer.tempoHint) && <div className="text-[9px] text-[#D4A843]/80">Tempo: {editBuffer.tempoHint}</div>}
                     </div>
