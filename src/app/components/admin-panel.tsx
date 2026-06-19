@@ -67,6 +67,7 @@ import { AdminWelcomeOverlay } from "./admin-welcome";
 import { AthleteOnboardedOverlay } from "./athlete-onboarded-overlay";
 import { SnapshotsTab } from "./snapshots-tab";
 import { CaliAdminStats } from "./cali/cali-admin-stats";
+import { AdminAuthEnvelope } from "./admin-auth-envelope";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -290,99 +291,11 @@ export function AdminPanel() {
   // ---------------------------------------------------------------------------
   if (!session) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mt-10 mb-6"
-      >
-        <div className="bg-gradient-to-br from-[#0f1923] to-[#111827] border border-[#D4A843]/30 rounded-2xl overflow-hidden">
-          {/* Header */}
-          <div className="px-5 py-4 border-b border-[#D4A843]/20 bg-gradient-to-r from-[#D4A843]/5 to-transparent">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[#D4A843]/10 border border-[#D4A843]/30">
-                <Shield className="w-5 h-5 text-[#D4A843]" />
-              </div>
-              <div>
-                <h2 className="text-[#E8ECF0] font-bold" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.85rem" }}>
-                  WCO ADMIN COMMAND CENTER
-                </h2>
-                <p className="text-[#8494A7] text-xs">Wallet verified. Second-factor signature required.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Auth Gate Content */}
-          <div className="p-6 sm:p-8 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="mb-6">
-                <div className="inline-flex p-4 rounded-full bg-[#D4A843]/5 border border-[#D4A843]/20 mb-4">
-                  <Lock className="w-10 h-10 text-[#D4A843]" />
-                </div>
-                <h3 className="text-[#E8ECF0] text-lg font-bold mb-2" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.9rem" }}>
-                  AUTHENTICATE TO UNLOCK
-                </h3>
-                <p className="text-[#8494A7] text-sm leading-relaxed">
-                  For security, admin operations require a second wallet signature.
-                  A message will be sent to your HashPack wallet via WalletConnect — open HashPack and approve it.
-                  Sessions expire after <span className="text-[#D4A843] font-semibold">20 minutes</span>.
-                </p>
-              </div>
-
-              {/* Security Info */}
-              <div className="grid grid-cols-3 gap-3 mb-6 text-center">
-                <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
-                  <Fingerprint className="w-5 h-5 text-[#4274B9] mx-auto mb-1" />
-                  <p className="text-[0.6rem] text-[#8494A7]">HIP-820 Signature</p>
-                </div>
-                <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
-                  <Timer className="w-5 h-5 text-[#D4A843] mx-auto mb-1" />
-                  <p className="text-[0.6rem] text-[#8494A7]">20 Min Timeout</p>
-                </div>
-                <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
-                  <Shield className="w-5 h-5 text-[#10b981] mx-auto mb-1" />
-                  <p className="text-[0.6rem] text-[#8494A7]">Server Verified</p>
-                </div>
-              </div>
-
-              {authError && (
-                <div className="flex items-start gap-2 px-4 py-3 mb-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-left">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{authError}</span>
-                </div>
-              )}
-
-              <button
-                onClick={authenticate}
-                disabled={isAuthenticating}
-                className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-[#D4A843] to-[#B8932B] text-[#0B1120] hover:from-[#E5B94E] hover:to-[#D4A843] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.75rem" }}
-              >
-                {isAuthenticating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    AWAITING HASHPACK APPROVAL...
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="w-4 h-4" />
-                    SIGN TO AUTHENTICATE
-                  </>
-                )}
-              </button>
-
-              {isAuthenticating && (
-                <p className="text-[#D4A843] text-xs mt-3 animate-pulse">
-                  Open HashPack on your device and approve the signature request.
-                </p>
-              )}
-
-              <p className="text-[#8494A7] text-[0.6rem] mt-3">
-                Connected as <span className="text-[#6AA3E0] font-mono">{accountId}</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+      <AdminAuthEnvelope
+        onAuthenticate={authenticate}
+        isAuthenticating={isAuthenticating}
+        hasError={!!authError}
+      />
     );
   }
 
