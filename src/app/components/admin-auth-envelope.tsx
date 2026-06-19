@@ -47,7 +47,7 @@ const NAVY_CAMO_TILE = `url("data:image/svg+xml,${encodeURIComponent(`
 </svg>
 `)}")`;
 
-/** User-provided fingerprint template — recolored gold, white knocks out on envelope */
+/** User-provided fingerprint template — gold ridges only, no white box */
 function GoldFingerprintTemplate({
   className = "",
   active = false,
@@ -56,20 +56,43 @@ function GoldFingerprintTemplate({
   active?: boolean;
 }) {
   return (
-    <img
-      src={fingerprintTemplate}
-      alt=""
-      aria-hidden
-      draggable={false}
+    <svg
+      viewBox="0 0 200 240"
       className={className}
-      style={{
-        filter: active
-          ? "sepia(1) saturate(5.5) hue-rotate(358deg) brightness(1.08) contrast(1.08)"
-          : "sepia(1) saturate(4.5) hue-rotate(358deg) brightness(0.98) contrast(1.02)",
-        mixBlendMode: "darken",
-        opacity: active ? 1 : 0.94,
-      }}
-    />
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="adminEnvelopeFpGold" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={active ? "#F5E6A8" : "#E8C547"} />
+          <stop offset="50%" stopColor={active ? "#D4AF37" : "#C9A227"} />
+          <stop offset="100%" stopColor={active ? "#A67C00" : "#9A7B0A"} />
+        </linearGradient>
+        {/* Teal template: low red channel = ridge; white bg = transparent */}
+        <filter id="adminEnvelopeFpKey" colorInterpolationFilters="sRGB">
+          <feColorMatrix
+            type="matrix"
+            values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1 0 0 0 1"
+          />
+        </filter>
+        <mask id="adminEnvelopeFpMask">
+          <image
+            href={fingerprintTemplate}
+            width="200"
+            height="240"
+            filter="url(#adminEnvelopeFpKey)"
+            preserveAspectRatio="xMidYMid meet"
+          />
+        </mask>
+      </defs>
+      <rect
+        width="200"
+        height="240"
+        fill="url(#adminEnvelopeFpGold)"
+        mask="url(#adminEnvelopeFpMask)"
+        opacity={active ? 1 : 0.94}
+      />
+    </svg>
   );
 }
 
@@ -392,7 +415,7 @@ export function AdminAuthEnvelope({
                   }}
                 >
                   <GoldFingerprintTemplate
-                    className="w-[78px] h-auto sm:w-[86px] object-contain pointer-events-none select-none"
+                    className="w-[78px] h-[94px] sm:w-[86px] sm:h-[104px] pointer-events-none select-none"
                     active={isAuthenticating || hovered}
                   />
                 </motion.div>
