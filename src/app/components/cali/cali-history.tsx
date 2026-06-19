@@ -49,7 +49,7 @@ export function CaliHistory() {
       setLoading(false);
       setLoadingMore(false);
     },
-    [cali],
+    [cali.sessionToken, cali.handleAuthError],
   );
 
   useEffect(() => {

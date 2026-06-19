@@ -39,8 +39,9 @@ export function CaliPRs() {
 
   useEffect(() => {
     if (!cali.sessionToken) return;
+    const token = cali.sessionToken;
     (async () => {
-      const res = await api.cali.prs(cali.sessionToken!);
+      const res = await api.cali.prs(token);
       if (res.success && res.data) setPrs(res.data.prs);
       else {
         cali.handleAuthError(res.code);
@@ -48,7 +49,7 @@ export function CaliPRs() {
       }
       setLoading(false);
     })();
-  }, [cali]);
+  }, [cali.sessionToken, cali.handleAuthError]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, PR[]>();

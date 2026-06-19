@@ -133,7 +133,7 @@ export function CaliWorkout() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [id, cali]);
+  }, [id, cali.sessionToken, cali.handleAuthError]);
 
   const setsTotal = useMemo(() => (plan ? countTotalSets(plan) : 0), [plan]);
   const setsLogged = loggedSets.size;

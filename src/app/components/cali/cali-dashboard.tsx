@@ -56,14 +56,15 @@ export function CaliDashboard() {
   const [savingLevel, setSavingLevel] = useState(false);
 
   // ── Initial load ───────────────────────────────────────────────────────
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     if (!cali.sessionToken) return;
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     setError(null);
+    const token = cali.sessionToken;
     const [p, s, r] = await Promise.all([
-      api.cali.getProfile(cali.sessionToken),
-      api.cali.streak(cali.sessionToken),
-      api.cali.prs(cali.sessionToken),
+      api.cali.getProfile(token),
+      api.cali.streak(token),
+      api.cali.prs(token),
     ]);
     if (p.success && p.data) setProfile(p.data.profile);
     if (s.success && s.data) setStreak(s.data.streak);
@@ -73,7 +74,7 @@ export function CaliDashboard() {
       setError(p.error || "Failed to load profile.");
     }
     setLoading(false);
-  }, [cali]);
+  }, [cali.sessionToken, cali.handleAuthError]);
 
   useEffect(() => {
     loadAll();
@@ -135,7 +136,7 @@ export function CaliDashboard() {
           </p>
         </div>
         <button
-          onClick={loadAll}
+          onClick={() => loadAll({ silent: true })}
           className="w-9 h-9 rounded-lg flex items-center justify-center text-[#8494A7] hover:text-white bg-white/[0.02] border border-[#4274B9]/15"
           aria-label="Refresh"
         >

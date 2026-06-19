@@ -25,6 +25,7 @@ import React, {
   useEffect,
   useCallback,
   useRef,
+  useMemo,
   type ReactNode,
 } from "react";
 import { api } from "../../lib/api";
@@ -120,6 +121,9 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
   // Track the current accountId we hold a session for, so we can detect a
   // wallet swap and invalidate immediately.
   const sessionAccountIdRef = useRef<string | null>(null);
+  const [sessionAccountId, setSessionAccountId] = useState<string | null>(null);
+  // Avoid wiping a restored cali session while WalletConnect is still booting.
+  const walletEverMatchedRef = useRef(false);
 
   // ── Restore on mount + probe /me ────────────────────────────────────────
   useEffect(() => {
@@ -132,6 +136,7 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
       }
       setSessionToken(stored.token);
       sessionAccountIdRef.current = stored.accountId;
+      setSessionAccountId(stored.accountId);
       const res = await api.cali.me(stored.token);
       if (cancelled) return;
       if (res.success && res.data) {
@@ -141,6 +146,7 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
         clearStored();
         setSessionToken(null);
         sessionAccountIdRef.current = null;
+        setSessionAccountId(null);
         setPhase("idle");
       }
     })();
@@ -150,15 +156,26 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── Detect wallet disconnect or account swap ────────────────────────────
+  // Wait until wallet has connected at least once with a matching account
+  // before invalidating — prevents flash during WalletConnect auto-reconnect.
   useEffect(() => {
-    if (!sessionAccountIdRef.current) return;
-    if (!wallet.connected || wallet.accountId !== sessionAccountIdRef.current) {
-      clearStored();
-      setSessionToken(null);
-      setEligibility(null);
-      sessionAccountIdRef.current = null;
-      setPhase("idle");
+    const bound = sessionAccountIdRef.current;
+    if (!bound) return;
+
+    if (wallet.connected && wallet.accountId === bound) {
+      walletEverMatchedRef.current = true;
+      return;
     }
+
+    if (!walletEverMatchedRef.current) return;
+
+    clearStored();
+    setSessionToken(null);
+    setEligibility(null);
+    sessionAccountIdRef.current = null;
+    setSessionAccountId(null);
+    walletEverMatchedRef.current = false;
+    setPhase("idle");
   }, [wallet.connected, wallet.accountId]);
 
   // ── Enter flow ──────────────────────────────────────────────────────────
@@ -221,9 +238,11 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     persistStored(stored);
     setSessionToken(stored.token);
     sessionAccountIdRef.current = accountId;
+    setSessionAccountId(accountId);
+    walletEverMatchedRef.current = true;
     setEligibility(verify.data.eligibility);
     setPhase("eligible");
-  }, [wallet]);
+  }, [wallet.connected, wallet.accountId, wallet.connect, wallet.signMessage]);
 
   // ── Refresh ─────────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
@@ -241,12 +260,18 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
       clearStored();
       setSessionToken(null);
       setEligibility(null);
+      sessionAccountIdRef.current = null;
+      setSessionAccountId(null);
+      walletEverMatchedRef.current = false;
       setError(res.error || "HBAR balance fell below the gate.");
       setPhase("revoked");
     } else if (res.code === "CALI_SESSION_REQUIRED" || res.code === "CALI_ELIGIBILITY_EXPIRED") {
       clearStored();
       setSessionToken(null);
       setEligibility(null);
+      sessionAccountIdRef.current = null;
+      setSessionAccountId(null);
+      walletEverMatchedRef.current = false;
       setPhase("idle");
     }
   }, [sessionToken]);
@@ -256,6 +281,8 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     setSessionToken(null);
     setEligibility(null);
     sessionAccountIdRef.current = null;
+    setSessionAccountId(null);
+    walletEverMatchedRef.current = false;
     setPhase("idle");
   }, []);
 
@@ -269,22 +296,27 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
       setSessionToken(null);
       setEligibility(null);
       sessionAccountIdRef.current = null;
+      setSessionAccountId(null);
+      walletEverMatchedRef.current = false;
       setPhase(code === "INSUFFICIENT_HBAR" ? "revoked" : "idle");
     }
   }, []);
 
-  const value: CaliContextValue = {
-    phase,
-    error,
-    accountId: sessionAccountIdRef.current,
-    sessionToken,
-    eligibility,
-    minTinybars: MIN_TINYBARS,
-    enter,
-    refresh,
-    signOut,
-    handleAuthError,
-  };
+  const value: CaliContextValue = useMemo(
+    () => ({
+      phase,
+      error,
+      accountId: sessionAccountId,
+      sessionToken,
+      eligibility,
+      minTinybars: MIN_TINYBARS,
+      enter,
+      refresh,
+      signOut,
+      handleAuthError,
+    }),
+    [phase, error, sessionAccountId, sessionToken, eligibility, enter, refresh, signOut, handleAuthError],
+  );
 
   return <CaliContext.Provider value={value}>{children}</CaliContext.Provider>;
 }
