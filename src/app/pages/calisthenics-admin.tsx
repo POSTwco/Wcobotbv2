@@ -32,6 +32,19 @@ const SUPABASE_URL = `https://${projectId}.supabase.co`;
 const SUPABASE_ANON = publicAnonKey;
 const WORKOUT_BUCKET_NAME = "WORKOUT BUCKET";
 
+function readStoredAdminSession(): { token: string; wallet: string } | null {
+  if (typeof window === "undefined") return null;
+  const token =
+    sessionStorage.getItem("caliAdminSessionToken") ||
+    sessionStorage.getItem("adminSessionToken");
+  if (!token) return null;
+  const wallet =
+    sessionStorage.getItem("caliAdminWallet") ||
+    sessionStorage.getItem("adminSessionWallet") ||
+    "";
+  return { token, wallet };
+}
+
 // Helper: returns usable src for <img> ONLY from Supabase (http) or data URLs set via admin panel.
 // No local files or old refs. If no URL assigned, callers should show placeholder or motion fallback.
 function getImageSrc(ref: string | null | undefined): string {
@@ -187,6 +200,31 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
   // Track whether we have ever successfully loaded the real full library (protect against races / fallback overwrites)
   const hasFullLibraryRef = useRef(false);
 
+  const resolveAdminCredentials = useCallback((): { token: string; wallet: string } | null => {
+    const stored = readStoredAdminSession();
+    const token =
+      propSessionToken ||
+      sessionToken ||
+      passedSessionToken ||
+      stored?.token ||
+      null;
+    const wallet =
+      propWallet ||
+      effectiveWallet ||
+      passedWallet ||
+      stored?.wallet ||
+      accountId ||
+      "";
+    if (!token) return null;
+    return { token, wallet };
+  }, [
+    propSessionToken, sessionToken, passedSessionToken,
+    propWallet, effectiveWallet, passedWallet, accountId,
+  ]);
+
+  const adminCredentials = resolveAdminCredentials();
+  const hasAdminSession = !!adminCredentials?.token;
+
   // Robust: load full library independently (no blocking Promise.all). Critical for 111+ list.
   // The session token (from panel or persisted storage) is authoritative on the backend.
   // We attempt the call whenever we have a tok — server derives the wallet from the validated session.
@@ -196,9 +234,9 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
       return false;
     }
     // Always attempt to fetch the library. Prefer live props passed from inside AdminPanel.
-    const effectiveTok = propSessionToken || sessionToken || passedSessionToken || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminSessionToken') || sessionStorage.getItem('adminSessionToken')) : null);
-    const tok = effectiveTok;
-    const w = propWallet || effectiveWallet || passedWallet || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminWallet') || sessionStorage.getItem('adminSessionWallet')) : null) || '';
+    const creds = resolveAdminCredentials();
+    const tok = creds?.token || "";
+    const w = creds?.wallet || propWallet || effectiveWallet || passedWallet || "";
 
     try {
       const getLib = adminApi.getCaliLibrary || (rootApi as any).getCaliLibrary;
@@ -234,7 +272,7 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
       setLibrarySource('fallback');
     }
     return false;
-  }, [propWallet, propSessionToken, effectiveWallet, sessionToken, passedSessionToken, passedWallet]);
+  }, [propWallet, propSessionToken, effectiveWallet, sessionToken, passedSessionToken, passedWallet, resolveAdminCredentials]);
 
 
 
@@ -264,16 +302,6 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
       setBucketLoading(false);
     }
   }, []);
-
-  // No extra signing. We inherit the original admin session token from the main Admin Command Center gate.
-  const ensureAdminSession = useCallback(async () => {
-    if (sessionToken) return sessionToken;
-    if (passedSessionToken) {
-      setSessionToken(passedSessionToken);
-      return passedSessionToken;
-    }
-    return null;
-  }, [sessionToken, passedSessionToken]);
 
   // Robust initial + reactive loads: always attempt full library when token present.
   // Uses effectiveWallet + storage so the full 111 list appears even after refresh.
@@ -353,12 +381,15 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
       return;
     }
 
-    const effectiveTok = propSessionToken || sessionToken || passedSessionToken || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminSessionToken') || sessionStorage.getItem('adminSessionToken')) : null);
-    const tok = effectiveTok;
-    const w = propWallet || effectiveWallet || passedWallet || (typeof window !== 'undefined' ? (sessionStorage.getItem('caliAdminWallet') || sessionStorage.getItem('adminSessionWallet')) : null) || 'session';
-    // Note: we no longer block writes on missing tok. If the connected wallet (w) is an admin wallet, 
-    // the backend requireAdmin (via X-Admin-Wallet header) will allow the edit. The full admin session token
-    // is preferred when available (from main admin), but admin wallet signed-in is now sufficient.
+    const creds = resolveAdminCredentials();
+    if (!creds?.token) {
+      toast.error(
+        "Admin session required. Open Governance → unlock Admin Command Center (wallet signature), then use the Calisthenics panel.",
+        { duration: 10000 },
+      );
+      return;
+    }
+    const { token: tok, wallet: w } = creds;
 
     const name = (editBuffer.name || '').trim();
     const id = (editBuffer.id || '').trim();
@@ -530,26 +561,40 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
     return () => window.removeEventListener('keydown', onKey);
   }, [editBuffer]);
 
-  // When rendered as embedded dropdown inside the already-unlocked Admin Command Center we receive
-  // a live sessionToken prop. In that case we trust the parent panel's protection and allow the UI.
-  const canUseEmbedded = embedded && !!propSessionToken;
-  if (!connected || !isAdmin) {
-    if (!canUseEmbedded) {
+  if (!embedded) {
+    if (!connected || !isAdmin) {
       return (
         <div className="min-h-[60vh] flex items-center justify-center p-8 text-center">
           <div>
             <AlertTriangle className="mx-auto mb-3 text-[#D4A843]" />
             <div style={ORBIT} className="text-xl mb-2">ADMIN ONLY</div>
-            <p className="text-[#8494A7]">Connect an admin wallet and unlock the Admin Command Center, then click the CALISTHENICS panel.</p>
+            <p className="text-[#8494A7]">Connect an admin wallet and unlock the Admin Command Center, then open the Calisthenics panel.</p>
             <button onClick={() => navigate("/governance")} className="mt-4 px-4 py-2 bg-[#D4A843] text-black rounded">Back to Governance</button>
           </div>
         </div>
       );
     }
+    if (!hasAdminSession) {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center p-8 text-center">
+          <div>
+            <AlertTriangle className="mx-auto mb-3 text-[#D4A843]" />
+            <div style={ORBIT} className="text-xl mb-2">SIGNATURE REQUIRED</div>
+            <p className="text-[#8494A7] max-w-md mx-auto">
+              Calisthenics edits require a signed admin session (20-minute token). Unlock the Admin Command Center in Governance first — wallet-only access is not sufficient.
+            </p>
+            <button onClick={() => navigate("/governance")} className="mt-4 px-4 py-2 bg-[#D4A843] text-black rounded">Unlock in Governance</button>
+          </div>
+        </div>
+      );
+    }
+  } else if (!propSessionToken) {
+    return (
+      <div className="p-6 text-center text-[#8494A7] text-sm">
+        Admin session missing. Re-unlock the Admin Command Center in Governance.
+      </div>
+    );
   }
-
-  // Note: For full live library (beyond defaults) and saving, open via the CALISTHENICS panel in Admin Command Center to pass the session token.
-  // The editor and list are always visible for workflow.
 
   // When embedded inside Admin Command Center (dropdown under live stats), use a contained
   // wrapper so it fits cleanly without fighting the parent panel card. "Just as it is" otherwise.
@@ -570,6 +615,12 @@ export function CalisthenicsAdminPage({ embedded = false, sessionToken: propSess
             <div style={ORBIT} className="text-sm tracking-widest text-[#D4A843]">WCO CALISTHENICS ROUTINE OPERATOR CONSOLE</div>
           )}
         </div>
+
+        {!hasAdminSession && embedded && (
+          <div className="mb-4 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm">
+            Admin session expired or missing — saves are disabled until you re-unlock the Admin Command Center.
+          </div>
+        )}
 
         {/* PROMINENT API BUNDLE WARNING — this is the #1 reason saves "do nothing" */}
         {!hasCaliMethods && (

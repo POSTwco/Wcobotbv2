@@ -699,8 +699,8 @@ export const api = {
         "/admin/test/clear-ip-flags", { method: "POST", body: {}, adminWallet, sessionToken }),
   },
 
-  /** Calisthenics command-center stats */
-  getCaliStats: (adminWallet: string, sessionToken: string) =>
+    /** Calisthenics admin ops — all routes require X-Admin-Session (signed 20-min token). */
+    getCaliStats: (adminWallet: string, sessionToken: string) =>
     request<{
       totalProfiles: number;
       totalWorkouts: number;
