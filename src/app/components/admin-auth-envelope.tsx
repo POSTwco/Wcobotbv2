@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
+import fingerprintTemplate from "../../assets/fingerprint-template.png";
 
 const ARMY = {
   olive: "#4B5320",
@@ -46,65 +47,29 @@ const NAVY_CAMO_TILE = `url("data:image/svg+xml,${encodeURIComponent(`
 </svg>
 `)}")`;
 
-/** Ink-on-parchment fingerprint ridges — no badge, no ring */
-function RealisticFingerprint({
+/** User-provided fingerprint template — recolored gold, white knocks out on envelope */
+function GoldFingerprintTemplate({
   className = "",
   active = false,
 }: {
   className?: string;
   active?: boolean;
 }) {
-  const ink = active ? "#2a221c" : "#3d3228";
-  const mid = active ? "#4a3d32" : "#524438";
-  const light = active ? "#5e4f42" : "#6a5a4c";
-
-  const ridge = (d: string, w = 0.42, color = ink, o = 0.92) => (
-    <path
-      d={d}
-      stroke={color}
-      strokeWidth={w}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      opacity={o}
-    />
-  );
-
   return (
-    <svg viewBox="0 0 72 88" className={className} fill="none" aria-hidden>
-      {ridge("M36 4 C24 4 14 10 10 20 C7 28 8 38 12 46")}
-      {ridge("M36 8 C26 8 18 13 15 21 C12.5 28 13 36 16.5 43")}
-      {ridge("M36 12 C28 12 21.5 16 19 23 C17 29 17.5 35.5 20.5 41")}
-      {ridge("M36 16 C30 16 25 19 23 25 C21.5 30 21.8 35.5 24 40", 0.38, mid)}
-      {ridge("M36 20 C32 20 28.5 22 27 26.5 C25.8 30.5 26 34.5 27.8 38", 0.36, light, 0.85)}
-      {ridge("M36 24 C33.5 24 31.5 25.5 30.8 28.5 C30.2 31 30.5 33.5 31.6 35.8", 0.34, light, 0.78)}
-      {ridge("M50 6 C58 8 64 14 66 22 C67.5 30 65 38 60 44")}
-      {ridge("M47 10 C54 12 59 17 60.5 24 C61.5 30 59.5 36 55.5 41")}
-      {ridge("M44 14 C50 16 54 20 55 26 C55.8 31 54.2 36 51 40", 0.38, mid)}
-      {ridge("M41 18 C46 20 49 23.5 49.5 28.5 C50 32.5 48.8 36 46.5 39", 0.36, light, 0.84)}
-      {ridge("M22 6 C14 8 8 14 6 22 C4.5 30 7 38 12 44")}
-      {ridge("M25 10 C18 12 13 17 11.5 24 C10.5 30 12.5 36 16.5 41")}
-      {ridge("M28 14 C22 16 18 20 17 26 C16.2 31 17.8 36 21 40", 0.38, mid)}
-      {ridge("M31 18 C26 20 23 23.5 22.5 28.5 C22 32.5 23.2 36 25.5 39", 0.36, light, 0.84)}
-      {ridge("M36 30 C34 30 32.8 31.2 32.5 33 C32.2 34.5 32.8 35.8 34 36.5", 0.32, light, 0.72)}
-      {ridge("M36 34 C35 34 34.3 34.8 34.2 36", 0.3, light, 0.65)}
-      {ridge("M36 38 C33 38 30.5 39.5 29 42 C27.5 44.5 27.5 47.5 28.8 50")}
-      {ridge("M36 42 C34 42 32.5 43.2 31.5 45.5 C30.8 47.2 31 49 32 50.5", 0.38, mid, 0.88)}
-      {ridge("M36 46 C34.5 46 33.5 47 33 48.5 C32.6 49.8 33 51 33.8 52", 0.34, light, 0.8)}
-      {ridge("M44 38 C46.5 38 48.5 39.5 49.5 42 C50.5 44.5 50.2 47.5 49 50")}
-      {ridge("M41 42 C43 42 44.5 43.2 45.2 45 C45.8 46.5 45.5 48.2 44.5 49.5", 0.36, mid, 0.86)}
-      {ridge("M28 38 C25.5 38 23.5 39.5 22.5 42 C21.5 44.5 21.8 47.5 23 50")}
-      {ridge("M31 42 C29 42 27.5 43.2 26.8 45 C26.2 46.5 26.5 48.2 27.5 49.5", 0.36, mid, 0.86)}
-      {ridge("M36 54 C30 54 25 56.5 22 60 C19 63.5 18.5 68 20 72")}
-      {ridge("M36 58 C31.5 58 28 59.8 26 62.5 C24 65 24 68 25.5 71", 0.38, mid)}
-      {ridge("M36 62 C33 62 30.5 63.5 29.2 65.8 C28 68 28.2 70.2 29.5 72", 0.36, light, 0.82)}
-      {ridge("M36 66 C34.5 66 33.5 67 33 68.5 C32.6 69.8 33 71 33.8 72", 0.32, light, 0.7)}
-      {ridge("M48 54 C53 54 57.5 56.5 60 60 C62.5 63.5 63 68 61.5 72")}
-      {ridge("M45 58 C49 58 52 59.8 54 62.5 C56 65 56 68 54.5 71", 0.38, mid)}
-      {ridge("M24 54 C19 54 14.5 56.5 12 60 C9.5 63.5 9 68 10.5 72")}
-      {ridge("M27 58 C23 58 20 59.8 18 62.5 C16 65 16 68 17.5 71", 0.38, mid)}
-      {ridge("M36 74 C34 74 32.5 75 32 76.5 C31.6 77.8 32 79 33 79.8", 0.3, light, 0.62)}
-      {ridge("M36 78 C35.2 78 34.6 78.6 34.5 79.5", 0.28, light, 0.55)}
-    </svg>
+    <img
+      src={fingerprintTemplate}
+      alt=""
+      aria-hidden
+      draggable={false}
+      className={className}
+      style={{
+        filter: active
+          ? "sepia(1) saturate(5.5) hue-rotate(358deg) brightness(1.08) contrast(1.08)"
+          : "sepia(1) saturate(4.5) hue-rotate(358deg) brightness(0.98) contrast(1.02)",
+        mixBlendMode: "darken",
+        opacity: active ? 1 : 0.94,
+      }}
+    />
   );
 }
 
@@ -413,7 +378,7 @@ export function AdminAuthEnvelope({
                       ? { opacity: [0.55, 0.85, 0.55], y: [0, -1, 0] }
                       : hovered
                         ? { opacity: 1, y: -2 }
-                        : { opacity: 0.82, y: 0 }
+                        : { opacity: 0.95, y: 0 }
                   }
                   transition={{
                     duration: isAuthenticating ? 1.4 : 0.35,
@@ -421,11 +386,13 @@ export function AdminAuthEnvelope({
                     ease: "easeInOut",
                   }}
                   style={{
-                    filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.12)) drop-shadow(0 3px 6px rgba(58,47,38,0.18))",
+                    filter: hovered || isAuthenticating
+                      ? "drop-shadow(0 2px 6px rgba(201,162,39,0.45)) drop-shadow(0 0 12px rgba(232,197,71,0.25))"
+                      : "drop-shadow(0 1px 3px rgba(201,162,39,0.28))",
                   }}
                 >
-                  <RealisticFingerprint
-                    className="w-[72px] h-[88px] sm:w-[80px] sm:h-[96px]"
+                  <GoldFingerprintTemplate
+                    className="w-[78px] h-auto sm:w-[86px] object-contain pointer-events-none select-none"
                     active={isAuthenticating || hovered}
                   />
                 </motion.div>
