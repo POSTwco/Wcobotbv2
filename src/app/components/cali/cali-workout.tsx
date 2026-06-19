@@ -47,6 +47,11 @@ interface Block {
   restSec: number;
   items: BlockItem[];
 }
+interface SwapMeta {
+  totalSwaps: number;
+  slotSwaps: Record<string, number>;
+}
+
 interface Plan {
   workoutId: string;
   level: 1 | 2 | 3;
@@ -56,6 +61,19 @@ interface Plan {
   createdAt: number;
   estimatedDurationSec: number;
   blocks: Block[];
+  swapMeta?: SwapMeta;
+}
+
+const MAX_SWAPS_PER_WORKOUT = 5;
+const MAX_SWAPS_PER_SLOT = 3;
+
+function swapLimitsFor(plan: Plan, blockIndex: number, itemIndex: number) {
+  const meta = plan.swapMeta ?? { totalSwaps: 0, slotSwaps: {} };
+  const sk = `${blockIndex}:${itemIndex}`;
+  return {
+    workoutRemaining: Math.max(0, MAX_SWAPS_PER_WORKOUT - meta.totalSwaps),
+    slotRemaining: Math.max(0, MAX_SWAPS_PER_SLOT - (meta.slotSwaps[sk] ?? 0)),
+  };
 }
 interface LoggedSet {
   blockIndex: number;
@@ -94,6 +112,7 @@ export function CaliWorkout() {
   const [completing, setCompleting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [anchoring, setAnchoring] = useState(false);
+  const [swappingSlot, setSwappingSlot] = useState<string | null>(null);
 
   const [xp, setXp] = useState(0);
   const [coachMessage, setCoachMessage] = useState<string | null>(null);
@@ -258,6 +277,57 @@ export function CaliWorkout() {
     }
   };
 
+  const clearSlotLogState = useCallback((blockIndex: number, itemIndex: number) => {
+    const prefix = `${blockIndex}|${itemIndex}|`;
+    setActuals((prev) => {
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (k.startsWith(prefix)) delete next[k];
+      }
+      return next;
+    });
+    setLoggedSets((prev) => {
+      const next = new Set(prev);
+      for (const k of prev) {
+        if (k.startsWith(prefix)) next.delete(k);
+      }
+      return next;
+    });
+    for (const k of Object.keys(lastSavedRef.current)) {
+      if (k.startsWith(prefix)) delete lastSavedRef.current[k];
+    }
+    setCompletedBlocks((prev) => {
+      const next = new Set(prev);
+      next.delete(blockIndex);
+      return next;
+    });
+  }, []);
+
+  const onSwapExercise = async (blockIndex: number, itemIndex: number) => {
+    if (!cali.sessionToken || !plan) return;
+    const slotKey = `${blockIndex}|${itemIndex}`;
+    const limits = swapLimitsFor(plan, blockIndex, itemIndex);
+    if (limits.workoutRemaining <= 0 || limits.slotRemaining <= 0) return;
+
+    setSwappingSlot(slotKey);
+    const res = await api.cali.swapExercise(cali.sessionToken, plan.workoutId, blockIndex, itemIndex);
+    setSwappingSlot(null);
+
+    if (!res.success || !res.data) {
+      cali.handleAuthError(res.code);
+      toast.error(res.error || "Couldn't swap exercise.");
+      return;
+    }
+
+    setPlan(res.data.workout as Plan);
+    clearSlotLogState(blockIndex, itemIndex);
+    setFocusedItemIndex(itemIndex);
+    setCoachMessage("Exercise swapped — similar category and difficulty. Sets reset for this move.");
+    toast.success(`Swapped to ${res.data.swappedItem?.name ?? "new exercise"}`, {
+      description: `${res.data.limits.workoutRemaining} workout swaps left`,
+    });
+  };
+
   const onRegenerate = async () => {
     if (!cali.sessionToken || !plan) return;
     setRegenerating(true);
@@ -275,6 +345,7 @@ export function CaliWorkout() {
 
   const activeItems = plan?.blocks[activeBlock]?.items ?? [];
   const focusedItem = activeItems[focusedItemIndex] ?? activeItems[0] ?? null;
+  const workoutSwapsLeft = plan ? swapLimitsFor(plan, activeBlock, 0).workoutRemaining : 0;
 
   useEffect(() => {
     setFocusedItemIndex(0);
@@ -306,7 +377,7 @@ export function CaliWorkout() {
           <ArrowLeft className="w-4 h-4" /> Dashboard
         </Link>
         <span className="text-[0.65rem] text-[#8494A7]" style={dmSans}>
-          L{plan.level} · ~{estMin} min
+          L{plan.level} · ~{estMin} min · {workoutSwapsLeft} swap{workoutSwapsLeft === 1 ? "" : "s"} left
         </span>
       </div>
 
@@ -343,27 +414,34 @@ export function CaliWorkout() {
       {/* Active block: list + right coaching rail */}
       <div className="flex gap-6 items-start">
         <div className="flex-1 min-w-0 space-y-4">
-          {activeItems.map((item, i) => (
-            <CaliExerciseCard
-              key={`${item.exerciseId}-${i}`}
-              item={item as BlockItem}
-              blockIndex={activeBlock}
-              itemIndex={i}
-              actuals={actuals}
-              loggedSets={loggedSets}
-              savingSet={savingSet}
-              isFocused={focusedItemIndex === i}
-              gender={avatarGender}
-              onFocus={() => setFocusedItemIndex(i)}
-              onChangeActual={(key, patch) =>
-                setActuals((prev) => ({
-                  ...prev,
-                  [key]: { value: "", rpe: "", note: "", ...prev[key], ...patch },
-                }))
-              }
-              onLogSet={logSet}
-            />
-          ))}
+          {activeItems.map((item, i) => {
+            const slotLimits = swapLimitsFor(plan, activeBlock, i);
+            return (
+              <CaliExerciseCard
+                key={`${activeBlock}-${i}-${item.exerciseId}`}
+                item={item as BlockItem}
+                blockIndex={activeBlock}
+                itemIndex={i}
+                actuals={actuals}
+                loggedSets={loggedSets}
+                savingSet={savingSet}
+                isFocused={focusedItemIndex === i}
+                gender={avatarGender}
+                onFocus={() => setFocusedItemIndex(i)}
+                onChangeActual={(key, patch) =>
+                  setActuals((prev) => ({
+                    ...prev,
+                    [key]: { value: "", rpe: "", note: "", ...prev[key], ...patch },
+                  }))
+                }
+                onLogSet={logSet}
+                onSwap={() => onSwapExercise(activeBlock, i)}
+                swapping={swappingSlot === `${activeBlock}|${i}`}
+                swapsSlotRemaining={slotLimits.slotRemaining}
+                swapsWorkoutRemaining={slotLimits.workoutRemaining}
+              />
+            );
+          })}
         </div>
 
         {focusedItem && (

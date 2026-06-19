@@ -811,6 +811,22 @@ export const api = {
     getWorkout: (caliSessionToken: string, workoutId: string) =>
       request<{ workout: any }>(`/cali/workout/${encodeURIComponent(workoutId)}`, { caliSessionToken }),
 
+    swapExercise: (
+      caliSessionToken: string,
+      workoutId: string,
+      blockIndex: number,
+      itemIndex: number,
+    ) =>
+      request<{
+        workout: any;
+        swappedItem: any;
+        swapMeta: { totalSwaps: number; slotSwaps: Record<string, number> };
+        limits: { workoutRemaining: number; slotRemaining: number; maxPerWorkout: number; maxPerSlot: number };
+      }>(
+        `/cali/workout/${encodeURIComponent(workoutId)}/swap`,
+        { method: "POST", body: { blockIndex, itemIndex }, caliSessionToken },
+      ),
+
     logSets: (
       caliSessionToken: string,
       workoutId: string,

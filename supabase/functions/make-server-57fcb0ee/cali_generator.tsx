@@ -100,6 +100,16 @@ export interface WorkoutBlock {
   items: WorkoutBlockItem[];
 }
 
+/** Per-workout swap limits (base tier — NFT/token gates can raise later). */
+export const MAX_SWAPS_PER_WORKOUT = 5;
+export const MAX_SWAPS_PER_SLOT = 3;
+
+export interface WorkoutSwapMeta {
+  totalSwaps: number;
+  /** Keys: `${blockIndex}:${itemIndex}` → swaps used on that slot */
+  slotSwaps: Record<string, number>;
+}
+
 export interface WorkoutPlan {
   workoutId: string;
   accountId: string;
@@ -111,6 +121,7 @@ export interface WorkoutPlan {
   estimatedDurationSec: number;
   blocks: WorkoutBlock[];
   excludeIds: string[];
+  swapMeta?: WorkoutSwapMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,4 +501,144 @@ export function exerciseIdsOfPlan(plan: WorkoutPlan): string[] {
   const ids: string[] = [];
   for (const b of plan.blocks) for (const it of b.items) ids.push(it.exerciseId);
   return ids;
+}
+
+function swapSlotKey(blockIndex: number, itemIndex: number): string {
+  return `${blockIndex}:${itemIndex}`;
+}
+
+function kindCategoryFilter(kind: BlockKind): (e: Exercise) => boolean {
+  switch (kind) {
+    case "warmup":
+      return (e) => e.category === "mobility";
+    case "push":
+      return (e) => e.category === "push";
+    case "pull":
+      return (e) => e.category === "pull";
+    case "legs":
+      return (e) => e.category === "legs";
+    case "core":
+      return (e) => e.category === "core";
+    case "conditioning":
+      return (e) => e.category === "conditioning";
+    case "cooldown":
+      return (e) => e.category === "mobility" && e.pattern === "stretch";
+    default:
+      return () => true;
+  }
+}
+
+function exerciseToBlockItem(ex: Exercise, sets: number, rng: () => number): WorkoutBlockItem {
+  const dose = pickDose(rng, ex, sets);
+  return {
+    exerciseId: ex.id,
+    name: ex.name,
+    category: ex.category,
+    pattern: ex.pattern,
+    sets: dose.sets,
+    target: dose.target,
+    unilateral: ex.unilateral,
+    tempoHint: ex.tempoHint,
+    cues: ex.cues,
+    equipment: ex.equipment,
+    benefit: CATEGORY_BENEFITS[ex.category],
+    scalingDownName: ex.scalingDown ? getExercise(ex.scalingDown)?.name : undefined,
+    scalingUpName: ex.scalingUp ? getExercise(ex.scalingUp)?.name : undefined,
+    previewImageRef: ex.previewImageRef,
+    description: ex.description,
+  };
+}
+
+/**
+ * Replace one exercise slot with a similar category/difficulty alternative.
+ * Mutates swap counters on the returned plan copy; same workoutId is preserved.
+ */
+export function swapExerciseInPlan(
+  plan: WorkoutPlan,
+  blockIndex: number,
+  itemIndex: number,
+  exercises: Exercise[],
+  swapSeed: string,
+): { plan: WorkoutPlan; item: WorkoutBlockItem; swapMeta: WorkoutSwapMeta } | { error: string; code?: string } {
+  const meta: WorkoutSwapMeta = plan.swapMeta ?? { totalSwaps: 0, slotSwaps: {} };
+  const sk = swapSlotKey(blockIndex, itemIndex);
+  const slotCount = meta.slotSwaps[sk] ?? 0;
+
+  if (meta.totalSwaps >= MAX_SWAPS_PER_WORKOUT) {
+    return { error: "Workout swap limit reached (5 per workout).", code: "SWAP_WORKOUT_LIMIT" };
+  }
+  if (slotCount >= MAX_SWAPS_PER_SLOT) {
+    return { error: "This exercise swap limit reached (3 per slot).", code: "SWAP_SLOT_LIMIT" };
+  }
+
+  const block = plan.blocks[blockIndex];
+  if (!block) return { error: "Invalid block.", code: "SWAP_INVALID" };
+  const current = block.items[itemIndex];
+  if (!current) return { error: "Invalid exercise slot.", code: "SWAP_INVALID" };
+
+  const idsInPlan = new Set(exerciseIdsOfPlan(plan));
+  idsInPlan.delete(current.exerciseId);
+
+  const rung = RUNGS[plan.level];
+  const availableEquip: ReadonlySet<string> = new Set(normalizeEquipment(plan.equipment));
+  const blockFilter = kindCategoryFilter(block.kind);
+  const libById = new Map(exercises.map((e) => [e.id, e]));
+  const currentEx = libById.get(current.exerciseId);
+  const currentDiff = currentEx?.difficulty ?? 5;
+
+  const baseFilter = (e: Exercise, relaxDifficulty: boolean) => {
+    if (e.id === current.exerciseId) return false;
+    if (idsInPlan.has(e.id)) return false;
+    if (e.level > plan.level) return false;
+    if (!availableEquip.has(e.equipment)) return false;
+    if (e.category !== current.category) return false;
+    if (!blockFilter(e)) return false;
+    if (!relaxDifficulty) {
+      if (e.difficulty < rung.difficultyBand[0] - 1 || e.difficulty > rung.difficultyBand[1] + 1) return false;
+      if (Math.abs(e.difficulty - currentDiff) > 3) return false;
+    }
+    return true;
+  };
+
+  let pool = exercises.filter((e) => baseFilter(e, false));
+  if (pool.length === 0) pool = exercises.filter((e) => baseFilter(e, true));
+  if (pool.length === 0) {
+    return { error: "No similar replacement exercises available for your level and equipment.", code: "SWAP_NO_CANDIDATES" };
+  }
+
+  const rng = mulberry32(seedToInt(swapSeed));
+  const weights = pool.map((ex) => Math.max(0.1, 4 - Math.abs(ex.difficulty - currentDiff)));
+  const chosen = weightedPick(rng, pool, weights);
+  const newItem = exerciseToBlockItem(chosen, current.sets, rng);
+
+  const newBlocks = plan.blocks.map((b, bi) => {
+    if (bi !== blockIndex) return b;
+    return { ...b, items: b.items.map((it, ii) => (ii === itemIndex ? newItem : it)) };
+  });
+
+  const newMeta: WorkoutSwapMeta = {
+    totalSwaps: meta.totalSwaps + 1,
+    slotSwaps: { ...meta.slotSwaps, [sk]: slotCount + 1 },
+  };
+
+  return {
+    plan: {
+      ...plan,
+      blocks: newBlocks,
+      estimatedDurationSec: estimateDurationSec(newBlocks),
+      swapMeta: newMeta,
+    },
+    item: newItem,
+    swapMeta: newMeta,
+  };
+}
+
+/** Remaining swaps for UI (base limits). */
+export function swapLimitsRemaining(plan: WorkoutPlan, blockIndex: number, itemIndex: number) {
+  const meta = plan.swapMeta ?? { totalSwaps: 0, slotSwaps: {} };
+  const sk = swapSlotKey(blockIndex, itemIndex);
+  return {
+    workoutRemaining: Math.max(0, MAX_SWAPS_PER_WORKOUT - meta.totalSwaps),
+    slotRemaining: Math.max(0, MAX_SWAPS_PER_SLOT - (meta.slotSwaps[sk] ?? 0)),
+  };
 }

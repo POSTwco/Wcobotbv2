@@ -62,6 +62,10 @@ import {
 import {
   buildWorkoutPlan,
   exerciseIdsOfPlan,
+  swapExerciseInPlan,
+  swapLimitsRemaining,
+  MAX_SWAPS_PER_WORKOUT,
+  MAX_SWAPS_PER_SLOT,
   type WorkoutPlan,
   type CaliEquipment as GenEquipment,
   type CaliLevel as GenLevel,
@@ -1126,6 +1130,93 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       return c.json({ success: false, error: "Workout not found" }, 404);
     }
     return c.json({ success: true, data: { workout: plan } });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /cali/workout/:id/swap — replace one exercise (limits: 3/slot, 5/workout)
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post(`${PREFIX}/cali/workout/:id/swap`, requireCaliSession, async (c) => {
+    const accountId = c.get("caliAccountId") as string;
+    const workoutId = sanitizeString(c.req.param("id"), 128);
+
+    if (!workoutId || workoutId.length < 16) {
+      return c.json({ success: false, error: "Invalid workoutId" }, 400);
+    }
+
+    const rl = await checkRateLimit(`cali-swap:${accountId}`, 30, 60_000);
+    if (rl.limited) {
+      return c.json(
+        { success: false, error: "Too many swap requests. Slow down.", code: "RATE_LIMITED", retryAfter: rl.retryAfter },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter || 5) } },
+      );
+    }
+
+    let body: any = {};
+    try { body = await c.req.json(); } catch {}
+
+    const blockIndex = Number(body?.blockIndex);
+    const itemIndex = Number(body?.itemIndex);
+    if (!Number.isInteger(blockIndex) || blockIndex < 0 || !Number.isInteger(itemIndex) || itemIndex < 0) {
+      return c.json({ success: false, error: "blockIndex and itemIndex required" }, 400);
+    }
+
+    const plan = await loadWorkoutForOwner(accountId, workoutId);
+    if (!plan) {
+      return c.json({ success: false, error: "Workout not found" }, 404);
+    }
+
+    const ov = (await kv.get("cali:overrides")) || {};
+    const added = await loadAddedExercises(kv);
+    const fullLibrary = mergeExercises(EXERCISES as any, added, ov as any);
+
+    const swapSeed = generateNonce();
+    const result = swapExerciseInPlan(plan, blockIndex, itemIndex, fullLibrary as any, swapSeed);
+    if ("error" in result) {
+      return c.json({ success: false, error: result.error, code: result.code }, 400);
+    }
+
+    let updated = result.plan;
+    try {
+      if (ov && Object.keys(ov).length > 0) {
+        for (const block of updated.blocks || []) {
+          for (const item of (block.items || [])) {
+            const live = getLiveExercise(item.exerciseId, ov as any);
+            if (live) {
+              if (live.name) item.name = live.name;
+              if ((live as any).cues) item.cues = (live as any).cues;
+              if ((live as any).description) (item as any).description = (live as any).description;
+              if ((live as any).previewImageRef) (item as any).previewImageRef = (live as any).previewImageRef;
+              if ((live as any).previewImageRefMale) (item as any).previewImageRefMale = (live as any).previewImageRefMale;
+              if ((live as any).previewImageRefFemale) (item as any).previewImageRefFemale = (live as any).previewImageRefFemale;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    try {
+      await kv.set(`cali:user:${accountId}:workout:${workoutId}`, updated);
+    } catch (err) {
+      console.log(`[CALI-SWAP] KV write failed for ${accountId}/${workoutId}: ${err}`);
+      return c.json({ success: false, error: "Workout storage unavailable" }, 500);
+    }
+
+    const limits = swapLimitsRemaining(updated, blockIndex, itemIndex);
+    console.log(`[CALI-SWAP] ${accountId} swapped ${workoutId} b${blockIndex}/i${itemIndex} → ${result.item.exerciseId}`);
+
+    return c.json({
+      success: true,
+      data: {
+        workout: updated,
+        swappedItem: result.item,
+        swapMeta: result.swapMeta,
+        limits: {
+          ...limits,
+          maxPerWorkout: MAX_SWAPS_PER_WORKOUT,
+          maxPerSlot: MAX_SWAPS_PER_SLOT,
+        },
+      },
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────

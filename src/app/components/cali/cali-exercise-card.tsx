@@ -5,6 +5,7 @@
 import { motion } from "motion/react";
 import {
   ChevronDown, CheckCircle2, AlertTriangle, Wind, Zap, TrendingUp, TrendingDown, Minus,
+  ArrowLeftRight, Loader2,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import type { AvatarGender } from "../../lib/cali-avatar-prefs";
@@ -40,12 +41,18 @@ interface Props {
   onFocus?: () => void;
   onChangeActual: (key: string, patch: Partial<SetState>) => void;
   onLogSet: (key: string, b: number, i: number, s: number) => void;
+  onSwap?: () => void;
+  swapping?: boolean;
+  swapsSlotRemaining?: number;
+  swapsWorkoutRemaining?: number;
 }
 
 export function CaliExerciseCard({
   item, blockIndex, itemIndex, actuals, loggedSets, savingSet,
   isFocused, gender, onFocus, onChangeActual, onLogSet,
+  onSwap, swapping, swapsSlotRemaining = 0, swapsWorkoutRemaining = 0,
 }: Props) {
+  const canSwap = !!onSwap && swapsSlotRemaining > 0 && swapsWorkoutRemaining > 0;
   const guide = getExerciseGuide(item);
   const accent = CATEGORY_COLORS[item.category] ?? "#4274B9";
   const delay = blockIndex * 0.08 + itemIndex * 0.05;
@@ -79,6 +86,30 @@ export function CaliExerciseCard({
             <h3 className="text-base sm:text-lg font-bold text-white" style={dmSans}>{item.name}</h3>
           </div>
           <div className="flex items-start gap-2 flex-shrink-0">
+            {onSwap && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); if (canSwap && !swapping) onSwap(); }}
+                disabled={!canSwap || swapping}
+                title={
+                  !canSwap
+                    ? swapsWorkoutRemaining <= 0
+                      ? "Workout swap limit reached (5 max)"
+                      : "Exercise swap limit reached (3 max)"
+                    : `Swap for a similar ${item.category} exercise (${swapsSlotRemaining} left here, ${swapsWorkoutRemaining} in workout)`
+                }
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[0.55rem] font-bold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  ...dmSans,
+                  borderColor: canSwap ? `${accent}40` : "rgba(255,255,255,0.08)",
+                  color: canSwap ? accent : "#8494A7",
+                  background: canSwap ? `${accent}12` : "rgba(255,255,255,0.02)",
+                }}
+              >
+                {swapping ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowLeftRight className="w-3 h-3" />}
+                <span className="hidden sm:inline">Swap</span>
+              </button>
+            )}
             <span className="lg:hidden">
               {(() => {
                 const gPrev = gender === 'female' ? (item as any).previewImageRefFemale || (item as any).previewImageRef : (item as any).previewImageRefMale || (item as any).previewImageRef;
