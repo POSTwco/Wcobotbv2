@@ -19,6 +19,33 @@ const ARMY = {
   stripeWhite: "#F0EDE4",
 };
 
+/** NWU Type I–inspired Navy digital camo palette */
+const NAVY_CAMO = {
+  ink: "#0B1620",
+  deep: "#152A38",
+  mid: "#2A4A5E",
+  slate: "#3D6278",
+  fog: "#5A7F94",
+};
+
+const NAVY_CAMO_TILE = `url("data:image/svg+xml,${encodeURIComponent(`
+<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>
+  <rect width='120' height='120' fill='${NAVY_CAMO.ink}'/>
+  <rect x='0' y='0' width='24' height='24' fill='${NAVY_CAMO.deep}'/>
+  <rect x='48' y='0' width='24' height='24' fill='${NAVY_CAMO.mid}'/>
+  <rect x='72' y='24' width='24' height='24' fill='${NAVY_CAMO.slate}'/>
+  <rect x='24' y='24' width='24' height='24' fill='${NAVY_CAMO.fog}' opacity='0.45'/>
+  <rect x='96' y='48' width='24' height='24' fill='${NAVY_CAMO.deep}'/>
+  <rect x='0' y='48' width='24' height='24' fill='${NAVY_CAMO.slate}'/>
+  <rect x='48' y='48' width='24' height='24' fill='${NAVY_CAMO.ink}'/>
+  <rect x='24' y='72' width='24' height='24' fill='${NAVY_CAMO.mid}'/>
+  <rect x='72' y='72' width='24' height='24' fill='${NAVY_CAMO.fog}' opacity='0.35'/>
+  <rect x='96' y='96' width='24' height='24' fill='${NAVY_CAMO.mid}'/>
+  <rect x='0' y='96' width='24' height='24' fill='${NAVY_CAMO.slate}' opacity='0.6'/>
+  <rect x='48' y='96' width='24' height='24' fill='${NAVY_CAMO.deep}'/>
+</svg>
+`)}")`;
+
 function ArmyStars({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 120 24" className={className} aria-hidden>
@@ -91,27 +118,118 @@ export function AdminAuthEnvelope({
             className="absolute -inset-4 rounded-full blur-xl opacity-40"
             style={{ background: `radial-gradient(circle, ${ARMY.brass}66, transparent)` }}
           />
-          <div
-            className="relative px-6 py-3 rounded-xl border-2"
+          <motion.div
+            className="relative overflow-hidden rounded-xl border-2 px-6 py-3"
             style={{
-              borderColor: `${ARMY.brass}88`,
-              background: `linear-gradient(180deg, ${ARMY.oliveDark}ee, ${ARMY.navy})`,
-              boxShadow: `0 8px 32px rgba(0,0,0,0.5), 0 0 24px ${ARMY.brass}22`,
+              borderColor: `${ARMY.brass}66`,
+              boxShadow: `0 8px 32px rgba(0,0,0,0.55), 0 0 28px ${ARMY.brass}28, inset 0 1px 0 rgba(255,255,255,0.12)`,
             }}
+            animate={{
+              boxShadow: [
+                `0 8px 32px rgba(0,0,0,0.55), 0 0 28px ${ARMY.brass}28, inset 0 1px 0 rgba(255,255,255,0.12)`,
+                `0 10px 40px rgba(0,0,0,0.6), 0 0 42px rgba(168,216,234,0.22), 0 0 56px ${ARMY.brass}33, inset 0 1px 0 rgba(255,255,255,0.18)`,
+                `0 8px 32px rgba(0,0,0,0.55), 0 0 28px ${ARMY.brass}28, inset 0 1px 0 rgba(255,255,255,0.12)`,
+              ],
+            }}
+            transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
           >
-            <img
-              src={wcoLogoWhite}
-              alt="WCO"
-              className="h-10 sm:h-12 w-auto object-contain mx-auto drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+            {/* Navy NWU digital camo base */}
+            <motion.div
+              className="absolute inset-0 opacity-95"
+              style={{
+                backgroundImage: NAVY_CAMO_TILE,
+                backgroundSize: "96px 96px",
+              }}
+              animate={{ backgroundPosition: ["0px 0px", "48px 24px", "0px 0px"] }}
+              transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+              aria-hidden
             />
-            <ArmyStars className="w-full mt-2 opacity-70" />
-            <p
-              className="mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.35em] text-center"
-              style={{ color: ARMY.brass, fontFamily: "'Oswald', sans-serif" }}
-            >
-              Command Center
-            </p>
-          </div>
+
+            {/* Depth wash — keeps logo legible over camo */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `linear-gradient(180deg, ${ARMY.oliveDark}cc 0%, ${NAVY_CAMO.deep}dd 45%, ${NAVY_CAMO.ink}ee 100%)`,
+              }}
+              aria-hidden
+            />
+
+            {/* Glass frost layer */}
+            <div
+              className="absolute inset-0 backdrop-blur-[3px] bg-white/[0.04]"
+              style={{
+                boxShadow: "inset 0 0 24px rgba(255,255,255,0.06), inset 0 -12px 28px rgba(0,0,0,0.25)",
+              }}
+              aria-hidden
+            />
+
+            {/* Iridescent glass shimmer */}
+            <motion.div
+              className="absolute inset-0 mix-blend-screen pointer-events-none"
+              style={{
+                background: `linear-gradient(
+                  125deg,
+                  transparent 0%,
+                  rgba(201,162,39,0.08) 18%,
+                  rgba(168,216,234,0.14) 38%,
+                  rgba(196,181,253,0.12) 52%,
+                  rgba(232,180,184,0.1) 68%,
+                  transparent 88%
+                )`,
+                backgroundSize: "220% 220%",
+              }}
+              animate={{ backgroundPosition: ["0% 40%", "100% 60%", "0% 40%"] }}
+              transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+              aria-hidden
+            />
+
+            {/* Rotating conic iridescent halo */}
+            <motion.div
+              className="absolute -inset-8 opacity-[0.28] mix-blend-color-dodge pointer-events-none command-sign-iridescent"
+              style={{
+                background: `conic-gradient(
+                  from 0deg,
+                  ${ARMY.brass}55,
+                  rgba(168,216,234,0.45),
+                  rgba(196,181,253,0.4),
+                  rgba(232,180,184,0.35),
+                  ${ARMY.brassLight}55,
+                  ${ARMY.brass}55
+                )`,
+                filter: "blur(18px)",
+              }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+              aria-hidden
+            />
+
+            {/* Glass edge highlight sweep */}
+            <motion.div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.22) 46%, rgba(201,162,39,0.18) 50%, transparent 64%)",
+              }}
+              animate={{ x: ["-130%", "230%"] }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", repeatDelay: 2.2 }}
+              aria-hidden
+            />
+
+            <div className="relative z-10">
+              <img
+                src={wcoLogoWhite}
+                alt="WCO"
+                className="h-10 sm:h-12 w-auto object-contain mx-auto drop-shadow-[0_2px_10px_rgba(0,0,0,0.75)]"
+              />
+              <ArmyStars className="w-full mt-2 opacity-80" />
+              <p
+                className="mt-2 text-[10px] sm:text-xs font-bold uppercase tracking-[0.35em] text-center drop-shadow-[0_1px_6px_rgba(0,0,0,0.65)]"
+                style={{ color: ARMY.brass, fontFamily: "'Oswald', sans-serif" }}
+              >
+                Command Center
+              </p>
+            </div>
+          </motion.div>
         </motion.div>
 
         {/* Giant army envelope */}
@@ -310,6 +428,14 @@ export function AdminAuthEnvelope({
         @keyframes armyEnvelopeFloat {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-6px); }
+        }
+        .command-sign-iridescent {
+          animation: commandSignIridescent 8s ease-in-out infinite;
+        }
+        @keyframes commandSignIridescent {
+          0%, 100% { filter: blur(18px) hue-rotate(0deg) saturate(1); }
+          33% { filter: blur(18px) hue-rotate(12deg) saturate(1.08); }
+          66% { filter: blur(18px) hue-rotate(-8deg) saturate(1.05); }
         }
       `}</style>
     </motion.div>
