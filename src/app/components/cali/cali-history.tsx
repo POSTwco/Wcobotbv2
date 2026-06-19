@@ -132,12 +132,6 @@ export function CaliHistory() {
           {loadingMore ? "Loading…" : "Load more"}
         </button>
       )}
-
-      <div className="text-center pt-2">
-        <Link to="/calisthenics/prs" className="text-xs text-[#6AA3E0] hover:underline" style={dmSans}>
-          View all PRs →
-        </Link>
-      </div>
     </div>
   );
 }

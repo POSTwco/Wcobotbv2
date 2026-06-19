@@ -2,20 +2,22 @@
  * Cali Dashboard — the post-eligibility landing screen.
  *
  * Shows the user their level (editable inline), equipment, current streak,
- * recent PRs, and a primary "Generate today's workout" CTA. On click, calls
- * api.cali.generate(...) and navigates to the workout screen.
+ * PR count (tap → full PR list), recent workout history, and a primary
+ * "Generate today's workout" CTA.
  *
  * Backend dependencies:
  *   GET  /cali/profile        (lazy-create on first read)
  *   GET  /cali/streak
  *   GET  /cali/prs
+ *   GET  /cali/history
  *   POST /cali/workout/generate
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   Dumbbell, Flame, Trophy, Settings2, RefreshCw, Loader2, AlertCircle,
+  ChevronRight, Calendar,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
@@ -42,6 +44,15 @@ interface PR {
   value: number;
   achievedAt: number;
 }
+interface HistoryItem {
+  workoutId: string;
+  dateKey: string;
+  completedAt: string | null;
+  totalSets: number;
+  uniqueExercises: number;
+  topVolumeSet: { exerciseId: string; metric: "reps" | "time_sec"; value: number } | null;
+  updatedAt: number;
+}
 
 export function CaliDashboard() {
   const cali = useCaliSession();
@@ -50,6 +61,8 @@ export function CaliDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [streak, setStreak] = useState<Streak | null>(null);
   const [prs, setPrs] = useState<PR[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,14 +74,19 @@ export function CaliDashboard() {
     if (!opts?.silent) setLoading(true);
     setError(null);
     const token = cali.sessionToken;
-    const [p, s, r] = await Promise.all([
+    const [p, s, r, h] = await Promise.all([
       api.cali.getProfile(token),
       api.cali.streak(token),
       api.cali.prs(token),
+      api.cali.history(token, { limit: 10 }),
     ]);
     if (p.success && p.data) setProfile(p.data.profile);
     if (s.success && s.data) setStreak(s.data.streak);
     if (r.success && r.data) setPrs(r.data.prs);
+    if (h.success && h.data) {
+      setHistory(h.data.items);
+      setHistoryTotal(h.data.total);
+    }
     if (!p.success) {
       cali.handleAuthError(p.code);
       setError(p.error || "Failed to load profile.");
@@ -166,6 +184,7 @@ export function CaliDashboard() {
           value={`${prs.length}`}
           sub={prs.length > 0 ? `Latest: ${prs[0].name}` : "Log a set to set your first"}
           accent="#D4A843"
+          onClick={() => navigate("/calisthenics/prs")}
         />
       </div>
 
@@ -204,39 +223,78 @@ export function CaliDashboard() {
         {generating ? "Building workout…" : "Generate today's workout"}
       </button>
 
-      {/* Recent PRs */}
-      {prs.length > 0 && (
-        <div
-          className="rounded-2xl border p-4 sm:p-5"
-          style={{
-            background: "rgba(11,17,32,0.6)",
-            borderColor: "rgba(66,116,185,0.15)",
-          }}
-        >
-          <h2 className="text-sm font-bold tracking-widest text-[#E8ECF0] mb-3" style={orbitron}>
-            RECENT PRs
+      {/* Workout history */}
+      <div
+        className="rounded-2xl border p-4 sm:p-5"
+        style={{
+          background: "rgba(11,17,32,0.6)",
+          borderColor: "rgba(66,116,185,0.15)",
+        }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold tracking-widest text-[#E8ECF0]" style={orbitron}>
+            WORKOUT HISTORY
           </h2>
+          {historyTotal > 0 && (
+            <span className="text-[0.6rem] text-[#8494A7]" style={dmSans}>
+              {historyTotal} total
+            </span>
+          )}
+        </div>
+
+        {history.length === 0 ? (
+          <div className="py-6 text-center">
+            <Calendar className="w-5 h-5 text-[#8494A7] mx-auto mb-2" />
+            <p className="text-xs text-[#8494A7]" style={dmSans}>
+              No workouts yet. Generate one above to start your log.
+            </p>
+          </div>
+        ) : (
           <ul className="space-y-2">
-            {prs.slice(0, 5).map((pr) => (
-              <li key={pr.exerciseId} className="flex items-center justify-between text-xs">
-                <span className="text-[#A3B0C2]" style={dmSans}>{pr.name}</span>
-                <span className="font-mono text-[#6AA3E0]">
-                  {pr.metric === "reps" ? `${pr.value} reps` : `${pr.value}s`}
-                </span>
+            {history.map((it) => (
+              <li key={`${it.dateKey}-${it.workoutId}`}>
+                <Link
+                  to={`/calisthenics/workout/${encodeURIComponent(it.workoutId)}`}
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[#4274B9]/12 bg-white/[0.02] hover:border-[#4274B9]/30 hover:bg-white/[0.04] transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white" style={dmSans}>{it.dateKey}</span>
+                      {it.completedAt && (
+                        <span className="px-1.5 py-0.5 text-[0.55rem] rounded bg-[#10b981]/12 text-[#10b981] font-bold" style={orbitron}>
+                          COMPLETED
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[0.65rem] text-[#8494A7] mt-0.5" style={dmSans}>
+                      {it.totalSets} sets · {it.uniqueExercises} exercises
+                      {it.topVolumeSet && (
+                        <> · top {it.topVolumeSet.value}{it.topVolumeSet.metric === "reps" ? " reps" : "s"}</>
+                      )}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[#8494A7] flex-shrink-0" />
+                </Link>
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
 
-      {/* Footer actions */}
-      <div className="flex items-center justify-between text-xs text-[#8494A7] pt-2" style={dmSans}>
-        <button
-          className="flex items-center gap-1.5 hover:text-[#E8ECF0]"
-          onClick={() => navigate("/calisthenics/history")}
-        >
-          View history →
-        </button>
+        {historyTotal > history.length && (
+          <div className="text-center pt-3 mt-1 border-t border-[#4274B9]/10">
+            <Link
+              to="/calisthenics/history"
+              className="text-xs text-[#6AA3E0] hover:underline"
+              style={dmSans}
+            >
+              View all {historyTotal} workouts →
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-end text-xs text-[#8494A7] pt-2" style={dmSans}>
         <button
           className="flex items-center gap-1.5 hover:text-[#E8ECF0]"
           onClick={cali.signOut}
@@ -250,17 +308,23 @@ export function CaliDashboard() {
 }
 
 function StatCard({
-  icon, label, value, sub, accent,
+  icon, label, value, sub, accent, onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub: string;
   accent: string;
+  onClick?: () => void;
 }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div
-      className="rounded-2xl border p-4"
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`rounded-2xl border p-4 text-left w-full ${
+        onClick ? "cursor-pointer hover:border-[#4274B9]/35 hover:bg-white/[0.03] transition-colors" : ""
+      }`}
       style={{
         background: "rgba(11,17,32,0.6)",
         borderColor: "rgba(66,116,185,0.15)",
@@ -271,6 +335,7 @@ function StatCard({
         <span className="text-[0.65rem] font-bold tracking-widest" style={orbitron}>
           {label}
         </span>
+        {onClick && <ChevronRight className="w-3 h-3 ml-auto opacity-50" />}
       </div>
       <p className="text-2xl font-bold text-white leading-none" style={orbitron}>
         {value}
@@ -278,6 +343,6 @@ function StatCard({
       <p className="text-[0.65rem] text-[#8494A7] mt-1.5 truncate" style={dmSans}>
         {sub}
       </p>
-    </div>
+    </Tag>
   );
 }
