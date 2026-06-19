@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
-import fingerprintTemplate from "../../assets/fingerprint-template.png";
+import fingerprintGold from "../../assets/fingerprint-gold.png";
 
 const ARMY = {
   olive: "#4B5320",
@@ -47,7 +47,7 @@ const NAVY_CAMO_TILE = `url("data:image/svg+xml,${encodeURIComponent(`
 </svg>
 `)}")`;
 
-/** User-provided fingerprint template — gold ridges only, no white box */
+/** User template — transparent gold ridges only */
 function GoldFingerprintTemplate({
   className = "",
   active = false,
@@ -56,43 +56,17 @@ function GoldFingerprintTemplate({
   active?: boolean;
 }) {
   return (
-    <svg
-      viewBox="0 0 200 240"
-      className={className}
-      preserveAspectRatio="xMidYMid meet"
+    <img
+      src={fingerprintGold}
+      alt=""
       aria-hidden
-    >
-      <defs>
-        <linearGradient id="adminEnvelopeFpGold" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={active ? "#F5E6A8" : "#E8C547"} />
-          <stop offset="50%" stopColor={active ? "#D4AF37" : "#C9A227"} />
-          <stop offset="100%" stopColor={active ? "#A67C00" : "#9A7B0A"} />
-        </linearGradient>
-        {/* Teal template: low red channel = ridge; white bg = transparent */}
-        <filter id="adminEnvelopeFpKey" colorInterpolationFilters="sRGB">
-          <feColorMatrix
-            type="matrix"
-            values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1 0 0 0 1"
-          />
-        </filter>
-        <mask id="adminEnvelopeFpMask">
-          <image
-            href={fingerprintTemplate}
-            width="200"
-            height="240"
-            filter="url(#adminEnvelopeFpKey)"
-            preserveAspectRatio="xMidYMid meet"
-          />
-        </mask>
-      </defs>
-      <rect
-        width="200"
-        height="240"
-        fill="url(#adminEnvelopeFpGold)"
-        mask="url(#adminEnvelopeFpMask)"
-        opacity={active ? 1 : 0.94}
-      />
-    </svg>
+      draggable={false}
+      className={className}
+      style={{
+        opacity: active ? 1 : 0.94,
+        filter: active ? "brightness(1.1)" : undefined,
+      }}
+    />
   );
 }
 
