@@ -5,7 +5,6 @@
  */
 
 import { motion } from "motion/react";
-import { Fingerprint } from "lucide-react";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
 
 const ARMY = {
@@ -45,6 +44,99 @@ const NAVY_CAMO_TILE = `url("data:image/svg+xml,${encodeURIComponent(`
   <rect x='48' y='96' width='24' height='24' fill='${NAVY_CAMO.deep}'/>
 </svg>
 `)}")`;
+
+function DelicateFingerprint({
+  className = "",
+  active = false,
+}: {
+  className?: string;
+  active?: boolean;
+}) {
+  const ink = active ? NAVY_CAMO.deep : "#3a4a3a";
+  const ridge = active ? NAVY_CAMO.mid : "#4f5f4a";
+
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      className={className}
+      fill="none"
+      aria-hidden
+    >
+      <path
+        d="M24 10 C17.5 10 12.5 14.5 12 20.5 C11.5 26 14 31 18 33.5"
+        stroke={ink}
+        strokeWidth="0.85"
+        strokeLinecap="round"
+        opacity="0.9"
+      />
+      <path
+        d="M24 14 C19 14 15.5 17.5 15.2 22.5 C14.9 27 16.8 30.5 20 32.2"
+        stroke={ridge}
+        strokeWidth="0.75"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <path
+        d="M24 18 C21 18 18.8 20 18.5 23.5 C18.2 26.5 19.5 28.8 21.8 29.8"
+        stroke={ink}
+        strokeWidth="0.7"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+      <path
+        d="M24 22 C22.2 22 21 23.2 20.8 25.2 C20.6 27 21.4 28.2 22.6 28.7"
+        stroke={ridge}
+        strokeWidth="0.65"
+        strokeLinecap="round"
+        opacity="0.75"
+      />
+      <path
+        d="M32 12 C36.5 14 39 18.5 38.5 24 C38 29 34.5 33 30 34.5"
+        stroke={ink}
+        strokeWidth="0.8"
+        strokeLinecap="round"
+        opacity="0.88"
+      />
+      <path
+        d="M29 16 C32 17.5 34 20.5 33.6 24.5 C33.2 28 31 30.5 28 31.5"
+        stroke={ridge}
+        strokeWidth="0.72"
+        strokeLinecap="round"
+        opacity="0.82"
+      />
+      <path
+        d="M16 12 C11.5 14 9 18.5 9.5 24 C10 29 13.5 33 18 34.5"
+        stroke={ink}
+        strokeWidth="0.8"
+        strokeLinecap="round"
+        opacity="0.88"
+      />
+      <path
+        d="M19 16 C16 17.5 14 20.5 14.4 24.5 C14.8 28 17 30.5 20 31.5"
+        stroke={ridge}
+        strokeWidth="0.72"
+        strokeLinecap="round"
+        opacity="0.82"
+      />
+      <path
+        d="M24 26.5 C23.2 26.5 22.6 27 22.5 27.8"
+        stroke={ink}
+        strokeWidth="0.6"
+        strokeLinecap="round"
+        opacity="0.7"
+      />
+      <ellipse
+        cx="24"
+        cy="30.5"
+        rx="2.2"
+        ry="1.4"
+        stroke={ridge}
+        strokeWidth="0.55"
+        opacity="0.65"
+      />
+    </svg>
+  );
+}
 
 function ArmyStars({ className = "" }: { className?: string }) {
   return (
@@ -329,68 +421,56 @@ export function AdminAuthEnvelope({
               <line x1="520" y1="340" x2="260" y2="92" stroke={ARMY.brass} strokeWidth="1" strokeOpacity="0.25" />
             </svg>
 
-            {/* Brass anniversary seal ring */}
+            {/* Delicate fingerprint seal — sole sign-in control */}
             <motion.div
               className="absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 z-30"
               animate={
                 isAuthenticating
-                  ? { rotate: 360, scale: [1, 1.08, 1] }
-                  : { scale: [1, 1.03, 1] }
+                  ? { scale: [1, 1.03, 1] }
+                  : { scale: [1, 1.012, 1] }
               }
-              transition={
-                isAuthenticating
-                  ? { rotate: { duration: 3, repeat: Infinity, ease: "linear" }, scale: { duration: 1.5, repeat: Infinity } }
-                  : { duration: 3, repeat: Infinity, ease: "easeInOut" }
-              }
+              transition={{
+                duration: isAuthenticating ? 1.6 : 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
             >
-              <div
-                className="w-[88px] h-[88px] sm:w-[100px] sm:h-[100px] rounded-full flex items-center justify-center"
+              <motion.button
+                type="button"
+                onClick={onAuthenticate}
+                disabled={isAuthenticating}
+                aria-label="Sign in with wallet fingerprint"
+                className="relative flex items-center justify-center w-[76px] h-[76px] sm:w-[84px] sm:h-[84px] rounded-full cursor-pointer disabled:cursor-wait focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C9A227]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                 style={{
-                  background: `conic-gradient(from 0deg, ${ARMY.brass}, ${ARMY.brassLight}, ${ARMY.olive}, ${ARMY.brass})`,
-                  boxShadow: `0 0 30px ${ARMY.brass}66, inset 0 2px 8px rgba(255,255,255,0.25), inset 0 -4px 12px rgba(0,0,0,0.35)`,
+                  background:
+                    "radial-gradient(circle at 38% 32%, rgba(255,255,255,0.94) 0%, rgba(240,232,216,0.82) 52%, rgba(210,198,172,0.55) 100%)",
+                  boxShadow:
+                    "0 6px 22px rgba(0,0,0,0.18), 0 0 14px rgba(201,162,39,0.12), inset 0 1px 3px rgba(255,255,255,0.85), inset 0 -2px 6px rgba(0,0,0,0.06)",
                 }}
+                whileHover={!isAuthenticating ? { scale: 1.05 } : {}}
+                whileTap={!isAuthenticating ? { scale: 0.97 } : {}}
               >
-                <div
-                  className="w-[76px] h-[76px] sm:w-[86px] sm:h-[86px] rounded-full flex items-center justify-center"
+                <motion.div
+                  className="absolute inset-3 rounded-full pointer-events-none"
                   style={{
-                    background: `radial-gradient(circle at 35% 30%, ${ARMY.parchment}, ${ARMY.khaki} 55%, #8B7355)`,
-                    border: `2px solid ${ARMY.brass}`,
+                    background: `radial-gradient(circle, ${ARMY.brass}10, transparent 72%)`,
                   }}
-                >
-                  {/* Fingerprint — sole sign-in control */}
-                  <motion.button
-                    type="button"
-                    onClick={onAuthenticate}
-                    disabled={isAuthenticating}
-                    aria-label="Sign in with wallet fingerprint"
-                    className="relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full cursor-pointer disabled:cursor-wait focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A227] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-                    whileHover={!isAuthenticating ? { scale: 1.12 } : {}}
-                    whileTap={!isAuthenticating ? { scale: 0.92 } : {}}
-                  >
-                    <motion.div
-                      className="absolute inset-0 rounded-full"
-                      style={{ background: `radial-gradient(circle, ${ARMY.brass}44, transparent 70%)` }}
-                      animate={{ opacity: [0.4, 0.9, 0.4], scale: [1, 1.25, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
-                    <Fingerprint
-                      className="relative z-10 w-9 h-9 sm:w-10 sm:h-10"
-                      style={{
-                        color: isAuthenticating ? ARMY.oliveDark : ARMY.olive,
-                        filter: `drop-shadow(0 2px 4px ${ARMY.brass}88)`,
-                      }}
-                      strokeWidth={isAuthenticating ? 1.5 : 2.2}
-                    />
-                    {isAuthenticating && (
-                      <motion.div
-                        className="absolute inset-0 rounded-full border-2 border-[#C9A227]"
-                        animate={{ scale: [1, 1.4], opacity: [0.8, 0] }}
-                        transition={{ duration: 1.2, repeat: Infinity }}
-                      />
-                    )}
-                  </motion.button>
-                </div>
-              </div>
+                  animate={{ opacity: [0.35, 0.55, 0.35] }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                />
+                <DelicateFingerprint
+                  className="relative z-10 w-11 h-11 sm:w-12 sm:h-12 opacity-90"
+                  active={isAuthenticating}
+                />
+                {isAuthenticating && (
+                  <motion.div
+                    className="absolute inset-0 rounded-full pointer-events-none"
+                    style={{ boxShadow: `0 0 0 1px ${ARMY.brass}33` }}
+                    animate={{ scale: [1, 1.18], opacity: [0.5, 0] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
+                  />
+                )}
+              </motion.button>
             </motion.div>
 
             {/* Shimmer sweep */}
