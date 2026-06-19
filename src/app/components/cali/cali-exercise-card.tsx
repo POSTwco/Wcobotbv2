@@ -13,6 +13,7 @@ import { getExerciseGuide, CATEGORY_COLORS, type WorkoutExerciseItem } from "../
 
 import { CaliSetLogger } from "./cali-set-logger";
 import { ExerciseYouTubeLink } from "./exercise-youtube-link";
+import { CaliHintWrap } from "./cali-hint-wrap";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -86,31 +87,35 @@ export function CaliExerciseCard({
             </span>
             <h3 className="text-base sm:text-lg font-bold text-white" style={dmSans}>{item.name}</h3>
           </div>
-          <div className="flex items-start gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-start justify-end gap-2 flex-shrink-0">
             <ExerciseYouTubeLink name={item.name} />
             {onSwap && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); if (canSwap && !swapping) onSwap(); }}
-                disabled={!canSwap || swapping}
-                title={
+              <CaliHintWrap
+                title="Swap Exercise"
+                hint={
                   !canSwap
                     ? swapsWorkoutRemaining <= 0
-                      ? "Workout swap limit reached (5 max)"
-                      : "Exercise swap limit reached (3 max)"
-                    : `Swap for a similar ${item.category} exercise (${swapsSlotRemaining} left here, ${swapsWorkoutRemaining} in workout)`
+                      ? "Workout swap limit reached — max 5 swaps per workout."
+                      : "This slot is maxed out — max 3 swaps per exercise."
+                    : `Replace with a similar ${item.category} move. ${swapsSlotRemaining} swap(s) left here, ${swapsWorkoutRemaining} in this workout.`
                 }
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[0.55rem] font-bold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  ...dmSans,
-                  borderColor: canSwap ? `${accent}40` : "rgba(255,255,255,0.08)",
-                  color: canSwap ? accent : "#8494A7",
-                  background: canSwap ? `${accent}12` : "rgba(255,255,255,0.02)",
-                }}
               >
-                {swapping ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowLeftRight className="w-3 h-3" />}
-                <span className="hidden sm:inline">Swap</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); if (canSwap && !swapping) onSwap(); }}
+                  disabled={!canSwap || swapping}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.03] active:scale-[0.98] disabled:hover:scale-100"
+                  style={{
+                    ...dmSans,
+                    borderColor: canSwap ? "rgba(212,168,67,0.45)" : "rgba(255,255,255,0.08)",
+                    color: canSwap ? "#D4A843" : "#8494A7",
+                    background: canSwap ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  {swapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowLeftRight className="w-4 h-4" />}
+                  <span>Swap</span>
+                </button>
+              </CaliHintWrap>
             )}
             <span className="lg:hidden">
               {(() => {
@@ -125,14 +130,19 @@ export function CaliExerciseCard({
                 );
               })()}
             </span>
-            <span
-              className="text-[0.65rem] font-bold px-2.5 py-1 rounded-lg"
-              style={{ ...dmSans, background: "rgba(66,116,185,0.12)", color: "#6AA3E0" }}
+            <CaliHintWrap
+              title="Target Prescription"
+              hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Log your actual numbers below after each set.`}
             >
-              {item.sets} × {item.target.low}–{item.target.high}
-              {item.target.metric === "reps" ? " reps" : "s"}
-              {item.unilateral ? "/side" : ""}
-            </span>
+              <span
+                className="text-xs sm:text-sm font-bold px-3 py-2 rounded-xl border border-[#D4A843]/35 bg-[#D4A843]/10 text-[#D4A843] hover:bg-[#D4A843]/16 hover:border-[#D4A843]/50 transition-all duration-200"
+                style={dmSans}
+              >
+                {item.sets} × {item.target.low}–{item.target.high}
+                {item.target.metric === "reps" ? " reps" : "s"}
+                {item.unilateral ? "/side" : ""}
+              </span>
+            </CaliHintWrap>
           </div>
         </div>
 
