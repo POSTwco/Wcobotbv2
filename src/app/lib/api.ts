@@ -688,16 +688,6 @@ export const api = {
       request<{ athletesReset: number }>(
         "/admin/test/reset-athlete-records", { method: "POST", body: {}, adminWallet, sessionToken }),
 
-    /** NUCLEAR: purge ALL votes (battle + proposal + skill) + snapshots */
-    purgeAllVotes: (adminWallet: string, sessionToken: string) =>
-      request<{ battleVotesRemoved: number; proposalVotesRemoved: number; skillVotesRemoved: number; snapshotsRemoved: number; totalKeysDeleted: number }>(
-        "/admin/test/purge-all-votes", { method: "POST", body: { confirm: "PURGE_ALL_VOTES" }, adminWallet, sessionToken }),
-
-    /** NUCLEAR: delete ALL data platform-wide (full fresh start) */
-    nuclearReset: (adminWallet: string, sessionToken: string) =>
-      request<{ totalKeysDeleted: number; counts: Record<string, number> }>(
-        "/admin/test/nuclear-reset", { method: "POST", body: { confirm: "NUCLEAR_RESET" }, adminWallet, sessionToken }),
-
     /** Get all flagged IP anomalies */
     getIpFlags: (adminWallet: string, sessionToken: string) =>
       request<any[]>(

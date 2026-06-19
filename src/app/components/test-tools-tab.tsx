@@ -5,9 +5,10 @@
  * Every action requires an active admin session (challenge-sign + 20-min token).
  *
  * SECURITY TIERS:
- *   Tier 1 (safe)    — Simple confirm button (cache flush, no data loss)
- *   Tier 2 (danger)  — Wallet re-sign required before execution
- *   Tier 3 (nuclear) — Type-to-confirm phrase + wallet re-sign + triple warnings
+ *   Tier 1 (safe)       — Simple confirm button (cache flush, no data loss)
+ *   Tier 2 (destructive) — Wallet re-sign required before execution
+ *
+ * Nuclear / platform-wide wipe tools were retired pre-mainnet (deployment safety).
  *
  * REMOVAL: Delete this entire file when going fully live. Also remove:
  *   - The "test-tools" tab entry in admin-panel.tsx
@@ -20,9 +21,9 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   AlertTriangle, Trash2, RotateCcw, Database, RefreshCw,
   Loader2, CheckCircle, XCircle, Swords, Vote, Users,
-  Trophy, MessageSquare, Camera, Zap, Skull, BarChart3,
+  Trophy, MessageSquare, Camera, Zap, BarChart3,
   ChevronDown, ChevronRight, Shield, Fingerprint, Lock,
-  ShieldAlert, ShieldOff, Wifi, Eye, Clock,
+  ShieldAlert, Wifi, Eye, Clock,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -37,7 +38,7 @@ interface TestToolsTabProps {
 }
 
 // Security tiers for confirmation modals
-type SecurityTier = "safe" | "destructive" | "nuclear";
+type SecurityTier = "safe" | "destructive";
 
 // ---------------------------------------------------------------------------
 // Enhanced Confirmation Modal with Wallet Re-Sign
@@ -52,21 +53,16 @@ function SecureConfirmModal({
   walletId: string;
   signMessage: (msg: string) => Promise<string | null>;
 }) {
-  const [step, setStep] = useState<"warning" | "type-confirm" | "signing" | "signed">("warning");
-  const [typeInput, setTypeInput] = useState("");
+  const [step, setStep] = useState<"warning" | "signing" | "signed">("warning");
   const [signError, setSignError] = useState<string | null>(null);
   const [isSigning, setIsSigning] = useState(false);
 
-  // Nuclear requires typing "DELETE EVERYTHING" or "PURGE ALL"
-  const nuclearPhrase = title.includes("NUCLEAR") ? "DELETE EVERYTHING" : "PURGE ALL VOTES";
-  const requiresSign = tier === "destructive" || tier === "nuclear";
-  const requiresType = tier === "nuclear";
+  const requiresSign = tier === "destructive";
 
   // Reset on open/close
   useEffect(() => {
     if (open) {
       setStep("warning");
-      setTypeInput("");
       setSignError(null);
       setIsSigning(false);
     }
@@ -77,14 +73,11 @@ function SecureConfirmModal({
   const tierColors = {
     safe: { border: "border-[#D4A843]/30", bg: "bg-[#D4A843]/10", text: "text-[#D4A843]" },
     destructive: { border: "border-red-500/30", bg: "bg-red-500/10", text: "text-red-400" },
-    nuclear: { border: "border-red-600/50", bg: "bg-red-600/20", text: "text-red-400" },
   };
   const tc = tierColors[tier];
 
   const handleNextFromWarning = () => {
-    if (requiresType) {
-      setStep("type-confirm");
-    } else if (requiresSign) {
+    if (requiresSign) {
       handleSign();
     } else {
       onConfirm();
@@ -133,12 +126,6 @@ function SecureConfirmModal({
     }
   };
 
-  const handleTypeConfirmNext = () => {
-    if (typeInput.trim().toUpperCase() === nuclearPhrase) {
-      handleSign();
-    }
-  };
-
   return (
     <AnimatePresence>
       <motion.div
@@ -153,15 +140,13 @@ function SecureConfirmModal({
         >
           {/* Security Header Bar */}
           <div className={`px-5 py-3 ${tc.bg} border-b ${tc.border} flex items-center gap-2`}>
-            {tier === "nuclear" ? (
-              <ShieldOff className="w-4 h-4 text-red-400" />
-            ) : tier === "destructive" ? (
+            {tier === "destructive" ? (
               <ShieldAlert className="w-4 h-4 text-red-400" />
             ) : (
               <Shield className="w-4 h-4 text-[#D4A843]" />
             )}
             <span className="text-[0.6rem] font-bold uppercase tracking-wider" style={{ fontFamily: "Orbitron, sans-serif", color: tier === "safe" ? "#D4A843" : "#f87171" }}>
-              {tier === "nuclear" ? "NUCLEAR — MAXIMUM SECURITY" : tier === "destructive" ? "DESTRUCTIVE ACTION — SIGNATURE REQUIRED" : "CONFIRM ACTION"}
+              {tier === "destructive" ? "DESTRUCTIVE ACTION — SIGNATURE REQUIRED" : "CONFIRM ACTION"}
             </span>
           </div>
 
@@ -171,31 +156,13 @@ function SecureConfirmModal({
               <>
                 <div className="flex items-start gap-3 mb-4">
                   <div className={`p-2.5 rounded-xl ${tc.bg} shrink-0`}>
-                    {tier === "nuclear" ? <Skull className="w-6 h-6 text-red-400" /> : <AlertTriangle className={`w-5 h-5 ${tc.text}`} />}
+                    <AlertTriangle className={`w-5 h-5 ${tc.text}`} />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-[#E8ECF0]" style={{ fontFamily: "Orbitron, sans-serif" }}>{title}</h3>
                     <p className="text-xs text-[#8494A7] mt-1.5 leading-relaxed">{description}</p>
                   </div>
                 </div>
-
-                {/* Tier-specific warnings */}
-                {tier === "nuclear" && (
-                  <div className="mb-4 space-y-2">
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/20">
-                      <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                      <span className="text-[0.6rem] text-red-300/90">This action is PERMANENT and IRREVERSIBLE. There is no undo.</span>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/20">
-                      <Lock className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                      <span className="text-[0.6rem] text-red-300/90">You will be required to type a confirmation phrase AND sign with your wallet.</span>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/20">
-                      <Fingerprint className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                      <span className="text-[0.6rem] text-red-300/90">A wallet signature cryptographically proves you authorized this action.</span>
-                    </div>
-                  </div>
-                )}
 
                 {tier === "destructive" && (
                   <div className="mb-4">
@@ -233,51 +200,11 @@ function SecureConfirmModal({
                     {requiresSign ? (
                       <>
                         <Fingerprint className="w-3 h-3" />
-                        {requiresType ? "PROCEED TO CONFIRM" : "SIGN TO CONFIRM"}
+                        SIGN TO CONFIRM
                       </>
                     ) : (
                       confirmLabel
                     )}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* Step: Type-to-Confirm (Nuclear only) */}
-            {step === "type-confirm" && (
-              <>
-                <div className="text-center mb-5">
-                  <div className="inline-flex p-3 rounded-full bg-red-500/10 border border-red-500/20 mb-3">
-                    <Skull className="w-8 h-8 text-red-400" />
-                  </div>
-                  <h3 className="text-sm font-bold text-red-400" style={{ fontFamily: "Orbitron, sans-serif" }}>TYPE TO CONFIRM</h3>
-                  <p className="text-xs text-[#8494A7] mt-2 leading-relaxed">
-                    To proceed, type <span className="text-red-400 font-mono font-bold">"{nuclearPhrase}"</span> in the box below.
-                  </p>
-                </div>
-
-                <input
-                  type="text"
-                  value={typeInput}
-                  onChange={(e) => setTypeInput(e.target.value)}
-                  placeholder={nuclearPhrase}
-                  className="w-full px-4 py-3 mb-4 rounded-xl bg-[#162033] border-2 border-red-500/30 text-red-300 font-mono text-sm text-center outline-none focus:border-red-500/60 placeholder-red-900/40 transition-all"
-                  autoFocus
-                  spellCheck={false}
-                />
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setStep("warning"); setTypeInput(""); }}
-                    className="flex-1 py-2.5 rounded-xl text-xs border border-[#4274B9]/20 text-[#8494A7] hover:bg-[#162033] transition-all"
-                  >Back</button>
-                  <button
-                    onClick={handleTypeConfirmNext}
-                    disabled={typeInput.trim().toUpperCase() !== nuclearPhrase}
-                    className="flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-red-600/20 border-2 border-red-500/40 text-red-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                    style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.6rem" }}
-                  >
-                    <Fingerprint className="w-3 h-3" /> SIGN WITH WALLET
                   </button>
                 </div>
               </>
@@ -549,7 +476,7 @@ export function TestToolsTab({ wallet, sessionToken }: TestToolsTabProps) {
           <p className="text-[0.6rem] font-bold text-[#D4A843]" style={{ fontFamily: "Orbitron, sans-serif" }}>WALLET SIGNATURE REQUIRED</p>
           <p className="text-[0.55rem] text-[#8494A7] mt-0.5 leading-relaxed">
             All destructive actions require a fresh wallet signature via HashPack to cryptographically verify your identity.
-            Nuclear operations additionally require a type-to-confirm phrase. Every action is logged server-side.
+            Every action is logged server-side.
           </p>
         </div>
       </div>
@@ -897,66 +824,10 @@ export function TestToolsTab({ wallet, sessionToken }: TestToolsTabProps) {
         </ToolCard>
       </Section>
 
-      {/* Section 4: Nuclear Options */}
-      <Section title="NUCLEAR OPTIONS" icon={<Skull className="w-3.5 h-3.5 text-red-500" />}>
-        {/* Nuclear warning banner */}
-        <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-950/30 border-2 border-red-500/20">
-          <ShieldOff className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[0.6rem] font-bold text-red-400" style={{ fontFamily: "Orbitron, sans-serif" }}>MAXIMUM SECURITY ZONE</p>
-            <p className="text-[0.55rem] text-red-300/60 mt-0.5 leading-relaxed">
-              These actions are IRREVERSIBLE and affect the entire platform. Each requires:
-              (1) typing a confirmation phrase, (2) signing with your wallet via HashPack,
-              and (3) server-side session token verification. Triple-factor confirmation.
-            </p>
-          </div>
-        </div>
-
-        <ToolCard
-          icon={<AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
-          title="PURGE ALL VOTES (PLATFORM-WIDE)"
-          description="Delete every battle vote and proposal vote across the entire platform. Resets all tallies. Battles, proposals, and athletes are preserved. Also cleans up any legacy skill votes. This resets all Oracle Scores, voter rankings, and accuracy stats to zero."
-          danger
-        >
-          <button
-            onClick={() => setConfirm({
-              title: "PURGE ALL VOTES",
-              description: "This will permanently delete EVERY vote across the entire platform (battle votes, proposal votes, plus any legacy skill votes), all snapshots, and reset all tallies. Oracle Scores, voter leaderboard rankings, and accuracy stats will all reset to zero. Battles, proposals, and athlete profiles are preserved.",
-              confirmLabel: "PURGE ALL VOTES", tier: "nuclear",
-              action: () => exec("Purge all votes", () => api.testTools.purgeAllVotes(wallet, sessionToken)),
-            })}
-            className="w-full py-2.5 rounded-lg text-[0.6rem] font-bold bg-red-500/10 border-2 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1.5"
-          >
-            <Fingerprint className="w-3.5 h-3.5" />
-            <AlertTriangle className="w-3 h-3" /> PURGE ALL VOTES PLATFORM-WIDE
-          </button>
-        </ToolCard>
-
-        <ToolCard
-          icon={<Skull className="w-3.5 h-3.5 text-red-500" />}
-          title="NUCLEAR RESET (FULL WIPE)"
-          description="Delete absolutely everything: athletes, events, battles, proposals, votes, chat, snapshots, sponsors, applications, config. Complete blank slate for a fresh test cycle. Run seed after this to repopulate."
-          danger
-        >
-          <button
-            onClick={() => setConfirm({
-              title: "NUCLEAR RESET",
-              description: "This will delete EVERYTHING from the platform: all athletes, events, battles, proposals, votes, chat messages, reward snapshots, sponsors, applications, and site config. The platform will be completely empty. You'll need to run Seed Initial Data to repopulate. This action is IRREVERSIBLE.",
-              confirmLabel: "EXECUTE NUCLEAR RESET", tier: "nuclear",
-              action: () => exec("Nuclear reset", () => api.testTools.nuclearReset(wallet, sessionToken)),
-            })}
-            className="w-full py-3 rounded-lg text-xs font-bold bg-red-600/20 border-2 border-red-500/40 text-red-400 hover:bg-red-600/30 transition-all flex items-center justify-center gap-2"
-          >
-            <Fingerprint className="w-4 h-4" />
-            <Skull className="w-4 h-4" /> NUCLEAR RESET — DELETE EVERYTHING
-          </button>
-        </ToolCard>
-      </Section>
-
       {/* Info Footer */}
       <div className="text-[0.5rem] text-[#8494A7]/60 text-center leading-relaxed border-t border-[#4274B9]/10 pt-3">
         All test tools require an active admin session (challenge-sign authenticated).
-        <br />Destructive actions require a fresh wallet signature. Nuclear actions require type-to-confirm + signature.
+        <br />Destructive actions require a fresh wallet signature.
         <br />Every action is logged server-side with the admin wallet ID and timestamp.
         <br />Remove this entire tab and all /admin/test/* routes before mainnet launch.
       </div>

@@ -119,8 +119,6 @@
  *   DELETE /admin/test/snapshot/:id              Delete reward snapshot
  *   POST   /admin/test/flush-caches              Flush leaderboard caches
  *   POST   /admin/test/reset-athlete-records     Reset all W/L/streak to 0
- *   POST   /admin/test/purge-all-votes           Nuclear: purge ALL votes platform-wide
- *   POST   /admin/test/nuclear-reset             Nuclear: delete ALL data
  *   GET    /admin/test/data-inventory            Count all KV data by prefix
  *   GET    /admin/test/ip-flags                  View flagged IP anomalies
  *   POST   /admin/test/clear-ip-flags            Clear all IP anomaly flags
@@ -4509,7 +4507,7 @@ app.post(`${PREFIX}/vote/proposal`, async (c) => {
 // POST /vote/skill — REMOVED
 // Athlete skills are now admin-only. Governors may propose skill changes
 // via the governance proposal system (POST /vote/proposal).
-// Legacy vote:skill: KV keys are cleaned up by purge-all-votes and nuclear-reset.
+// Legacy vote:skill: KV keys are orphaned (skill voting removed; no platform-wide purge endpoint).
 // ---------------------------------------------------------------------------
 
 // ===========================================================================
@@ -5592,7 +5590,7 @@ app.post(`${PREFIX}/admin/test/purge-proposal-votes/:id`, requireAdminSession, a
 // ---------------------------------------------------------------------------
 // 3. POST /admin/test/purge-skill-votes/:id — REMOVED
 //    Skill votes no longer exist. Skills are admin-only.
-//    Legacy vote:skill: keys are cleaned by purge-all-votes and nuclear-reset.
+//    Legacy vote:skill: keys are orphaned (skill voting removed).
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -5861,176 +5859,7 @@ app.post(`${PREFIX}/admin/test/reset-athlete-records`, requireAdminSession, asyn
 });
 
 // ---------------------------------------------------------------------------
-// 12. POST /admin/test/purge-all-votes
-//     Nuclear vote reset: delete ALL battle + proposal + skill votes across
-//     the entire platform. Battles/proposals/athletes preserved.
-//     Resets all tallies and clears all oracle/voter history.
-// ---------------------------------------------------------------------------
-app.post(`${PREFIX}/admin/test/purge-all-votes`, requireAdminSession, async (c) => {
-  try {
-    const adminWallet = c.get("adminWallet");
-    const body = await c.req.json().catch(() => ({}));
-    if (body?.confirm !== "PURGE_ALL_VOTES") {
-      return c.json({ success: false, error: "Must send { confirm: \"PURGE_ALL_VOTES\" } to execute" }, 400);
-    }
-
-    const keysToDelete: string[] = [];
-    let battleVoteCount = 0, proposalVoteCount = 0, skillVoteCount = 0;
-
-    // Battle votes
-    const allBattleVotes: any[] = await kv.getByPrefix("vote:battle:");
-    for (const v of allBattleVotes) {
-      if (v?.wallet && v?.battleId) {
-        keysToDelete.push(`vote:battle:${v.battleId}:${v.wallet}`);
-        keysToDelete.push(`wvote:${v.wallet}:${v.battleId}`);
-        if (v.nonce) keysToDelete.push(`vote-nonce:${v.nonce}`);
-      }
-      battleVoteCount++;
-    }
-
-    // Proposal votes
-    const allPropVotes: any[] = await kv.getByPrefix("vote:proposal:");
-    for (const v of allPropVotes) {
-      if (v?.wallet && v?.proposalId) {
-        keysToDelete.push(`vote:proposal:${v.proposalId}:${v.wallet}`);
-        if (v.nonce) keysToDelete.push(`vote-nonce:${v.nonce}`);
-      }
-      proposalVoteCount++;
-    }
-
-    // Skill votes
-    const allSkillVotes: any[] = await kv.getByPrefix("vote:skill:");
-    for (const v of allSkillVotes) {
-      if (v?.wallet && v?.athleteId) {
-        keysToDelete.push(`vote:skill:${v.athleteId}:${v.wallet}`);
-        if (v.nonce) keysToDelete.push(`vote-nonce:${v.nonce}`);
-      }
-      skillVoteCount++;
-    }
-
-    // Snapshots
-    const allSnapshots: any[] = await kv.getByPrefix("snapshot:");
-    for (const s of allSnapshots) {
-      if (s?.battleId) keysToDelete.push(`snapshot:${s.battleId}`);
-    }
-
-    if (keysToDelete.length > 0) {
-      for (let i = 0; i < keysToDelete.length; i += 200) {
-        await kv.mdel(keysToDelete.slice(i, i + 200));
-      }
-    }
-
-    // Reset all battle tallies
-    const allBattles: any[] = await kv.getByPrefix("battle:");
-    for (const b of allBattles) {
-      if (b?.id) {
-        b.votes1Count = 0; b.votes2Count = 0;
-        b.votes1Weighted = 0; b.votes2Weighted = 0;
-        b.updatedAt = now();
-        await kv.set(`battle:${b.id}`, b);
-      }
-    }
-
-    // Reset all proposal tallies
-    const allProposals: any[] = await kv.getByPrefix("proposal:");
-    for (const p of allProposals) {
-      if (p?.id) {
-        p.votesFor = 0; p.votesAgainst = 0; p.totalVoters = 0;
-        p.updatedAt = now();
-        await kv.set(`proposal:${p.id}`, p);
-      }
-    }
-
-    invalidateCache("leaderboard:athletes");
-    invalidateCache("leaderboard:voters");
-    invalidateCacheByPrefix("leaderboard:");
-
-    console.log(`[TEST-TOOLS] NUCLEAR PURGE: ${battleVoteCount} battle, ${proposalVoteCount} proposal, ${skillVoteCount} skill votes, ${allSnapshots.length} snapshots. Keys: ${keysToDelete.length}. Admin: ${adminWallet}`);
-    return c.json({
-      success: true,
-      data: {
-        battleVotesRemoved: battleVoteCount,
-        proposalVotesRemoved: proposalVoteCount,
-        skillVotesRemoved: skillVoteCount,
-        snapshotsRemoved: allSnapshots.length,
-        totalKeysDeleted: keysToDelete.length,
-      },
-    });
-  } catch (error) {
-    console.log(`[TEST-TOOLS] Error in nuclear purge: ${error}`);
-    return c.json({ success: false, error: safeErrorMsg("Failed to purge all votes") }, 500);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// 13. POST /admin/test/nuclear-reset
-//     Full platform reset: deletes ALL data (athletes, events, battles,
-//     proposals, votes, chat, snapshots, sponsors, applications, config).
-//     Absolute last resort for a complete fresh test cycle.
-// ---------------------------------------------------------------------------
-app.post(`${PREFIX}/admin/test/nuclear-reset`, requireAdminSession, async (c) => {
-  try {
-    const adminWallet = c.get("adminWallet");
-    const body = await c.req.json().catch(() => ({}));
-    if (body?.confirm !== "NUCLEAR_RESET") {
-      return c.json({ success: false, error: "Must send { confirm: \"NUCLEAR_RESET\" } to execute" }, 400);
-    }
-
-    const prefixes = [
-      "athlete:", "event:", "battle:", "proposal:", "sponsor:", "sponsor-inquiry:",
-      "application:", "vote:battle:", "vote:proposal:", "vote:skill:",
-      "snapshot:", "wvote:", "walloc:", "vote-nonce:", "nft-collection:",
-    ];
-
-    const counts: Record<string, number> = {};
-    let totalDeleted = 0;
-
-    for (const prefix of prefixes) {
-      const items: any[] = await kv.getByPrefix(prefix);
-      counts[prefix] = items.length;
-
-      const keysToDelete: string[] = [];
-      for (const item of items) {
-        if (item?.id) {
-          keysToDelete.push(`${prefix}${item.id}`);
-        } else if (item?.wallet && item?.battleId && prefix === "vote:battle:") {
-          keysToDelete.push(`vote:battle:${item.battleId}:${item.wallet}`);
-        } else if (item?.wallet && item?.proposalId && prefix === "vote:proposal:") {
-          keysToDelete.push(`vote:proposal:${item.proposalId}:${item.wallet}`);
-        } else if (item?.wallet && item?.athleteId && prefix === "vote:skill:") {
-          keysToDelete.push(`vote:skill:${item.athleteId}:${item.wallet}`);
-        } else if (item?.battleId && prefix === "snapshot:") {
-          keysToDelete.push(`snapshot:${item.battleId}`);
-        }
-      }
-
-      if (keysToDelete.length > 0) {
-        for (let i = 0; i < keysToDelete.length; i += 200) {
-          await kv.mdel(keysToDelete.slice(i, i + 200));
-        }
-        totalDeleted += keysToDelete.length;
-      }
-    }
-
-    // Clear chat
-    await kv.set(CHAT_KV_KEY, []);
-    // Reset config to empty (don't delete — re-seed will repopulate)
-    await kv.set("config:site", {});
-
-    invalidateCache("leaderboard:athletes");
-    invalidateCache("leaderboard:voters");
-    invalidateCacheByPrefix("leaderboard:");
-
-    console.log(`[TEST-TOOLS] NUCLEAR RESET EXECUTED. ${totalDeleted} keys deleted. Counts: ${JSON.stringify(counts)}. Admin: ${adminWallet}`);
-    return c.json({ success: true, data: { totalKeysDeleted: totalDeleted, counts } });
-  } catch (error) {
-    console.log(`[TEST-TOOLS] Error in nuclear reset: ${error}`);
-    return c.json({ success: false, error: safeErrorMsg("Failed to execute nuclear reset") }, 500);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// 14. GET /admin/test/data-inventory
+// 12. GET /admin/test/data-inventory
 //     Quick count of all KV data by prefix for operational visibility.
 // ---------------------------------------------------------------------------
 app.get(`${PREFIX}/admin/test/data-inventory`, requireAdminSession, async (c) => {
