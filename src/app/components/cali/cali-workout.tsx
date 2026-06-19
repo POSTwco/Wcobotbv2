@@ -12,6 +12,7 @@ import confetti from "canvas-confetti";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
+import { CaliLoader } from "./cali-loader";
 import { CaliWorkoutProgress } from "./cali-workout-progress";
 import { CaliExerciseCard } from "./cali-exercise-card";
 import { CaliCoachToast } from "./cali-coach-toast";
@@ -352,11 +353,7 @@ export function CaliWorkout() {
   }, [activeBlock]);
 
   if (loading) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-[#6AA3E0]" />
-      </div>
-    );
+    return <CaliLoader variant="workout" />;
   }
   if (error || !plan) {
     return (

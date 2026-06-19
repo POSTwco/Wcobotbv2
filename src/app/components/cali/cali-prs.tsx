@@ -5,7 +5,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { ArrowLeft, Trophy, Loader2 } from "lucide-react";
+import { ArrowLeft, Trophy } from "lucide-react";
+import { CaliLoader } from "./cali-loader";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 
@@ -62,6 +63,10 @@ export function CaliPRs() {
     return map;
   }, [prs]);
 
+  if (loading) {
+    return <CaliLoader variant="list" />;
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 sm:py-10 space-y-5">
       <Link to="/calisthenics" className="flex items-center gap-1.5 text-xs text-[#8494A7] hover:text-[#E8ECF0]" style={dmSans}>
@@ -79,11 +84,7 @@ export function CaliPRs() {
 
       {error && <p className="text-xs text-red-300" style={dmSans}>{error}</p>}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-5 h-5 animate-spin text-[#6AA3E0]" />
-        </div>
-      ) : prs.length === 0 ? (
+      {prs.length === 0 ? (
         <div className="rounded-2xl border border-[#4274B9]/15 bg-white/[0.02] p-8 text-center">
           <Trophy className="w-6 h-6 text-[#8494A7] mx-auto mb-3" />
           <p className="text-sm text-[#A3B0C2]" style={dmSans}>

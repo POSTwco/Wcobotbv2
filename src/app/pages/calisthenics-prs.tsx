@@ -1,11 +1,13 @@
-import { CaliSessionProvider, useCaliSession } from "../components/cali/cali-context";
-import { CaliGate } from "../components/cali/cali-gate";
+import { CaliSessionProvider } from "../components/cali/cali-context";
+import { CaliEligibleShell } from "../components/cali/cali-eligible-shell";
 import { CaliPRs } from "../components/cali/cali-prs";
 
 function Inner() {
-  const cali = useCaliSession();
-  if (cali.phase !== "eligible") return <CaliGate />;
-  return <CaliPRs />;
+  return (
+    <CaliEligibleShell loaderVariant="list">
+      <CaliPRs />
+    </CaliEligibleShell>
+  );
 }
 
 export function CalisthenicsPRsPage() {

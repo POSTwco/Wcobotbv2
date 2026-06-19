@@ -19,6 +19,7 @@ import {
   Dumbbell, Flame, Trophy, Settings2, RefreshCw, Loader2, AlertCircle,
   ChevronRight, Calendar,
 } from "lucide-react";
+import { CaliLoader } from "./cali-loader";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 import { LevelPicker } from "./cali-level-picker";
@@ -131,11 +132,7 @@ export function CaliDashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-[#6AA3E0]" />
-      </div>
-    );
+    return <CaliLoader variant="dashboard" />;
   }
 
   return (

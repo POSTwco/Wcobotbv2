@@ -7,14 +7,16 @@
  * next UI slice.
  */
 
-import { CaliSessionProvider, useCaliSession } from "../components/cali/cali-context";
-import { CaliGate } from "../components/cali/cali-gate";
+import { CaliSessionProvider } from "../components/cali/cali-context";
+import { CaliEligibleShell } from "../components/cali/cali-eligible-shell";
 import { CaliDashboard } from "../components/cali/cali-dashboard";
 
 function CaliInner() {
-  const cali = useCaliSession();
-  if (cali.phase !== "eligible") return <CaliGate />;
-  return <CaliDashboard />;
+  return (
+    <CaliEligibleShell loaderVariant="dashboard">
+      <CaliDashboard />
+    </CaliEligibleShell>
+  );
 }
 
 export function CalisthenicsPage() {

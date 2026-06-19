@@ -5,14 +5,16 @@
  * landing here via a deep link still hits the gate if they're not eligible.
  */
 
-import { CaliSessionProvider, useCaliSession } from "../components/cali/cali-context";
-import { CaliGate } from "../components/cali/cali-gate";
+import { CaliSessionProvider } from "../components/cali/cali-context";
+import { CaliEligibleShell } from "../components/cali/cali-eligible-shell";
 import { CaliWorkout } from "../components/cali/cali-workout";
 
 function Inner() {
-  const cali = useCaliSession();
-  if (cali.phase !== "eligible") return <CaliGate />;
-  return <CaliWorkout />;
+  return (
+    <CaliEligibleShell loaderVariant="workout">
+      <CaliWorkout />
+    </CaliEligibleShell>
+  );
 }
 
 export function CalisthenicsWorkoutPage() {

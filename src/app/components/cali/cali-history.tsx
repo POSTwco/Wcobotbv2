@@ -5,7 +5,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router";
-import { ArrowLeft, Calendar, Loader2, ChevronRight, Anchor as AnchorIcon } from "lucide-react";
+import { ArrowLeft, Calendar, ChevronRight, Anchor as AnchorIcon } from "lucide-react";
+import { CaliLoader } from "./cali-loader";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 
@@ -56,6 +57,10 @@ export function CaliHistory() {
     fetchPage();
   }, [fetchPage]);
 
+  if (loading) {
+    return <CaliLoader variant="list" />;
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 sm:py-10 space-y-4">
       <div className="flex items-center justify-between">
@@ -80,11 +85,7 @@ export function CaliHistory() {
         <p className="text-xs text-red-300" style={dmSans}>{error}</p>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-5 h-5 animate-spin text-[#6AA3E0]" />
-        </div>
-      ) : items.length === 0 ? (
+      {items.length === 0 ? (
         <div className="rounded-2xl border border-[#4274B9]/15 bg-white/[0.02] p-8 text-center">
           <Calendar className="w-6 h-6 text-[#8494A7] mx-auto mb-3" />
           <p className="text-sm text-[#A3B0C2]" style={dmSans}>
