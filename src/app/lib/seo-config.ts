@@ -22,8 +22,10 @@ export function absoluteUrl(path = ""): string {
 }
 
 export function absoluteOgImage(ogPath: string): string {
-  if (ogPath.startsWith("http")) return ogPath;
-  return absoluteUrl(ogPath);
+  const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
+  const version = SITE.ogVersion;
+  if (!version) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}v=${version}`;
 }
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {

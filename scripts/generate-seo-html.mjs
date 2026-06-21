@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { buildSocialMetaTags } from "./social-meta.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -16,8 +17,10 @@ function absoluteUrl(routePath) {
 }
 
 function absoluteOgImage(ogPath) {
-  if (ogPath.startsWith("http")) return ogPath;
-  return absoluteUrl(ogPath);
+  const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
+  const version = site.ogVersion;
+  if (!version) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}v=${version}`;
 }
 
 function buildJsonLd(routePath, page) {
@@ -94,30 +97,9 @@ function buildHeadTags(routePath, page) {
   const canonical = absoluteUrl(routePath);
   const ogImage = absoluteOgImage(page.ogImage);
   const jsonLd = buildJsonLd(routePath, page);
+  const social = buildSocialMetaTags({ site, page, canonical, ogImage });
 
-  return `
-    <title>${page.title}</title>
-    <meta name="description" content="${page.description}" />
-    <meta name="keywords" content="${site.keywords}" />
-    <meta name="author" content="${site.org}" />
-    <meta name="theme-color" content="${site.themeColor}" />
-    <link rel="canonical" href="${canonical}" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="${site.name}" />
-    <meta property="og:locale" content="${site.locale}" />
-    <meta property="og:title" content="${page.title}" />
-    <meta property="og:description" content="${page.description}" />
-    <meta property="og:url" content="${canonical}" />
-    <meta property="og:image" content="${ogImage}" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="${page.headline} — ${site.org}" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="${site.twitter}" />
-    <meta name="twitter:title" content="${page.title}" />
-    <meta name="twitter:description" content="${page.description}" />
-    <meta name="twitter:image" content="${ogImage}" />
-    <meta name="twitter:image:alt" content="${page.headline} — ${site.org}" />
+  return `${social}
     <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
 }
 
@@ -130,7 +112,10 @@ function stripSeoTags(html) {
     .replace(/<meta name="theme-color"[^>]*>\s*/g, "")
     .replace(/<meta name="robots"[^>]*>\s*/g, "")
     .replace(/<link rel="canonical"[^>]*>\s*/g, "")
+    .replace(/<link rel="shortcut icon"[^>]*>\s*/g, "")
+    .replace(/<link rel="icon" href="\/favicon.ico"[^>]*>\s*/g, "")
     .replace(/<meta property="og:[^"]*"[^>]*>\s*/g, "")
+    .replace(/<meta property="twitter:[^"]*"[^>]*>\s*/g, "")
     .replace(/<meta name="twitter:[^"]*"[^>]*>\s*/g, "")
     .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*/g, "");
 }

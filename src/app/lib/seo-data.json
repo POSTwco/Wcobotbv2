@@ -9,9 +9,11 @@
     "locale": "en_US",
     "twitter": "@WCO_ORG",
     "themeColor": "#0B1120",
+    "ogVersion": "2",
     "keywords": "calisthenics, battle of the bars, WCO, World Calisthenics Organization, Hedera, Web3, token voting, bodyweight training, BOTB",
-    "logo": "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCO%20white%20on%20trans.png",
-    "shield": "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/BOTB%20SHIELD%20LOGORegisteredsmall.png"
+    "logo": "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/fistWCOClear.png",
+    "fist": "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/fistWCOClear.png",
+    "wordmark": "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCOWHITELETTERSONLY%20CLEAR%20BACKGROUND.png"
   },
   "socialLinks": [
     { "id": "discord", "label": "Discord", "href": "https://discord.com/invite/Zt52bf8Ve" },
