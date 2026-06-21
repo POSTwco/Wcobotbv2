@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { Crown, Loader2, ChevronRight, Wrench, Sparkles, ArrowLeft } from "lucide-react";
 import { api } from "../../lib/api";
 import { useEliteSession } from "./elite-context";
+import { EliteSponsoredAthleteCta } from "./elite-sponsored-athlete-cta";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -84,6 +85,8 @@ export function EliteDashboard() {
           PRO CALISTHENICS · BATTLE OF THE BARS · Elite 1–2 hour skill sessions. Copy → drill → dominate.
         </p>
       </div>
+
+      <EliteSponsoredAthleteCta />
 
       <section className="mb-6">
         <h2 className="text-xs font-bold tracking-widest text-[#D4A843] mb-3" style={orbitron}>SKILL TRACK</h2>
