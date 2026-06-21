@@ -12,7 +12,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/re
 import {
   Megaphone, Send, CheckCircle, Users, Globe, TrendingUp,
   Tv, BarChart3, Crown, Loader2, ExternalLink, Shield, Zap,
-  Award, Star, ArrowRight,
+  Award, Star, ArrowRight, Dumbbell,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -677,6 +677,19 @@ export function BecomeSponsorSection() {
               <ul className="space-y-1 text-[#8494A7] text-[0.6rem]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                 <li className="flex items-start gap-1.5"><span className="text-[#8494A7] mt-0.5">-</span> Logo placement in partner row</li>
                 <li className="flex items-start gap-1.5"><span className="text-[#8494A7] mt-0.5">-</span> Click-through link to your website</li>
+              </ul>
+            </div>
+
+            {/* Routine tier */}
+            <div className="p-4 rounded-xl bg-gradient-to-br from-[#D4A843]/5 to-[#0f1923] border border-[#D4A843]/20 hover:border-[#D4A843]/35 transition-all duration-300">
+              <div className="flex items-center gap-2 mb-2">
+                <Dumbbell className="w-4 h-4 text-[#D4A843]" />
+                <span className="text-[#D4A843] text-xs font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>ROUTINE SPONSOR</span>
+              </div>
+              <ul className="space-y-1 text-[#8494A7] text-[0.6rem]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                <li className="flex items-start gap-1.5"><span className="text-[#D4A843] mt-0.5">-</span> Compact gold banner under generated workout routines</li>
+                <li className="flex items-start gap-1.5"><span className="text-[#D4A843] mt-0.5">-</span> Logo, tagline, and product image placement</li>
+                <li className="flex items-start gap-1.5"><span className="text-[#D4A843] mt-0.5">-</span> Reaches athletes during active calisthenics sessions</li>
               </ul>
             </div>
 

@@ -18,6 +18,7 @@ import { CaliExerciseCard } from "./cali-exercise-card";
 import { CaliCoachToast } from "./cali-coach-toast";
 import { CaliWorkoutCelebration } from "./cali-workout-celebration";
 import { CaliMotionRail } from "./cali-motion-rail";
+import { CaliWorkoutSponsorBanner } from "./cali-workout-sponsor-banner";
 import { getCoachMessage } from "../../lib/cali-coach-messages";
 import { getAvatarGender, setAvatarGender, type AvatarGender } from "../../lib/cali-avatar-prefs";
 import {
@@ -440,6 +441,7 @@ export function CaliWorkout() {
               />
             );
           })}
+          <CaliWorkoutSponsorBanner key={`sponsor-${activeBlock}`} />
         </div>
 
         {focusedItem && (

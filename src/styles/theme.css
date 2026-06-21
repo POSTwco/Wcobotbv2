@@ -278,3 +278,10 @@ img {
     height: 2rem !important;
   }
 }
+
+.sponsor-routine-tab .sponsor-routine-logo {
+  max-height: 3rem;
+}
+.sponsor-routine-tab .sponsor-routine-product {
+  max-height: 3.5rem;
+}

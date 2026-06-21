@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Megaphone, Plus, Pencil, Trash2, Eye, EyeOff, Loader2, CheckCircle,
-  ExternalLink, ChevronRight, AlertTriangle, Crown, Star, Building2,
+  ExternalLink, ChevronRight, AlertTriangle, Crown, Star, Building2, Dumbbell,
   BarChart3, Mail, ArrowUp, ArrowDown, X, Image as ImageIcon, Link as LinkIcon,
   Globe, MousePointerClick,
   Archive, ChevronDown,
@@ -29,7 +29,10 @@ const TIER_META: Record<SponsorTier, { label: string; color: string; icon: any; 
   title:    { label: "TITLE",    color: "#D4A843", icon: Crown,     description: "Hero banner + event naming rights" },
   premium:  { label: "PREMIUM",  color: "#6AA3E0", icon: Star,      description: "Featured showcase with product image" },
   standard: { label: "STANDARD", color: "#8494A7", icon: Building2, description: "Logo in sponsor bar" },
+  routine:  { label: "ROUTINE",  color: "#D4A843", icon: Dumbbell,  description: "Logo + product tab under workout routines" },
 };
+
+const ALL_TIERS: SponsorTier[] = ["title", "premium", "standard", "routine"];
 
 // ---------------------------------------------------------------------------
 // SponsorsTab
@@ -152,6 +155,7 @@ export function SponsorsTab({ wallet, sessionToken }: { wallet: string; sessionT
     title: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("title") : s.tier === "title")).length,
     premium: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("premium") : s.tier === "premium")).length,
     standard: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("standard") : s.tier === "standard")).length,
+    routine: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("routine") : s.tier === "routine")).length,
     totalImpressions: sponsors.reduce((sum, s) => sum + (s.impressions || 0), 0),
     totalClicks: sponsors.reduce((sum, s) => sum + (s.clicks || 0), 0),
   }), [sponsors]);
@@ -220,6 +224,7 @@ export function SponsorsTab({ wallet, sessionToken }: { wallet: string; sessionT
             <span className="text-[#D4A843] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.title}T</span>
             <span className="text-[#6AA3E0] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.premium}P</span>
             <span className="text-[#8494A7] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.standard}S</span>
+            <span className="text-[#D4A843] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.routine}R</span>
           </div>
         </div>
         <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
@@ -759,8 +764,8 @@ function SponsorForm({
       <div>
         <label className="text-[#8494A7] text-[0.55rem] block mb-1" style={{ fontFamily: "Orbitron, sans-serif" }}>SPONSORSHIP TIERS</label>
         <p className="text-[#8494A7]/60 text-[0.45rem] mb-2">Select one or more — sponsor appears in every selected display spot</p>
-        <div className="grid grid-cols-3 gap-2">
-          {(["title", "premium", "standard"] as SponsorTier[]).map((tier) => {
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {ALL_TIERS.map((tier) => {
             const meta = TIER_META[tier];
             const Icon = meta.icon;
             const currentTiers: SponsorTier[] = sponsor.tiers && sponsor.tiers.length > 0

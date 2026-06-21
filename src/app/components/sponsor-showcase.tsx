@@ -12,50 +12,13 @@
  */
 
 import { useEffect, useRef, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { ExternalLink, Star, ChevronRight, Crown } from "lucide-react";
-import { api } from "../lib/api";
 import { useSponsors } from "../lib/hooks";
 import type { Sponsor } from "../lib/types";
+import { hasTier, trackImpression, openSponsor, useViewportImpression } from "../lib/sponsor-display";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-
-// ---------------------------------------------------------------------------
-// Helper: get effective tiers (backward compat with old single-tier data)
-// ---------------------------------------------------------------------------
-function hasTier(sp: Sponsor, tier: string): boolean {
-  if (sp.tiers && sp.tiers.length > 0) return sp.tiers.includes(tier as any);
-  return sp.tier === tier;
-}
-
-// ---------------------------------------------------------------------------
-// Impression tracking — fires once per sponsor per page session
-// ---------------------------------------------------------------------------
-const tracked = new Set<string>();
-
-function trackImpression(sp: Sponsor) {
-  if (tracked.has(sp.id)) return;
-  tracked.add(sp.id);
-  api.trackSponsorImpression(sp.id).catch(() => {});
-}
-
-function useViewportImpression(sp: Sponsor | null, ref: React.RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    if (!sp || !ref.current || tracked.has(sp.id)) return;
-    const el = ref.current;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) trackImpression(sp); },
-      { threshold: 0.3 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [sp, ref]);
-}
-
-function openSponsor(sp: Sponsor) {
-  api.trackSponsorClick(sp.id).catch(() => {});
-  const url = sp.ctaUrl || sp.websiteUrl;
-  if (url) window.open(url, "_blank", "noopener,noreferrer");
-}
+import { SponsorBannerStrip } from "./sponsor-banner-strip";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TitleSponsorBanner — containerless floating display
@@ -67,221 +30,14 @@ export function TitleSponsorBanner() {
 
   if (loading || title.length === 0) return null;
 
-  return <TitleBannerInner sponsors={title} />;
-}
-
-function TitleBannerInner({ sponsors }: { sponsors: Sponsor[] }) {
-  const [idx, setIdx] = useState(0);
-  const [hovered, setHovered] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const sponsor = sponsors[idx % sponsors.length];
-
-  useViewportImpression(sponsor, ref);
-
-  // Auto-rotate every 7s, pause on hover
-  useEffect(() => {
-    if (sponsors.length <= 1 || hovered) return;
-    const iv = setInterval(() => setIdx((i) => (i + 1) % sponsors.length), 7000);
-    return () => clearInterval(iv);
-  }, [sponsors.length, hovered]);
-
   return (
-    <div
-      ref={ref}
-      className="absolute top-0 left-0 right-0 z-20 flex items-start sm:items-center cursor-pointer sponsor-banner-compact"
-      style={{ height: "calc((100% - 500px) / 2 + 20px)", minHeight: "56px", paddingTop: "4px" }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={() => openSponsor(sponsor)}
-    >
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Ambient gold glow — very subtle, no container */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] sm:w-[700px] h-[60px] sm:h-[100px] bg-[#D4A843]/[0.02] rounded-full blur-[50px]" />
-      </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={sponsor.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
-          className="relative flex items-center justify-between gap-2 sm:gap-6 lg:gap-8 max-w-full"
-        >
-          {/* ── LEFT CLUSTER: Label + Logo ── */}
-          <div className="flex items-center gap-2 sm:gap-5 min-w-0 flex-1 overflow-hidden">
-            {/* "TITLE SPONSOR" floating label — subtle gold text, no container */}
-            <motion.div
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1, duration: 0.5 }}
-              className="shrink-0 hidden sm:flex flex-col items-center"
-            >
-              <Crown className="w-4 h-4 text-[#D4A843]/50 mb-0.5" />
-              <span
-                className="text-[#D4A843]/40 text-[0.4rem] tracking-[0.2em] leading-none whitespace-nowrap"
-                style={{ fontFamily: "Orbitron, sans-serif" }}
-              >
-                TITLE SPONSOR
-              </span>
-            </motion.div>
-
-            {/* Thin gold separator line — floating, no box */}
-            <div className="hidden sm:block w-[1px] h-10 bg-gradient-to-b from-transparent via-[#D4A843]/20 to-transparent shrink-0" />
-
-            {/* Sponsor Logo — LARGE, full display, no cropping — 25% bigger */}
-            {sponsor.logoUrl && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.15, duration: 0.5, type: "spring", stiffness: 200 }}
-                className="shrink-0"
-              >
-                <motion.div
-                  animate={{ y: hovered ? -3 : 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <ImageWithFallback
-                    src={sponsor.logoUrl}
-                    alt={sponsor.name}
-                    className="h-[40px] sm:h-[100px] lg:h-[120px] w-auto object-contain max-w-[120px] sm:max-w-[380px] lg:max-w-[480px] drop-shadow-[0_0_20px_rgba(212,168,67,0.12)] sponsor-logo-primary"
-                  />
-                </motion.div>
-              </motion.div>
-            )}
-
-            {/* Secondary Logo — sits right beside primary for title sponsors (hidden on mobile) */}
-            {sponsor.secondaryLogoUrl && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 200 }}
-                className="shrink-0 hidden sm:block"
-              >
-                <motion.div
-                  animate={{ y: hovered ? -3 : 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <ImageWithFallback
-                    src={sponsor.secondaryLogoUrl}
-                    alt={`${sponsor.name} product`}
-                    className="h-[50px] sm:h-[75px] lg:h-[90px] w-auto object-contain max-w-[180px] sm:max-w-[280px] lg:max-w-[360px] drop-shadow-[0_0_20px_rgba(212,168,67,0.10)] sponsor-logo-secondary"
-                  />
-                </motion.div>
-              </motion.div>
-            )}
-
-            {/* Another thin separator */}
-            <div className="hidden md:block w-[1px] h-12 bg-gradient-to-b from-transparent via-[#D4A843]/15 to-transparent shrink-0 sponsor-separator" />
-
-            {/* Text — name + tagline floating freely — 25% bigger */}
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25, duration: 0.5 }}
-              className="min-w-0 flex-1 hidden md:block"
-            >
-              <motion.p
-                className="text-[#E8ECF0] text-lg lg:text-xl font-bold leading-tight sponsor-text-name"
-                style={{ fontFamily: "'DM Sans', sans-serif" }}
-                animate={{ opacity: [0.85, 1, 0.85] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              >
-                {sponsor.customText || sponsor.name}
-              </motion.p>
-              {sponsor.tagline && (
-                <motion.p
-                  className="text-[#D4A843]/50 text-sm lg:text-base mt-0.5 leading-tight sponsor-text-tagline"
-                  style={{ fontFamily: "'DM Sans', sans-serif", fontStyle: "italic" }}
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                >
-                  {sponsor.tagline}
-                </motion.p>
-              )}
-            </motion.div>
-          </div>
-
-          {/* ── RIGHT CLUSTER: Product Image + CTA ── */}
-          <div className="flex items-center gap-2 sm:gap-5 shrink-0">
-            {/* Product Image — large, floating, tilting animation (hidden on mobile to prevent overflow) */}
-            {sponsor.productImageUrl && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, x: 12 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 200 }}
-                className="hidden sm:block"
-              >
-                <motion.div
-                  animate={{
-                    rotate: [0, 10, 0, -10, 0],
-                  }}
-                  transition={{
-                    duration: 8,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                  className="relative"
-                  style={{ transformOrigin: "center bottom" }}
-                >
-                  <ImageWithFallback
-                    src={sponsor.productImageUrl}
-                    alt=""
-                    className="h-[70px] sm:h-[100px] lg:h-[120px] w-auto object-contain max-w-[150px] sm:max-w-[220px] lg:max-w-[280px] drop-shadow-[0_4px_24px_rgba(212,168,67,0.12)] sponsor-product-img"
-                  />
-                  {/* Subtle glow behind product */}
-                  <div className={`absolute -inset-2 sm:-inset-3 bg-[#D4A843]/[0.04] rounded-2xl blur-lg transition-opacity duration-500 pointer-events-none ${hovered ? "opacity-100" : "opacity-40"}`} />
-                </motion.div>
-              </motion.div>
-            )}
-
-            {/* CTA — just floating text, no button box */}
-            <motion.div
-              initial={{ opacity: 0, x: 8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.35, duration: 0.4 }}
-              className="flex items-center gap-1.5 group/cta"
-            >
-              <span
-                className="text-[#D4A843]/60 text-[0.5rem] sm:text-[0.7rem] tracking-[0.1em] sm:tracking-[0.15em] group-hover/cta:text-[#D4A843] transition-colors duration-300 whitespace-nowrap"
-                style={{ fontFamily: "Orbitron, sans-serif" }}
-              >
-                {sponsor.ctaLabel || "VISIT"}
-              </span>
-              <motion.div
-                animate={{ x: hovered ? 3 : 0 }}
-                transition={{ duration: 0.25, type: "spring", stiffness: 300 }}
-              >
-                <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 text-[#D4A843]/40 group-hover/cta:text-[#D4A843] transition-colors duration-300" />
-              </motion.div>
-            </motion.div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Rotation dots — if multiple title sponsors */}
-      {sponsors.length > 1 && (
-        <div className="flex items-center justify-center gap-1.5 mt-1">
-          {sponsors.map((_, i) => (
-            <button
-              key={i}
-              onClick={(e) => { e.stopPropagation(); setIdx(i); }}
-              className={`rounded-full transition-all duration-400 ${
-                i === idx % sponsors.length
-                  ? "w-4 h-[2px] bg-[#D4A843]/50"
-                  : "w-[3px] h-[2px] bg-[#D4A843]/15 hover:bg-[#D4A843]/30"
-              }`}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Bottom divider — ultra-thin gold fade line */}
-      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#D4A843]/10 to-transparent" />
-      </div>
-    </div>
+    <SponsorBannerStrip
+      sponsors={title}
+      variant="hero"
+      label="TITLE SPONSOR"
+      icon={Crown}
+      impressionSpot="title"
+    />
   );
 }
 
@@ -414,7 +170,7 @@ function generateParticles(index: number, count: number = 8) {
 function PremiumSpot({ sponsor, index }: { sponsor: Sponsor; index: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
-  useViewportImpression(sponsor, ref);
+  useViewportImpression(sponsor, ref, "premium");
 
   const floatConfig = FLOAT_CONFIGS[index % FLOAT_CONFIGS.length];
   const particles = useMemo(() => generateParticles(index), [index]);
@@ -657,7 +413,7 @@ function StandardMarquee({ sponsors }: { sponsors: Sponsor[] }) {
     if (!ref.current) return;
     const el = ref.current;
     const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) sponsors.forEach(trackImpression); },
+      ([e]) => { if (e.isIntersecting) sponsors.forEach((sp) => trackImpression(sp, "standard")); },
       { threshold: 0.2 },
     );
     obs.observe(el);

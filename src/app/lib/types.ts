@@ -334,7 +334,7 @@ export interface SiteConfig {
 // ---------------------------------------------------------------------------
 // Sponsors
 // ---------------------------------------------------------------------------
-export type SponsorTier = "title" | "premium" | "standard";
+export type SponsorTier = "title" | "premium" | "standard" | "routine";
 
 export interface Sponsor {
   id: string;                    // e.g. "spn-001"
