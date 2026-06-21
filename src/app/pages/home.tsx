@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { Zap, ArrowRight, Trophy, Users, Coins, Swords, Shield, TrendingUp, Download, Vote, Flame, Sparkles, ChevronRight, ExternalLink } from "lucide-react";
+import { Zap, ArrowRight, Trophy, Users, Coins, Swords, Shield, TrendingUp, Download, Vote, Flame, Sparkles, ChevronRight, ExternalLink, Dumbbell } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
 import { useVIP } from "../components/vip/vip-context";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
@@ -436,6 +436,13 @@ export function HomePage() {
                 style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
               >
                 PLAY BATTLES <ArrowRight className="w-5 h-5" />
+              </Link>
+              <Link
+                to="/calisthenics"
+                className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-4 border border-[#4274B9]/30 text-[#4274B9] rounded-xl hover:bg-[#4274B9]/10 transition-all"
+                style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
+              >
+                <Dumbbell className="w-5 h-5" /> Workout routine
               </Link>
             </div>
           </motion.div>
