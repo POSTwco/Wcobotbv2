@@ -135,7 +135,7 @@ function SkeletonCaliWorkout() {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.25, duration: 0.45 }}
-      className="space-y-4"
+      className="space-y-5"
     >
       <div className="flex items-center justify-between">
         <SkeletonPulse className="w-28 h-3 rounded" />
@@ -147,14 +147,29 @@ function SkeletonCaliWorkout() {
           key={i}
           className="rounded-2xl border border-[#4274B9]/10 p-4 space-y-3"
         >
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#111d30] border border-[#1e293b] flex items-center justify-center">
-              <Dumbbell className="w-3.5 h-3.5 text-[#4274B9]/30" />
+          <div className="flex items-center justify-between gap-2">
+            <SkeletonPulse className="w-20 h-5 rounded-md" delay={0.15 + i * 0.1} />
+            <div className="flex gap-1.5">
+              <SkeletonPulse className="w-9 h-9 rounded-xl" delay={0.18 + i * 0.1} />
+              <SkeletonPulse className="w-16 h-9 rounded-xl" delay={0.2 + i * 0.1} />
             </div>
-            <SkeletonPulse className="flex-1 h-4 rounded-md" delay={0.15 + i * 0.1} />
           </div>
-          <SkeletonPulse className="w-full h-20 rounded-xl" delay={0.2 + i * 0.1} />
-          <SkeletonPulse className="w-32 h-9 rounded-lg" delay={0.25 + i * 0.1} />
+          <SkeletonPulse className="w-3/4 h-5 rounded-md" delay={0.22 + i * 0.1} />
+          <div className="flex items-center gap-3">
+            <div className="w-[72px] h-[72px] rounded-xl bg-[#111d30] border border-[#1e293b] flex items-center justify-center flex-shrink-0">
+              <Dumbbell className="w-5 h-5 text-[#4274B9]/30" />
+            </div>
+            <SkeletonPulse className="flex-1 h-10 rounded-xl" delay={0.25 + i * 0.1} />
+          </div>
+          <SkeletonPulse className="w-full h-10 rounded-xl" delay={0.28 + i * 0.1} />
+          <div className="rounded-xl border border-[#D4A843]/10 p-3 space-y-2">
+            <SkeletonPulse className="w-24 h-4 rounded" delay={0.3 + i * 0.1} />
+            <div className="grid grid-cols-2 gap-2">
+              <SkeletonPulse className="h-11 rounded-xl" delay={0.32 + i * 0.1} />
+              <SkeletonPulse className="h-11 rounded-xl" delay={0.34 + i * 0.1} />
+            </div>
+            <SkeletonPulse className="w-full h-11 rounded-xl" delay={0.36 + i * 0.1} />
+          </div>
         </div>
       ))}
     </motion.div>

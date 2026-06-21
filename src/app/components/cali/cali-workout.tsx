@@ -23,6 +23,7 @@ import { getAvatarGender, setAvatarGender, type AvatarGender } from "../../lib/c
 import {
   xpForSet, xpForBlock, xpForPr, xpForWorkoutComplete,
 } from "../../lib/cali-workout-xp";
+import { CALI_WORKOUT_ACTION_BAR_BOTTOM } from "../../lib/cali-workout-layout";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -368,7 +369,7 @@ export function CaliWorkout() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10 space-y-5 pb-32">
+    <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10 space-y-5 pb-28">
       <div className="flex items-center justify-between">
         <Link to="/calisthenics" className="flex items-center gap-1.5 text-xs text-[#8494A7] hover:text-[#E8ECF0]" style={dmSans}>
           <ArrowLeft className="w-4 h-4" /> Dashboard
@@ -410,7 +411,7 @@ export function CaliWorkout() {
 
       {/* Active block: list + right coaching rail */}
       <div className="flex gap-6 items-start">
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="flex-1 min-w-0 space-y-5">
           {activeItems.map((item, i) => {
             const slotLimits = swapLimitsFor(plan, activeBlock, i);
             return (
@@ -464,9 +465,12 @@ export function CaliWorkout() {
       />
 
       {/* Sticky bottom action bar */}
-      <div className="fixed bottom-20 md:bottom-6 left-0 right-0 z-40 px-4" style={{ pointerEvents: "none" }}>
+      <div
+        className="fixed left-0 right-0 z-40 px-4 md:bottom-6"
+        style={{ bottom: CALI_WORKOUT_ACTION_BAR_BOTTOM, pointerEvents: "none" }}
+      >
         <div
-          className="max-w-5xl mx-auto flex gap-2 p-2 rounded-2xl border"
+          className="max-w-5xl mx-auto flex gap-2 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] rounded-2xl border"
           style={{
             pointerEvents: "auto",
             background: "rgba(11,17,32,0.92)",
@@ -478,7 +482,7 @@ export function CaliWorkout() {
           <button
             onClick={onRegenerate}
             disabled={regenerating}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold border border-[#4274B9]/25 text-[#A3B0C2] hover:text-white hover:border-[#4274B9]/50 disabled:opacity-60"
+            className="flex-1 flex items-center justify-center gap-2 min-h-[44px] py-3 rounded-xl text-xs font-bold border border-[#4274B9]/25 text-[#A3B0C2] hover:text-white hover:border-[#4274B9]/50 disabled:opacity-60"
             style={dmSans}
           >
             {regenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -487,7 +491,7 @@ export function CaliWorkout() {
           <button
             onClick={onComplete}
             disabled={completing}
-            className="flex-[2] flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold disabled:opacity-60"
+            className="flex-[2] flex items-center justify-center gap-2 min-h-[44px] py-3 rounded-xl text-xs font-bold disabled:opacity-60"
             style={{
               ...dmSans,
               background: "linear-gradient(135deg, #4274B9, #3563A0)",
@@ -501,7 +505,7 @@ export function CaliWorkout() {
           <button
             onClick={onAnchor}
             disabled={anchoring}
-            className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl text-xs font-bold border border-[#D4A843]/25 text-[#D4A843] hover:bg-[#D4A843]/8 disabled:opacity-60"
+            className="flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] px-3 py-3 rounded-xl text-xs font-bold border border-[#D4A843]/25 text-[#D4A843] hover:bg-[#D4A843]/8 disabled:opacity-60"
             style={dmSans}
           >
             {anchoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Anchor className="w-4 h-4" />}

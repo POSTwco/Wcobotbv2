@@ -31,7 +31,7 @@ export function CaliWorkoutProgress({
 
   return (
     <div
-      className="sticky top-0 z-30 -mx-4 px-4 py-3 mb-4 border-b"
+      className="sticky top-14 sm:top-16 z-30 isolate -mx-4 px-4 py-3 mb-4 border-b"
       style={{
         background: "rgba(11,17,32,0.92)",
         borderColor: "rgba(66,116,185,0.15)",

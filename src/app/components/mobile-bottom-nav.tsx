@@ -331,6 +331,10 @@ function MoreSheet({
 // ---------------------------------------------------------------------------
 // Main Bottom Nav
 // ---------------------------------------------------------------------------
+function isWorkoutRoute(pathname: string) {
+  return /^\/calisthenics\/workout\/[^/]+/.test(pathname);
+}
+
 export function MobileBottomNav() {
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -367,6 +371,10 @@ export function MobileBottomNav() {
   useEffect(() => {
     setMoreOpen(false);
   }, [location.pathname]);
+
+  if (isWorkoutRoute(location.pathname)) {
+    return null;
+  }
 
   return (
     <>

@@ -68,26 +68,24 @@ export function CaliExerciseCard({
       style={{
         background: "linear-gradient(160deg, rgba(66,116,185,0.05), rgba(11,17,32,0.9))",
         borderColor: isFocused ? `${accent}55` : `${accent}25`,
-        boxShadow: isFocused ? `0 4px 24px ${accent}18` : `0 4px 24px ${accent}08`,
-        borderLeftWidth: isFocused ? 3 : 1,
-        borderLeftColor: isFocused ? accent : undefined,
+        boxShadow: isFocused
+          ? `inset 0 0 0 2px ${accent}44, 0 4px 24px ${accent}18`
+          : `0 4px 24px ${accent}08`,
       }}
       onMouseEnter={onFocus}
       onFocus={onFocus}
     >
       {/* Card header */}
-      <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex-1 min-w-0">
-            <span
-              className="inline-block text-[0.55rem] font-bold tracking-widest uppercase px-2 py-0.5 rounded-md mb-2"
-              style={{ ...orbitron, background: `${accent}18`, color: accent }}
-            >
-              {item.category}
-            </span>
-            <h3 className="text-base sm:text-lg font-bold text-white" style={dmSans}>{item.name}</h3>
-          </div>
-          <div className="flex flex-wrap items-start justify-end gap-2 flex-shrink-0">
+      <div className="p-4 sm:p-5 space-y-3">
+        {/* Row 1: category + actions */}
+        <div className="flex items-center justify-between gap-2 flex-nowrap">
+          <span
+            className="inline-block text-[0.55rem] font-bold tracking-widest uppercase px-2 py-0.5 rounded-md flex-shrink-0"
+            style={{ ...orbitron, background: `${accent}18`, color: accent }}
+          >
+            {item.category}
+          </span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <ExerciseYouTubeLink name={item.name} />
             {onSwap && (
               <CaliHintWrap
@@ -104,7 +102,7 @@ export function CaliExerciseCard({
                   type="button"
                   onClick={(e) => { e.stopPropagation(); if (canSwap && !swapping) onSwap(); }}
                   disabled={!canSwap || swapping}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.03] active:scale-[0.98] disabled:hover:scale-100"
+                  className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-xl text-xs font-bold border transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.03] active:scale-[0.98] disabled:hover:scale-100"
                   style={{
                     ...dmSans,
                     borderColor: canSwap ? "rgba(212,168,67,0.45)" : "rgba(255,255,255,0.08)",
@@ -117,33 +115,57 @@ export function CaliExerciseCard({
                 </button>
               </CaliHintWrap>
             )}
-            <span className="lg:hidden">
-              {(() => {
-                const gPrev = gender === 'female' ? (item as any).previewImageRefFemale || (item as any).previewImageRef : (item as any).previewImageRefMale || (item as any).previewImageRef;
-                return gPrev && (String(gPrev).startsWith("http") || String(gPrev).startsWith("data:")) ? (
-                  <img src={gPrev} className="w-12 h-12 object-contain rounded border border-white/10" alt={item.name} />
-                ) : (
-                  <div className="w-12 h-12 rounded border border-white/10 bg-[#0B1120]/60 flex flex-col items-center justify-center text-center p-1">
-                    <div className="text-[#8494A7] text-[8px]">No custom image</div>
-                    <div className="text-[#6AA3E0] text-[7px] leading-none mt-0.5">Upload via<br />Admin panel</div>
-                  </div>
-                );
-              })()}
-            </span>
-            <CaliHintWrap
-              title="Target Prescription"
-              hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Log your actual numbers below after each set.`}
-            >
-              <span
-                className="text-xs sm:text-sm font-bold px-3 py-2 rounded-xl border border-[#D4A843]/35 bg-[#D4A843]/10 text-[#D4A843] hover:bg-[#D4A843]/16 hover:border-[#D4A843]/50 transition-all duration-200"
-                style={dmSans}
-              >
-                {item.sets} × {item.target.low}–{item.target.high}
-                {item.target.metric === "reps" ? " reps" : "s"}
-                {item.unilateral ? "/side" : ""}
-              </span>
-            </CaliHintWrap>
           </div>
+        </div>
+
+        {/* Row 2: title — full width */}
+        <h3 className="text-base sm:text-lg font-bold text-white break-words" style={dmSans}>{item.name}</h3>
+
+        {/* Row 3: mobile preview + prescription */}
+        <div className="flex items-center gap-3 lg:hidden">
+          <div className="flex-shrink-0">
+            {(() => {
+              const gPrev = gender === 'female' ? (item as any).previewImageRefFemale || (item as any).previewImageRef : (item as any).previewImageRefMale || (item as any).previewImageRef;
+              return gPrev && (String(gPrev).startsWith("http") || String(gPrev).startsWith("data:")) ? (
+                <img src={gPrev} className="w-[72px] h-[72px] object-contain rounded-xl border border-white/10 bg-[#0B1120]/40" alt={item.name} />
+              ) : (
+                <div className="w-[72px] h-[72px] rounded-xl border border-white/10 bg-[#0B1120]/60 flex flex-col items-center justify-center text-center p-1">
+                  <div className="text-[#8494A7] text-[8px]">No image</div>
+                  <div className="text-[#6AA3E0] text-[7px] leading-none mt-0.5">Admin panel</div>
+                </div>
+              );
+            })()}
+          </div>
+          <CaliHintWrap
+            title="Target Prescription"
+            hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Log your actual numbers below after each set.`}
+          >
+            <span
+              className="flex-1 min-w-0 text-xs sm:text-sm font-bold px-3 py-2 rounded-xl border border-[#D4A843]/35 bg-[#D4A843]/10 text-[#D4A843] truncate block"
+              style={dmSans}
+            >
+              {item.sets} × {item.target.low}–{item.target.high}
+              {item.target.metric === "reps" ? " reps" : "s"}
+              {item.unilateral ? "/side" : ""}
+            </span>
+          </CaliHintWrap>
+        </div>
+
+        {/* Desktop prescription (thumbnail in motion rail) */}
+        <div className="hidden lg:flex items-center justify-end">
+          <CaliHintWrap
+            title="Target Prescription"
+            hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Log your actual numbers below after each set.`}
+          >
+            <span
+              className="text-sm font-bold px-3 py-2 rounded-xl border border-[#D4A843]/35 bg-[#D4A843]/10 text-[#D4A843]"
+              style={dmSans}
+            >
+              {item.sets} × {item.target.low}–{item.target.high}
+              {item.target.metric === "reps" ? " reps" : "s"}
+              {item.unilateral ? "/side" : ""}
+            </span>
+          </CaliHintWrap>
         </div>
 
         {item.tempoHint && (
@@ -230,7 +252,7 @@ export function CaliExerciseCard({
       </div>
 
       {/* Set loggers */}
-      <div className="px-4 sm:px-5 pb-4 space-y-2 border-t border-[#4274B9]/10 pt-3">
+      <div className="px-4 sm:px-5 pb-4 space-y-3 border-t border-[#4274B9]/10 pt-3">
         {Array.from({ length: item.sets }).map((_, s) => {
           const key = `${blockIndex}|${itemIndex}|${s}`;
           const a = actuals[key] ?? { value: "", rpe: "", note: "" };

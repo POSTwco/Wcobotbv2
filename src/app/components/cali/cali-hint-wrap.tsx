@@ -8,18 +8,21 @@ interface Props {
   hint: string;
   children: React.ReactNode;
   side?: "top" | "bottom" | "left" | "right";
+  showIcon?: boolean;
 }
 
-export function CaliHintWrap({ title, hint, children, side = "top" }: Props) {
+export function CaliHintWrap({ title, hint, children, side = "top", showIcon = true }: Props) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="group inline-flex items-center gap-1.5 cursor-help">
           {children}
-          <Info
-            className="w-3.5 h-3.5 text-[#D4A843] flex-shrink-0 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200"
-            aria-hidden
-          />
+          {showIcon && (
+            <Info
+              className="w-3.5 h-3.5 text-[#D4A843] flex-shrink-0 hidden sm:inline opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200"
+              aria-hidden
+            />
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent

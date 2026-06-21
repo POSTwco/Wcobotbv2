@@ -1,6 +1,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --nav-h: 3.5rem;
+  --nav-h-sm: 4rem;
+  --workout-action-bar-h: 4.25rem;
+  --workout-bar-offset: max(1rem, env(safe-area-inset-bottom, 0px));
   --font-size: 16px;
   --background: #0B1120;
   --foreground: #E8ECF0;

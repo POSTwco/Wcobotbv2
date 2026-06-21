@@ -25,9 +25,15 @@ function ScrollToTop() {
 
 const ATHLETE_BG = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/athlete1.jpg";
 
+function isWorkoutRoute(pathname: string) {
+  return /^\/calisthenics\/workout\/[^/]+/.test(pathname);
+}
+
 export function Layout() {
   const { vipActive } = useVIP();
+  const location = useLocation();
   const [showSponsorModal, setShowSponsorModal] = useState(false);
+  const onWorkoutPage = isWorkoutRoute(location.pathname);
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-[#E8ECF0] relative overflow-x-hidden" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -73,7 +79,7 @@ export function Layout() {
 
       <div className="relative z-10">
         <Navbar />
-        <main className="pt-14 sm:pt-16 pb-20 md:pb-0">
+        <main className={`pt-14 sm:pt-16 md:pb-0 ${onWorkoutPage ? "pb-4" : "pb-20"}`}>
           <PageTransition>
             <Outlet />
           </PageTransition>

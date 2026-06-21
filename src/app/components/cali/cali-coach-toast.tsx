@@ -5,6 +5,7 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles } from "lucide-react";
+import { CALI_COACH_TOAST_BOTTOM } from "../../lib/cali-workout-layout";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -31,7 +32,7 @@ export function CaliCoachToast({ message, onDismiss, durationMs = 2800 }: Props)
           exit={{ opacity: 0, y: 20, scale: 0.98 }}
           transition={{ type: "spring", damping: 22, stiffness: 280 }}
           className="fixed left-4 right-4 z-50 mx-auto max-w-md"
-          style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: CALI_COACH_TOAST_BOTTOM }}
         >
           <div
             className="flex items-start gap-3 px-4 py-3.5 rounded-2xl border shadow-2xl"
