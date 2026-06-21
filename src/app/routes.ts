@@ -11,7 +11,7 @@ import { CalisthenicsPage } from "./pages/calisthenics";
 import { CalisthenicsWorkoutPage } from "./pages/calisthenics-workout";
 import { CalisthenicsHistoryPage } from "./pages/calisthenics-history";
 import { CalisthenicsPRsPage } from "./pages/calisthenics-prs";
-import { CalisthenicsAdminPage } from "./pages/calisthenics-admin";
+
 import { PrivacyPage } from "./pages/privacy";
 import { TermsPage } from "./pages/terms";
 import { WhitepaperPage } from "./pages/whitepaper";
@@ -54,7 +54,7 @@ export const router = createBrowserRouter([
       { path: "calisthenics/workout/:id", Component: CalisthenicsWorkoutPage },
       { path: "calisthenics/history", Component: CalisthenicsHistoryPage },
       { path: "calisthenics/prs", Component: CalisthenicsPRsPage },
-      { path: "calisthenics/admin", Component: CalisthenicsAdminPage },
+
       { path: "privacy", Component: PrivacyPage },
       { path: "terms", Component: TermsPage },
       { path: "whitepaper", Component: WhitepaperPage },

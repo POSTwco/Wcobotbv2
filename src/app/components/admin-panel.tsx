@@ -30,11 +30,9 @@
  *   Launch    — Launch guide and instructions
  *
  * CALISTHENICS EDITOR:
- *   The full routine operator console (111+ list + editor form + bucket uploads + simulate)
- *   is now embedded directly under LIVE TRAFFIC / CALISTHENICS stats as a dropdown.
- *   Click the CALISTHENICS stats panel to expand. Uses the live admin session token.
- *   No navigation away from the protected panel → saves are reliable and permanent.
- *   Secondary access still available via the "Cali Editor" bottom tab.
+ *   The routine operator console (111+ list + editor form + bucket uploads + simulate)
+ *   lives exclusively on the "Cali Editor" tab (next to Launch). Stats-only panel above
+ *   tabs — no inline dropdown duplicate.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -114,10 +112,7 @@ export function AdminPanel() {
   const [activeTab, setActiveTab] = useState<AdminTab>("manual");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Calisthenics editor dropdown (lives directly under live stats / cali ops zone).
-  // Sits silently (collapsed) until admin clicks the CALISTHENICS panel to expand.
-  // Uses the live session object — never navigates away.
-  const [showCaliEditor, setShowCaliEditor] = useState(false);
+
 
   // Welcome overlay state — triggers after successful auth
   const [showWelcome, setShowWelcome] = useState(false);
@@ -361,44 +356,8 @@ export function AdminPanel() {
         {/* Live unique-IP visit counter — privacy-preserving traffic gauge */}
         <VisitCounter wallet={session.wallet} sessionToken={session.token} />
 
-        {/* CALISTHENICS OPS ZONE — LIVE STATS + INLINE DROPDOWN EDITOR
-            Click the stats area to expand/collapse the full edit tool (library + form).
-            Editor runs inside this same protected panel using the live session token.
-            No navigation away = reliable permanent saves. Sits silently when closed. */}
-        <div className="border-b border-[#D4A843]/10 bg-[#0B1120]/30 px-4 sm:px-5 py-1">
-          <div className="text-[0.5rem] uppercase tracking-[1.5px] text-[#D4A843] font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>
-            CALISTHENICS OPS ZONE — STATS + DROPDOWN EDITOR (click panel to toggle)
-          </div>
-        </div>
-        <CaliAdminStats
-          wallet={session.wallet}
-          sessionToken={session.token}
-          onClick={() => setShowCaliEditor(v => !v)}
-        />
-
-        {/* Embedded Calisthenics Routine Editor — placed directly under the live stats.
-            Renders the exact same tool (scrollable 111+ list + full form + uploads + simulate).
-            When collapsed it takes zero extra space. Uses live session → saves are permanent. */}
-        {showCaliEditor && (
-          <div className="border-b border-[#D4A843]/10 bg-[#0B1120]/20 px-4 sm:px-5 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <div style={{ fontFamily: "Orbitron, sans-serif" }} className="text-[10px] tracking-widest text-[#D4A843]">
-                ROUTINE OPERATIONS — EDIT OR ADD EXERCISES (inside Admin Command Center)
-              </div>
-              <button
-                onClick={() => setShowCaliEditor(false)}
-                className="text-[10px] px-2 py-0.5 border border-white/20 rounded hover:bg-white/5"
-              >
-                CLOSE EDITOR
-              </button>
-            </div>
-            <CalisthenicsAdminPage
-              embedded
-              sessionToken={session.token}
-              wallet={session.wallet}
-            />
-          </div>
-        )}
+        {/* Calisthenics live stats — editor opens via Cali Editor tab only */}
+        <CaliAdminStats wallet={session.wallet} sessionToken={session.token} />
 
         {/* Tab Navigation */}
         <div className="border-b border-[#D4A843]/10 overflow-x-auto">
@@ -440,7 +399,9 @@ export function AdminPanel() {
               {activeTab === "manual" && <ManualTab />}
               {activeTab === "test-tools" && <TestToolsTab wallet={session.wallet} sessionToken={session.token} />}
               {activeTab === "launch" && <LaunchGuideTab />}
-              {activeTab === "cali-editor" && <CalisthenicsAdminPage embedded sessionToken={session.token} wallet={session.wallet} />}
+              {activeTab === "cali-editor" && (
+                <CalisthenicsAdminPage sessionToken={session.token} wallet={session.wallet} />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

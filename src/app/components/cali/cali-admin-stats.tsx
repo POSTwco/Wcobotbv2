@@ -27,11 +27,9 @@ interface Stats {
 export function CaliAdminStats({
   wallet,
   sessionToken,
-  onClick,
 }: {
   wallet: string;
   sessionToken: string;
-  onClick?: () => void;
 }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,21 +53,12 @@ export function CaliAdminStats({
     return () => clearInterval(id);
   }, [load]);
 
-  const handleClick = () => {
-    if (onClick) onClick();
-  };
-
   const signInsToday = stats?.caliSignInsToday ?? 0;
   const signInsTotal = stats?.caliSignInsTotal ?? 0;
   const gensTotal = stats?.workoutsGeneratedTotal ?? 0;
 
   return (
-    <div
-      onClick={handleClick}
-      className={`px-4 sm:px-5 py-3 border-b border-[#D4A843]/10 bg-[#0B1120]/40 ${onClick ? "cursor-pointer hover:bg-[#0B1120]/70 active:bg-[#162033] transition-colors" : ""}`}
-      role={onClick ? "button" : undefined}
-      aria-label={onClick ? "Toggle Calisthenics Routine Editor (embedded dropdown)" : undefined}
-    >
+    <div className="px-4 sm:px-5 py-3 border-b border-[#D4A843]/10 bg-[#0B1120]/40">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-[#4274B9]/12 border border-[#4274B9]/25">
@@ -81,9 +70,7 @@ export function CaliAdminStats({
           {stats && (
             <span className="text-[0.55rem] text-[#8494A7] font-mono">{stats.libraryVersion}</span>
           )}
-          {onClick && (
-            <span className="text-[0.5rem] ml-1 px-1.5 py-0.5 rounded bg-[#D4A843]/10 text-[#D4A843] tracking-wider">TOGGLE EDITOR</span>
-          )}
+
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); load(); }}
@@ -120,7 +107,7 @@ export function CaliAdminStats({
               ))}
             </div>
           )}
-          {onClick && <div className="text-[0.5rem] text-[#D4A843] mt-1">Click panel to toggle the full routine editor (dropdown under stats — stays inside admin)</div>}
+
         </>
       ) : loading ? (
         <p className="text-[0.65rem] text-[#8494A7]">Loading stats…</p>
