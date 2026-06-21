@@ -212,7 +212,7 @@ export function EliteSponsoredAthleteCta() {
                 Become a Pro WCO Sponsored Athlete
               </h2>
               <p className="text-[0.7rem] sm:text-xs text-[#A3B0C2] mt-1.5 leading-relaxed" style={dmSans}>
-                Apply to Battle of the Bars — your card could look like this.
+                Apply to Battle of the Bars — compete on the official athlete roster.
               </p>
             </div>
 
