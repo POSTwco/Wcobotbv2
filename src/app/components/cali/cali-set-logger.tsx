@@ -25,10 +25,11 @@ interface Props {
   state: SetState;
   logged: boolean;
   onChange: (patch: Partial<SetState>) => void;
+  showNotes?: boolean;
 }
 
 export function CaliSetLogger({
-  setIndex, metric, targetLow, targetHigh, state, logged, onChange,
+  setIndex, metric, targetLow, targetHigh, state, logged, onChange, showNotes = false,
 }: Props) {
   const placeholder = metric === "reps" ? `${targetLow}–${targetHigh}` : `${targetLow}–${targetHigh}s`;
   const unitLabel = metric === "reps" ? "reps" : "seconds";
@@ -91,6 +92,17 @@ export function CaliSetLogger({
           aria-label={`Set ${setIndex + 1} RPE`}
         />
       </div>
+
+      {showNotes && !logged && (
+        <textarea
+          placeholder="Session notes — injuries, sensations, battle prep…"
+          value={state.note}
+          onChange={(e) => onChange({ note: e.target.value.slice(0, 280) })}
+          rows={2}
+          className="w-full px-3 py-2 text-xs rounded-xl bg-[#D4A843]/5 border border-[#D4A843]/20 text-[#E8ECF0] placeholder:text-[#8494A7]/60 focus:outline-none focus:border-[#D4A843]/40 resize-none"
+          style={dmSans}
+        />
+      )}
     </div>
   );
 }

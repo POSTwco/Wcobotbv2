@@ -47,13 +47,18 @@ interface Props {
   swapping?: boolean;
   swapsSlotRemaining?: number;
   swapsWorkoutRemaining?: number;
+  variant?: "cali" | "elite";
+  showNotes?: boolean;
 }
 
 export function CaliExerciseCard({
   item, blockIndex, itemIndex, actuals, loggedSets, savingExercise,
   isFocused, gender, onFocus, onChangeActual, onLogAllSets,
   onSwap, swapping, swapsSlotRemaining = 0, swapsWorkoutRemaining = 0,
+  variant = "cali", showNotes = false,
 }: Props) {
+  const isElite = variant === "elite";
+  const cardAccent = isElite ? "#D4A843" : (CATEGORY_COLORS[item.category] ?? "#4274B9");
   const pendingCount = Array.from({ length: item.sets }).filter((_, s) => {
     const key = `${blockIndex}|${itemIndex}|${s}`;
     if (loggedSets.has(key)) return false;
@@ -66,7 +71,7 @@ export function CaliExerciseCard({
   );
   const canSwap = !!onSwap && swapsSlotRemaining > 0 && swapsWorkoutRemaining > 0;
   const guide = getExerciseGuide(item);
-  const accent = CATEGORY_COLORS[item.category] ?? "#4274B9";
+  const accent = cardAccent;
   const delay = blockIndex * 0.08 + itemIndex * 0.05;
 
   return (
@@ -76,7 +81,9 @@ export function CaliExerciseCard({
       transition={{ delay, duration: 0.4, ease: "easeOut" }}
       className="rounded-2xl border overflow-hidden transition-all duration-200"
       style={{
-        background: "linear-gradient(160deg, rgba(66,116,185,0.05), rgba(11,17,32,0.9))",
+        background: isElite
+          ? "linear-gradient(160deg, rgba(212,168,67,0.06), rgba(11,17,32,0.92))"
+          : "linear-gradient(160deg, rgba(66,116,185,0.05), rgba(11,17,32,0.9))",
         borderColor: isFocused ? `${accent}55` : `${accent}25`,
         boxShadow: isFocused
           ? `inset 0 0 0 2px ${accent}44, 0 4px 24px ${accent}18`
@@ -276,6 +283,7 @@ export function CaliExerciseCard({
               state={a}
               logged={loggedSets.has(key)}
               onChange={(patch) => onChangeActual(key, patch)}
+              showNotes={showNotes}
             />
           );
         })}

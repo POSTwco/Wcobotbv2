@@ -26,7 +26,7 @@ function ScrollToTop() {
 const ATHLETE_BG = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/athlete1.jpg";
 
 function isWorkoutRoute(pathname: string) {
-  return /^\/calisthenics\/workout\/[^/]+/.test(pathname);
+  return /^\/calisthenics\/(elite\/)?workout\/[^/]+/.test(pathname);
 }
 
 export function Layout() {

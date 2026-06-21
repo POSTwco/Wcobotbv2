@@ -77,11 +77,13 @@ async function request<T>(
     walletSessionToken?: string;
     /** Calisthenics-tab session token (X-Cali-Session header) */
     caliSessionToken?: string;
+    /** Elite vault session token (X-Elite-Session header) */
+    eliteSessionToken?: string;
     /** Override default request timeout in ms */
     timeoutMs?: number;
   } = {}
 ): Promise<ApiResponse<T>> {
-  const { method = "GET", body, adminWallet, sessionToken, walletSessionToken, caliSessionToken, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { method = "GET", body, adminWallet, sessionToken, walletSessionToken, caliSessionToken, eliteSessionToken, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${publicAnonKey}`,
@@ -102,6 +104,10 @@ async function request<T>(
 
   if (caliSessionToken) {
     headers["X-Cali-Session"] = caliSessionToken;
+  }
+
+  if (eliteSessionToken) {
+    headers["X-Elite-Session"] = eliteSessionToken;
   }
 
   // AbortController for timeout
@@ -860,6 +866,54 @@ export const api = {
     verifyAnchor: (caliSessionToken: string, workoutId: string) =>
       request<{ ok: boolean; consensusTs: string; hashMatches: boolean }>(
         `/cali/verify-anchor/${encodeURIComponent(workoutId)}`, { caliSessionToken }),
+  },
+
+  elite: {
+    accessCheck: (wallet: string) =>
+      request<{ allowed: boolean }>(`/elite/access-check?wallet=${encodeURIComponent(wallet)}`),
+
+    challenge: (accountId: string) =>
+      request<{ challenge: string; nonce: string; expiresAt: number }>(
+        "/elite/challenge", { method: "POST", body: { accountId } }),
+
+    verify: (accountId: string, nonce: string, signature: string) =>
+      request<{ sessionToken: string; expiresAt: number; eligibility: { accountId: string; accessVia: string } }>(
+        "/elite/verify", { method: "POST", body: { accountId, nonce, signature } }),
+
+    me: (eliteSessionToken: string) =>
+      request<{ accountId: string; eligibility: unknown }>("/elite/session/me", { eliteSessionToken }),
+
+    getProfile: (eliteSessionToken: string) =>
+      request<{ profile: any }>("/elite/profile", { eliteSessionToken }),
+
+    updateProfile: (eliteSessionToken: string, patch: Record<string, unknown>) =>
+      request<{ profile: any }>("/elite/profile", { method: "PUT", body: patch, eliteSessionToken }),
+
+    listExercises: (eliteSessionToken: string) =>
+      request<{ exercises: any[]; libraryVersion: string }>("/elite/exercises", { eliteSessionToken }),
+
+    generate: (eliteSessionToken: string, opts?: { skillTrack?: string; durationTarget?: number; equipment?: string[] }) =>
+      request<{ workout: any }>("/elite/workout/generate", { method: "POST", body: opts ?? {}, eliteSessionToken }),
+
+    createCustom: (eliteSessionToken: string, body: { skillTrack?: string; durationTarget?: number; slots: Array<{ exerciseId: string; sets: number }> }) =>
+      request<{ workout: any }>("/elite/workout/custom", { method: "POST", body, eliteSessionToken }),
+
+    getWorkout: (eliteSessionToken: string, workoutId: string) =>
+      request<{ workout: any }>(`/elite/workout/${encodeURIComponent(workoutId)}`, { eliteSessionToken }),
+
+    logSets: (
+      eliteSessionToken: string,
+      workoutId: string,
+      sets: Array<{ blockIndex: number; itemIndex: number; setIndex: number; value: number; rpe?: number; note?: string }>,
+      opts?: { completed?: boolean; completedAt?: string },
+    ) =>
+      request<{ log: any }>(
+        `/elite/workout/${encodeURIComponent(workoutId)}/log`,
+        { method: "POST", body: { sets, ...(opts ?? {}) }, eliteSessionToken },
+      ),
+
+    history: (eliteSessionToken: string) =>
+      request<{ items: any[]; total: number }>("/elite/history", { eliteSessionToken }),
   },
 };
 

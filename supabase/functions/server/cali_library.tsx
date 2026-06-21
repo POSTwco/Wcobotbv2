@@ -30,7 +30,9 @@
  * edge isolate at boot — keep it lean.
  */
 
-export const LIBRARY_VERSION = "cali-lib-1.2.0";
+import { ELITE_EXERCISES } from "./elite_exercises_data.tsx";
+
+export const LIBRARY_VERSION = "cali-lib-2.0.0";
 
 export type CaliCategory =
   | "push"
@@ -54,7 +56,9 @@ export type CaliPattern =
   | "iso_hold"
   | "locomotion"
   | "plyo"
-  | "stretch";
+  | "stretch"
+  | "dynamic_spin"
+  | "combo_flow";
 
 export type CaliMetric = "reps" | "time_sec";
 export type CaliEquipmentReq = "none" | "bar" | "rings" | "wall";
@@ -64,8 +68,10 @@ export interface Exercise {
   name: string;
   category: CaliCategory;
   pattern: CaliPattern;
-  /** Minimum workout level this exercise can appear in (1-3) */
-  level: 1 | 2 | 3;
+  /** Minimum workout level this exercise can appear in (1-4; 4 = elite vault only) */
+  level: 1 | 2 | 3 | 4;
+  eliteTrack?: "static" | "ascension" | "dynamic" | "flow";
+  description?: string;
   /** Difficulty rating 1-10 — used for in-level selection weighting */
   difficulty: number;
   equipment: CaliEquipmentReq;
@@ -1624,7 +1630,12 @@ export const EXERCISES: ReadonlyArray<Exercise> = Object.freeze([
   ...LEGS,
   ...CONDITIONING,
   ...MOBILITY,
+  ...ELITE_EXERCISES,
 ]);
+
+export function getEliteExercises(): Exercise[] {
+  return EXERCISES.filter((e) => e.level === 4);
+}
 
 // Build an id → exercise lookup once at module load.
 const EXERCISE_BY_ID: ReadonlyMap<string, Exercise> = (() => {
@@ -1644,7 +1655,7 @@ const EXERCISE_BY_ID: ReadonlyMap<string, Exercise> = (() => {
 console.log(
   `[CALI-LIB] Loaded ${EXERCISES.length} exercises (${LIBRARY_VERSION}) — ` +
     `push:${PUSH.length} pull:${PULL.length} core:${CORE.length} ` +
-    `legs:${LEGS.length} cond:${CONDITIONING.length} mob:${MOBILITY.length}`,
+    `legs:${LEGS.length} cond:${CONDITIONING.length} mob:${MOBILITY.length} elite:${ELITE_EXERCISES.length}`,
 );
 
 export function getExercise(id: string): Exercise | undefined {

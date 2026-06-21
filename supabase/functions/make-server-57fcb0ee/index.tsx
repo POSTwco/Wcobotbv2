@@ -163,6 +163,7 @@ import {
   type CompactVote,
 } from "./scaling.tsx";
 import { mountCaliRoutes } from "./cali.tsx";
+import { mountEliteRoutes } from "./elite.tsx";
 
 const app = new Hono();
 
@@ -1896,6 +1897,7 @@ app.post(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
       weightClass: sanitizeString(body.weightClass || existing?.weightClass || "", 60),
       // Verified Hedera wallet for Arena Chat athlete badge
       wallet: (body.wallet && isValidHederaAccountId(body.wallet)) ? body.wallet : (existing?.wallet || ""),
+      eliteAccess: body.eliteAccess === true || (body.eliteAccess !== false && existing?.eliteAccess === true),
       totalVotes: existing?.totalVotes ?? 0,
       tokensStaked: existing?.tokensStaked ?? 0,
       createdAt: existing?.createdAt || now(),
@@ -5966,6 +5968,7 @@ app.post(`${PREFIX}/admin/test/clear-ip-flags`, requireAdminSession, async (c) =
 // Mount cali routes LAST so core functionality (admin auth, etc.) is not affected
 // if cali code has a startup error.
 mountCaliRoutes(app, PREFIX);
+mountEliteRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);

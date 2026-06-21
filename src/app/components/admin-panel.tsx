@@ -441,6 +441,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
     nftCardBorderColor: "#4274B9", nftCardGlowGradient: "from-[#4274B9] via-[#6AA3E0] to-[#4274B9]",
     bracketSeat: 0,
     wallet: "",
+    eliteAccess: false,
     primaryColor: "", secondaryColor: "",
     weightClass: "",
   });
@@ -476,6 +477,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
       nftCardBorderColor: "#4274B9", nftCardGlowGradient: "from-[#4274B9] via-[#6AA3E0] to-[#4274B9]",
       bracketSeat: 0,
       wallet: "",
+      eliteAccess: false,
       primaryColor: "", secondaryColor: "",
       weightClass: "",
     });
@@ -513,6 +515,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
       nftCardGlowGradient: athlete.nftCardGlowGradient || "",
       bracketSeat: athlete.bracketSeat ?? 0,
       wallet: athlete.wallet || "",
+      eliteAccess: athlete.eliteAccess === true,
       primaryColor: athlete.primaryColor || "",
       secondaryColor: athlete.secondaryColor || "",
       weightClass: athlete.weightClass || "",
@@ -562,6 +565,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
         nftCardBorderColor: form.nftCardBorderColor,
         nftCardGlowGradient: form.nftCardGlowGradient,
         wallet: form.wallet,
+        eliteAccess: form.eliteAccess,
         primaryColor: form.primaryColor,
         secondaryColor: form.secondaryColor,
         weightClass: form.weightClass,
@@ -736,6 +740,9 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {ath.eliteAccess && (
+                  <span className="px-2 py-0.5 rounded text-[0.55rem] bg-[#D4A843]/15 text-[#D4A843] border border-[#D4A843]/25">ELITE</span>
+                )}
                 <span className={`px-2 py-0.5 rounded text-[0.55rem] ${
                   ath.status === "active" ? "bg-[#10b981]/10 text-[#10b981]" :
                   ath.status === "champion" ? "bg-[#D4A843]/10 text-[#D4A843]" :

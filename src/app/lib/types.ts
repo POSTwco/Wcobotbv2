@@ -78,6 +78,9 @@ export interface Athlete {
   // Verified Hedera wallet (admin-set, for Arena Chat athlete badge)
   wallet?: string;               // Hedera account ID e.g. "0.0.XXXXXXX"
 
+  /** Admin-granted Elite Tech Vault access (wallet must match at verify) */
+  eliteAccess?: boolean;
+
   // Bracket assignment
   bracketSeat?: number;          // 1-12, default bracket seed position
 
@@ -401,6 +404,7 @@ export interface AthleteFormData {
   secondaryColor?: string;       // Brand color
   weightClass?: string;          // Weight class
   wallet?: string;               // Verified Hedera wallet for chat badge
+  eliteAccess?: boolean;         // Elite Tech Vault whitelist
 }
 
 // ---------------------------------------------------------------------------

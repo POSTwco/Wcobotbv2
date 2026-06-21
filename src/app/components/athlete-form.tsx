@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { WCO_WEIGHT_CLASSES } from "../lib/types";
+import { Checkbox } from "./ui/checkbox";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -68,6 +69,7 @@ export interface AthleteFormState {
   bracketSeat: number;
   // Verified Hedera wallet for Arena Chat badge
   wallet: string;
+  eliteAccess: boolean;
 }
 
 interface AthleteFormProps {
@@ -241,6 +243,16 @@ export function AthleteForm({
                 placeholder="0.0.XXXXXXX"
               />
               <p className="text-[#4274B9]/50 text-[0.5rem] mt-1">If set, this athlete will appear with a verified badge in Arena Chat when messaging from this wallet.</p>
+              <label className="flex items-center gap-2.5 mt-3 cursor-pointer group">
+                <Checkbox
+                  checked={form.eliteAccess}
+                  onCheckedChange={(v) => updateField("eliteAccess", !!v)}
+                  className="border-[#D4A843]/40 data-[state=checked]:bg-[#D4A843] data-[state=checked]:border-[#D4A843]"
+                />
+                <span className="text-[#D4A843]/90 text-[0.6rem] group-hover:text-[#D4A843]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                  Elite Vault Access — grant BoB Tech Vault entry when wallet is set
+                </span>
+              </label>
             </div>
           </FormSection>
 
