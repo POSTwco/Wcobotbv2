@@ -553,7 +553,13 @@ export function CalisthenicsAdminPage({
           <span className="text-[10px] text-[#8494A7] ml-1">Full list + editor only visible when pane is open</span>
         </div>
 
-
+        {adminCredentials && (
+          <CaliFeaturedAthleteEditor
+            sessionToken={adminCredentials.token}
+            wallet={adminCredentials.wallet}
+            disabled={!hasAdminSession}
+          />
+        )}
 
         {/* Wonderful live editor pane — EDIT/NEW unified. The full scroll list of ALL exercises is hidden until this pane is open. */}
         {editBuffer && selectedId ? (
@@ -944,14 +950,6 @@ export function CalisthenicsAdminPage({
         ) : null}
         <div className="text-[10px] text-[#8494A7] mt-1">Click EDIT / NEW EXERCISE to open the scrollable library and editor (with category filter). Every saved change flows directly into user workouts via the live override system.</div>
       </section>
-
-      {adminCredentials && (
-        <CaliFeaturedAthleteEditor
-          sessionToken={adminCredentials.token}
-          wallet={adminCredentials.wallet}
-          disabled={!hasAdminSession}
-        />
-      )}
 
       <div className="text-center text-[10px] text-[#8494A7] mt-8">WCO Calisthenics Routine Operator Console — educational tooltips • live simulate • overrides instantly live for users • 111+ exercises • 250 max</div>
       </div>

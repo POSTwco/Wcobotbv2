@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Save, Upload, Plus, Trash2, Loader2, Star, Video } from "lucide-react";
+import { Save, Upload, Plus, Trash2, Loader2, Star, Video, ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
 import type { EliteFeaturedAthlete } from "../../lib/types";
@@ -115,6 +115,7 @@ export function CaliFeaturedAthleteEditor({
   const [saving, setSaving] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const adminApi: any = (api as any)?.admin || api;
 
@@ -192,21 +193,53 @@ export function CaliFeaturedAthleteEditor({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-8">
-        <Loader2 className="w-6 h-6 text-[#D4A843] animate-spin" />
-      </div>
-    );
-  }
+  const liveLabel = form.enabled && form.athleteName.trim()
+    ? form.athleteName.trim()
+    : null;
 
   return (
-    <section className="mb-8 mt-10 pt-8 border-t border-[#D4A843]/20">
-      <div className="flex items-center gap-2 mb-1">
-        <Star className="w-4 h-4 text-[#D4A843]" />
-        <div style={ORBIT} className="uppercase text-xs tracking-widest text-[#D4A843]">
-          Elite Zone — Featured Athlete Spotlight
+    <div className="mb-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setIsOpen((v) => !v)}
+          disabled={loading}
+          className="px-3 py-1 bg-[#D4A843] text-[#0B1120] text-xs rounded flex items-center gap-1 font-medium hover:brightness-110 disabled:opacity-60"
+        >
+          {loading ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Star className="w-3 h-3" />
+          )}
+          FEATURED ATHLETE SPOTLIGHT
+          <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+        {liveLabel && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            Live: {liveLabel}
+          </span>
+        )}
+        {!isOpen && (
+          <span className="text-[10px] text-[#8494A7]">Elite zone weekly/monthly highlight — click to edit</span>
+        )}
+      </div>
+
+      {isOpen && (
+      <section className="mt-3 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          <Star className="w-4 h-4 text-[#D4A843]" />
+          <div style={ORBIT} className="uppercase text-xs tracking-widest text-[#D4A843]">
+            Elite Zone — Featured Athlete Spotlight
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="text-xs px-2 py-1 border border-white/20 rounded hover:bg-white/5 flex items-center gap-1"
+        >
+          <X className="w-3 h-3" /> Close
+        </button>
       </div>
       <p className="text-xs text-[#8494A7] mb-4" style={DMS}>
         Set the weekly or monthly athlete highlight shown below the sponsored-athlete CTA in Pro Calisthenics.
@@ -399,5 +432,7 @@ export function CaliFeaturedAthleteEditor({
         </button>
       </div>
     </section>
+      )}
+    </div>
   );
 }
