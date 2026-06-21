@@ -19,7 +19,7 @@ import { CaliCoachToast } from "./cali-coach-toast";
 import { CaliWorkoutCelebration } from "./cali-workout-celebration";
 import { CaliMotionRail } from "./cali-motion-rail";
 import { CaliWorkoutSponsorBanner } from "./cali-workout-sponsor-banner";
-import { getCoachMessage } from "../../lib/cali-coach-messages";
+import { getCoachMessage, getIncompleteSetsPrompt } from "../../lib/cali-coach-messages";
 import { getAvatarGender, setAvatarGender, type AvatarGender } from "../../lib/cali-avatar-prefs";
 import {
   xpForSet, xpForBlock, xpForPr, xpForWorkoutComplete,
@@ -110,7 +110,7 @@ export function CaliWorkout() {
   const [actuals, setActuals] = useState<Record<string, { value: string; rpe: string; note: string }>>({});
   const [loggedSets, setLoggedSets] = useState<Set<string>>(new Set());
   const [completedBlocks, setCompletedBlocks] = useState<Set<number>>(new Set());
-  const [savingSet, setSavingSet] = useState<string | null>(null);
+  const [savingExercise, setSavingExercise] = useState<string | null>(null);
   const lastSavedRef = useRef<Record<string, string>>({});
   const [completing, setCompleting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -178,56 +178,123 @@ export function CaliWorkout() {
     }
   }, [plan, completedBlocks]);
 
-  const logSet = useCallback(
-    async (key: string, b: number, i: number, s: number) => {
-      if (!cali.sessionToken || !plan) return;
-      const a = actuals[key];
-      if (!a) return;
-      const valueNum = Number(a.value);
-      if (!Number.isFinite(valueNum) || valueNum <= 0) return;
+  const applyLoggedSetsResponse = useCallback(
+    (b: number, keys: string[], res: { prChanges?: Array<{ previous?: number; current: number }> }) => {
+      const newLogged = new Set(loggedSets);
+      let newSetCount = 0;
+      for (const key of keys) {
+        if (!loggedSets.has(key)) newSetCount++;
+        newLogged.add(key);
+      }
+      setLoggedSets(newLogged);
 
-      const signature = `${a.value}|${a.rpe}|${a.note}`;
-      if (lastSavedRef.current[key] === signature && loggedSets.has(key)) return;
+      if (newSetCount > 0) {
+        setXp((x) => x + xpForSet() * newSetCount);
+        setCoachMessage(getCoachMessage("setLogged"));
+      }
 
-      setSavingSet(key);
-      const setBody: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: valueNum };
-      const rpeNum = Number(a.rpe);
-      if (a.rpe && Number.isFinite(rpeNum) && rpeNum >= 1 && rpeNum <= 10) setBody.rpe = rpeNum;
-      if (a.note?.trim()) setBody.note = a.note.trim();
+      for (const change of res.prChanges ?? []) {
+        setXp((x) => x + xpForPr());
+        setCoachMessage(getCoachMessage("prHit"));
+        toast.success(
+          change.previous
+            ? `New PR! ${change.current} (was ${change.previous})`
+            : `First record: ${change.current}`,
+          { icon: <Trophy className="w-4 h-4" /> },
+        );
+      }
 
-      const res = await api.cali.logSets(cali.sessionToken, plan.workoutId, [setBody]);
-      setSavingSet(null);
+      checkBlockComplete(b, newLogged);
+    },
+    [loggedSets, checkBlockComplete],
+  );
+
+  const executeLogAllSets = useCallback(
+    async (b: number, i: number, toLog: LoggedSet[], keys: string[]) => {
+      if (!cali.sessionToken || !plan || toLog.length === 0) return;
+
+      const exerciseKey = `${b}|${i}`;
+      setSavingExercise(exerciseKey);
+
+      const res = await api.cali.logSets(cali.sessionToken, plan.workoutId, toLog);
+      setSavingExercise(null);
 
       if (res.success && res.data) {
-        lastSavedRef.current[key] = signature;
-        const wasNew = !loggedSets.has(key);
-        const newLogged = new Set(loggedSets);
-        newLogged.add(key);
-        setLoggedSets(newLogged);
-
-        if (wasNew) {
-          setXp((x) => x + xpForSet());
-          setCoachMessage(getCoachMessage("setLogged"));
+        for (const key of keys) {
+          const a = actuals[key];
+          if (a) lastSavedRef.current[key] = `${a.value}|${a.rpe}|${a.note}`;
         }
-
-        for (const change of res.data.prChanges ?? []) {
-          setXp((x) => x + xpForPr());
-          setCoachMessage(getCoachMessage("prHit"));
-          toast.success(
-            change.previous
-              ? `New PR! ${change.current} (was ${change.previous})`
-              : `First record: ${change.current}`,
-            { icon: <Trophy className="w-4 h-4" /> },
-          );
+        applyLoggedSetsResponse(b, keys, res.data);
+        if (toLog.length > 1) {
+          toast.success(`${toLog.length} sets logged — keep stacking!`);
         }
-
-        checkBlockComplete(b, newLogged);
       } else {
         cali.handleAuthError(res.code);
-        toast.error(res.error || "Couldn't save set.");
+        toast.error(res.error || "Couldn't save sets.");
       }
     },
-    [actuals, plan, cali, loggedSets, checkBlockComplete],
+    [actuals, plan, cali, applyLoggedSetsResponse],
+  );
+
+  const logAllSetsForExercise = useCallback(
+    (b: number, i: number) => {
+      if (!plan) return;
+      const item = plan.blocks[b]?.items[i];
+      if (!item) return;
+
+      const totalSets = item.sets;
+      const toLog: LoggedSet[] = [];
+      const keys: string[] = [];
+
+      for (let s = 0; s < totalSets; s++) {
+        const key = `${b}|${i}|${s}`;
+        if (loggedSets.has(key)) continue;
+        const a = actuals[key];
+        if (!a) continue;
+        const valueNum = Number(a.value);
+        if (!Number.isFinite(valueNum) || valueNum <= 0) continue;
+
+        const signature = `${a.value}|${a.rpe}|${a.note}`;
+        if (lastSavedRef.current[key] === signature && loggedSets.has(key)) continue;
+
+        const setBody: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: valueNum };
+        const rpeNum = Number(a.rpe);
+        if (a.rpe && Number.isFinite(rpeNum) && rpeNum >= 1 && rpeNum <= 10) setBody.rpe = rpeNum;
+        if (a.note?.trim()) setBody.note = a.note.trim();
+        toLog.push(setBody);
+        keys.push(key);
+      }
+
+      if (toLog.length === 0) {
+        toast.error("Enter at least one set before logging.");
+        return;
+      }
+
+      let loggedAfter = 0;
+      for (let s = 0; s < totalSets; s++) {
+        const key = `${b}|${i}|${s}`;
+        if (loggedSets.has(key) || keys.includes(key)) loggedAfter++;
+      }
+
+      const remaining = totalSets - loggedAfter;
+      if (remaining > 0) {
+        toast(getIncompleteSetsPrompt(remaining), {
+          duration: 14000,
+          action: {
+            label: "Yes — log & continue",
+            onClick: () => executeLogAllSets(b, i, toLog, keys),
+          },
+          cancel: {
+            label: "Finish my sets",
+            onClick: () => {},
+          },
+        });
+        return;
+      }
+
+      void executeLogAllSets(b, i, toLog, keys);
+    },
+    [plan, actuals, loggedSets, executeLogAllSets],
   );
 
   const onComplete = async () => {
@@ -423,7 +490,7 @@ export function CaliWorkout() {
                 itemIndex={i}
                 actuals={actuals}
                 loggedSets={loggedSets}
-                savingSet={savingSet}
+                savingExercise={savingExercise === `${activeBlock}|${i}`}
                 isFocused={focusedItemIndex === i}
                 gender={avatarGender}
                 onFocus={() => setFocusedItemIndex(i)}
@@ -433,7 +500,7 @@ export function CaliWorkout() {
                     [key]: { value: "", rpe: "", note: "", ...prev[key], ...patch },
                   }))
                 }
-                onLogSet={logSet}
+                onLogAllSets={logAllSetsForExercise}
                 onSwap={() => onSwapExercise(activeBlock, i)}
                 swapping={swappingSlot === `${activeBlock}|${i}`}
                 swapsSlotRemaining={slotLimits.slotRemaining}

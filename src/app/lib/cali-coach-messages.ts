@@ -43,7 +43,16 @@ const LEVEL_CRUSH: Record<number, string[]> = {
   3: ["Level 3. ELITE territory. You're training like the athlete you were born to be."],
 };
 
+const INCOMPLETE_SETS_PROMPT = [
+  "You're {remaining} set(s) from a full win. The version of you that finishes doesn't leave reps on the table — sure you want to move on?",
+  "Almost there. Champions close the gap. {remaining} set(s) still open — log what you've got, or go back and own every rep.",
+  "Your future self is watching. {remaining} set(s) left on the board. Is this the story you want to tell today?",
+  "Momentum loves completion. You've got {remaining} set(s) waiting — finish strong, or confirm you're logging partial progress.",
+  "Standards rise in the moments you choose not to quit. {remaining} set(s) remain — are you sure you're done?",
+];
+
 let lastIndex: Partial<Record<CoachTrigger, number>> = {};
+let lastIncompleteIdx = -1;
 
 function pick(pool: string[], trigger: CoachTrigger): string {
   let idx = Math.floor(Math.random() * pool.length);
@@ -52,6 +61,16 @@ function pick(pool: string[], trigger: CoachTrigger): string {
   }
   lastIndex[trigger] = idx;
   return pool[idx];
+}
+
+/** Tony Robbins-style nudge when logging before all sets are done. */
+export function getIncompleteSetsPrompt(remaining: number): string {
+  let idx = Math.floor(Math.random() * INCOMPLETE_SETS_PROMPT.length);
+  if (idx === lastIncompleteIdx && INCOMPLETE_SETS_PROMPT.length > 1) {
+    idx = (idx + 1) % INCOMPLETE_SETS_PROMPT.length;
+  }
+  lastIncompleteIdx = idx;
+  return INCOMPLETE_SETS_PROMPT[idx].replace("{remaining}", String(remaining));
 }
 
 export function getCoachMessage(trigger: CoachTrigger, level?: number): string {

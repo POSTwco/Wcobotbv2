@@ -5,7 +5,7 @@
 import { motion } from "motion/react";
 import {
   ChevronDown, CheckCircle2, AlertTriangle, Wind, Zap, TrendingUp, TrendingDown, Minus,
-  ArrowLeftRight, Loader2,
+  ArrowLeftRight, Loader2, Check,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import type { AvatarGender } from "../../lib/cali-avatar-prefs";
@@ -37,12 +37,12 @@ interface Props {
   itemIndex: number;
   actuals: Record<string, SetState>;
   loggedSets: Set<string>;
-  savingSet: string | null;
+  savingExercise: boolean;
   isFocused?: boolean;
   gender: AvatarGender;
   onFocus?: () => void;
   onChangeActual: (key: string, patch: Partial<SetState>) => void;
-  onLogSet: (key: string, b: number, i: number, s: number) => void;
+  onLogAllSets: (b: number, i: number) => void;
   onSwap?: () => void;
   swapping?: boolean;
   swapsSlotRemaining?: number;
@@ -50,10 +50,20 @@ interface Props {
 }
 
 export function CaliExerciseCard({
-  item, blockIndex, itemIndex, actuals, loggedSets, savingSet,
-  isFocused, gender, onFocus, onChangeActual, onLogSet,
+  item, blockIndex, itemIndex, actuals, loggedSets, savingExercise,
+  isFocused, gender, onFocus, onChangeActual, onLogAllSets,
   onSwap, swapping, swapsSlotRemaining = 0, swapsWorkoutRemaining = 0,
 }: Props) {
+  const pendingCount = Array.from({ length: item.sets }).filter((_, s) => {
+    const key = `${blockIndex}|${itemIndex}|${s}`;
+    if (loggedSets.has(key)) return false;
+    const v = Number(actuals[key]?.value);
+    return Number.isFinite(v) && v > 0;
+  }).length;
+
+  const allLogged = Array.from({ length: item.sets }).every((_, s) =>
+    loggedSets.has(`${blockIndex}|${itemIndex}|${s}`),
+  );
   const canSwap = !!onSwap && swapsSlotRemaining > 0 && swapsWorkoutRemaining > 0;
   const guide = getExerciseGuide(item);
   const accent = CATEGORY_COLORS[item.category] ?? "#4274B9";
@@ -138,7 +148,7 @@ export function CaliExerciseCard({
           </div>
           <CaliHintWrap
             title="Target Prescription"
-            hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Log your actual numbers below after each set.`}
+            hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Enter your numbers below, then tap Log all sets.`}
           >
             <span
               className="flex-1 min-w-0 text-xs sm:text-sm font-bold px-3 py-2 rounded-xl border border-[#D4A843]/35 bg-[#D4A843]/10 text-[#D4A843] truncate block"
@@ -155,7 +165,7 @@ export function CaliExerciseCard({
         <div className="hidden lg:flex items-center justify-end">
           <CaliHintWrap
             title="Target Prescription"
-            hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Log your actual numbers below after each set.`}
+            hint={`Complete ${item.sets} set${item.sets === 1 ? "" : "s"} of ${item.target.low}–${item.target.high}${item.target.metric === "reps" ? " reps" : " seconds"}${item.unilateral ? " per side" : ""}. Enter your numbers below, then tap Log all sets.`}
           >
             <span
               className="text-sm font-bold px-3 py-2 rounded-xl border border-[#D4A843]/35 bg-[#D4A843]/10 text-[#D4A843]"
@@ -265,12 +275,36 @@ export function CaliExerciseCard({
               targetHigh={item.target.high}
               state={a}
               logged={loggedSets.has(key)}
-              saving={savingSet === key}
               onChange={(patch) => onChangeActual(key, patch)}
-              onLog={() => onLogSet(key, blockIndex, itemIndex, s)}
             />
           );
         })}
+
+        {!allLogged && (
+          <button
+            type="button"
+            onClick={() => onLogAllSets(blockIndex, itemIndex)}
+            disabled={savingExercise || pendingCount === 0}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98] disabled:hover:scale-100 transition-all duration-200"
+            style={{
+              ...dmSans,
+              background: "linear-gradient(135deg, #D4A843, #B8860B)",
+              color: "#0B1120",
+              boxShadow: "0 2px 14px rgba(212,168,67,0.35)",
+            }}
+          >
+            {savingExercise ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Check className="w-4 h-4" />
+            )}
+            {pendingCount === 0
+              ? "Log all sets"
+              : pendingCount === 1
+                ? "Log all sets (1 ready)"
+                : `Log all sets (${pendingCount} ready)`}
+          </button>
+        )}
       </div>
     </motion.div>
   );

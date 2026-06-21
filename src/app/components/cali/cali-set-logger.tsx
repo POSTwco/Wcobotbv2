@@ -1,10 +1,9 @@
 /**
- * One-tap set logger with micro-interactions.
+ * Set input row — values only; parent handles bundled "Log all sets".
  */
 
-import { useState } from "react";
 import { motion } from "motion/react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { CaliHintWrap } from "./cali-hint-wrap";
 
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -25,25 +24,14 @@ interface Props {
   targetHigh: number;
   state: SetState;
   logged: boolean;
-  saving: boolean;
   onChange: (patch: Partial<SetState>) => void;
-  onLog: () => void;
 }
 
 export function CaliSetLogger({
-  setIndex, metric, targetLow, targetHigh, state, logged, saving, onChange, onLog,
+  setIndex, metric, targetLow, targetHigh, state, logged, onChange,
 }: Props) {
-  const [pulse, setPulse] = useState(false);
   const placeholder = metric === "reps" ? `${targetLow}–${targetHigh}` : `${targetLow}–${targetHigh}s`;
   const unitLabel = metric === "reps" ? "reps" : "seconds";
-
-  const handleLog = () => {
-    const v = Number(state.value);
-    if (!Number.isFinite(v) || v <= 0) return;
-    setPulse(true);
-    setTimeout(() => setPulse(false), 400);
-    onLog();
-  };
 
   if (logged) {
     return (
@@ -103,22 +91,6 @@ export function CaliSetLogger({
           aria-label={`Set ${setIndex + 1} RPE`}
         />
       </div>
-
-      <motion.button
-        onClick={handleLog}
-        disabled={saving || !state.value || Number(state.value) <= 0}
-        animate={pulse ? { scale: [1, 1.06, 1] } : {}}
-        className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.03] active:scale-[0.98] disabled:hover:scale-100 transition-all duration-200"
-        style={{
-          ...dmSans,
-          background: "linear-gradient(135deg, #D4A843, #B8860B)",
-          color: "#0B1120",
-          boxShadow: "0 2px 14px rgba(212,168,67,0.35)",
-        }}
-      >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-        Log Set
-      </motion.button>
     </div>
   );
 }
