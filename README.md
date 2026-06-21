@@ -11,9 +11,16 @@
 </p>
 
 <p align="center">
-  <a href="https://wco-beta.vercel.app"><img src="https://img.shields.io/badge/🌐_Live-wco--beta.vercel.app-D4A843?style=for-the-badge&labelColor=0B1120" alt="Live Site" /></a>
+  <a href="https://www.wcorg.io"><img src="https://img.shields.io/badge/🌐_Live-www.wcorg.io-D4A843?style=for-the-badge&labelColor=0B1120" alt="Live Site" /></a>
   <a href="https://github.com/POSTwco/Wcobotbv2"><img src="https://img.shields.io/badge/GitHub-POSTwco%2FWcobotbv2-6AA3E0?style=for-the-badge&logo=github&labelColor=0B1120" alt="GitHub Repo" /></a>
   <a href="https://worldcalisthenics.org"><img src="https://img.shields.io/badge/WCO-worldcalisthenics.org-4274B9?style=for-the-badge&labelColor=0B1120" alt="WCO Website" /></a>
+</p>
+
+<p align="center">
+  <a href="https://x.com/WCO_ORG"><img src="https://img.shields.io/badge/X-@WCO__ORG-000000?style=for-the-badge&logo=x&logoColor=white&labelColor=0B1120" alt="X" /></a>
+  <a href="https://discord.com/invite/Zt52bf8Ve"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white&labelColor=0B1120" alt="Discord" /></a>
+  <a href="https://www.youtube.com/@WorldCalisthenicsOrg"><img src="https://img.shields.io/badge/YouTube-WCO-FF0000?style=for-the-badge&logo=youtube&logoColor=white&labelColor=0B1120" alt="YouTube" /></a>
+  <a href="https://www.instagram.com/world_calisthenics_org/"><img src="https://img.shields.io/badge/Instagram-WCO-E4405F?style=for-the-badge&logo=instagram&logoColor=white&labelColor=0B1120" alt="Instagram" /></a>
 </p>
 
 <p align="center">

@@ -68,7 +68,7 @@ export function HomePage() {
         <div className="absolute inset-0">
           <img
             src={ATHLETE_BG}
-            alt=""
+            alt="Calisthenics athlete training background"
             className="w-full h-full object-cover opacity-[0.12]"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0B1120] via-[#0B1120]/60 to-[#0B1120]" />

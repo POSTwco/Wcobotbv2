@@ -140,7 +140,7 @@ export const WC_APP_METADATA = {
   name: "Battle of the Bars",
   description:
     "The world's first decentralized calisthenics competition platform by the World Calisthenics Organization. Vote on IRL battles, stake tokens, earn rewards.",
-  url: typeof window !== "undefined" ? window.location.origin : "https://battleofthebars.io",
+  url: typeof window !== "undefined" ? window.location.origin : "https://www.wcorg.io",
   icons: [
     "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCO%20white%20on%20trans.png",
   ],

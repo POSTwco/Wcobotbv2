@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "node scripts/generate-favicons.mjs && node scripts/generate-og-images.mjs && vite build && node scripts/generate-seo-html.mjs && node scripts/generate-sitemap.mjs",
+    "seo:assets": "node scripts/generate-favicons.mjs && node scripts/generate-og-images.mjs",
     "dev": "vite",
     "deploy:edge": "supabase functions deploy make-server-57fcb0ee"
   },
@@ -62,6 +63,7 @@
     "react-dnd": "16.0.1",
     "react-dnd-html5-backend": "16.0.1",
     "react-dom": "18.3.1",
+    "react-helmet-async": "^2.0.5",
     "react-hook-form": "7.55.0",
     "react-popper": "2.3.0",
     "react-resizable-panels": "2.1.7",
@@ -78,6 +80,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
+    "jimp": "^1.6.0",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5"
   },

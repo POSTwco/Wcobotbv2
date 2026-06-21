@@ -1,0 +1,129 @@
+{
+  "site": {
+    "name": "Battle of the Bars",
+    "org": "World Calisthenics Organization",
+    "tagline": "No loss. Only Gains.",
+    "description": "The world's first decentralized calisthenics competition platform by the World Calisthenics Organization. Vote on IRL battles, stake WCO tokens, earn rewards, and train with the Cali Engine.",
+    "url": "https://www.wcorg.io",
+    "orgUrl": "https://worldcalisthenics.org",
+    "locale": "en_US",
+    "twitter": "@WCO_ORG",
+    "themeColor": "#0B1120",
+    "keywords": "calisthenics, battle of the bars, WCO, World Calisthenics Organization, Hedera, Web3, token voting, bodyweight training, BOTB",
+    "logo": "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCO%20white%20on%20trans.png",
+    "shield": "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/BOTB%20SHIELD%20LOGORegisteredsmall.png"
+  },
+  "socialLinks": [
+    { "id": "discord", "label": "Discord", "href": "https://discord.com/invite/Zt52bf8Ve" },
+    { "id": "x", "label": "X (Twitter)", "href": "https://x.com/WCO_ORG" },
+    { "id": "instagram", "label": "Instagram", "href": "https://www.instagram.com/world_calisthenics_org/" },
+    { "id": "youtube", "label": "YouTube", "href": "https://www.youtube.com/@WorldCalisthenicsOrg" },
+    { "id": "website", "label": "WCO Website", "href": "https://worldcalisthenics.org" }
+  ],
+  "pages": {
+    "/": {
+      "title": "Battle of the Bars | WCO — Only Gains",
+      "description": "Vote on live calisthenics battles, stake WCO tokens, earn rewards, and train with the Cali Engine. The official Web3 platform of the World Calisthenics Organization.",
+      "ogImage": "/og/home.png",
+      "headline": "Battle of the Bars",
+      "index": true,
+      "priority": 1.0
+    },
+    "/battles": {
+      "title": "Live Battles | Battle of the Bars",
+      "description": "Watch IRL calisthenics battles and vote with WCO tokens. Token-weighted voting on Battle of the Bars events — no loss, only gains.",
+      "ogImage": "/og/battles.png",
+      "headline": "Live Battles",
+      "index": true,
+      "priority": 0.9
+    },
+    "/athletes": {
+      "title": "Athletes | WCO Platform",
+      "description": "Meet the elite calisthenics athletes competing in Battle of the Bars. Rate athletes, follow their journeys, and support the WCO roster.",
+      "ogImage": "/og/athletes.png",
+      "headline": "Elite Athletes",
+      "index": true,
+      "priority": 0.85
+    },
+    "/nfts": {
+      "title": "NFT Collection | WCO",
+      "description": "Explore WCO Governor NFTs, Athlete NFTs, and Sigma collection on Hedera. Digital ownership meets real-world calisthenics competition.",
+      "ogImage": "/og/nfts.png",
+      "headline": "NFT Collection",
+      "index": true,
+      "priority": 0.8
+    },
+    "/governance": {
+      "title": "Governors Hub | WCO",
+      "description": "Govern the Battle of the Bars ecosystem with WCO Governor NFTs. Proposals, voting power, and protocol governance on Hedera.",
+      "ogImage": "/og/governance.png",
+      "headline": "Governors Hub",
+      "index": true,
+      "priority": 0.8
+    },
+    "/leaderboard": {
+      "title": "Leaderboard | Battle of the Bars",
+      "description": "Top voters, stakers, and competitors on the WCO platform. Climb the Battle of the Bars leaderboard.",
+      "ogImage": "/og/leaderboard.png",
+      "headline": "Leaderboard",
+      "index": true,
+      "priority": 0.75
+    },
+    "/apply": {
+      "title": "Apply as Athlete | WCO",
+      "description": "Apply to compete in Battle of the Bars. Join the World Calisthenics Organization athlete roster and compete on the global stage.",
+      "ogImage": "/og/apply.png",
+      "headline": "Apply as Athlete",
+      "index": true,
+      "priority": 0.7
+    },
+    "/calisthenics": {
+      "title": "Calisthenics Routines | WCO Cali Engine",
+      "description": "Generate daily bodyweight workouts with the WCO Cali Engine. Beginner to expert routines, PR tracking, and motion-guided coaching.",
+      "ogImage": "/og/calisthenics.png",
+      "headline": "Cali Engine",
+      "index": true,
+      "priority": 0.85
+    },
+    "/calisthenics/history": {
+      "title": "Workout History | WCO Cali",
+      "description": "Review your calisthenics workout history, streaks, and progress on the WCO Cali Engine.",
+      "ogImage": "/og/calisthenics.png",
+      "headline": "Workout History",
+      "index": true,
+      "priority": 0.6
+    },
+    "/calisthenics/prs": {
+      "title": "Personal Records | WCO Cali",
+      "description": "Track and celebrate your calisthenics personal records with the WCO Cali Engine.",
+      "ogImage": "/og/calisthenics.png",
+      "headline": "Personal Records",
+      "index": true,
+      "priority": 0.6
+    },
+    "/privacy": {
+      "title": "Privacy Policy | WCO Platform",
+      "description": "Privacy policy for the Battle of the Bars platform by the World Calisthenics Organization.",
+      "ogImage": "/og/default.png",
+      "headline": "Privacy Policy",
+      "index": true,
+      "priority": 0.3
+    },
+    "/terms": {
+      "title": "Terms of Service | WCO Platform",
+      "description": "Terms of service for the Battle of the Bars platform by the World Calisthenics Organization.",
+      "ogImage": "/og/default.png",
+      "headline": "Terms of Service",
+      "index": true,
+      "priority": 0.3
+    },
+    "/whitepaper": {
+      "title": "Whitepaper | Battle of the Bars",
+      "description": "Technical whitepaper for Battle of the Bars — token-weighted voting, Hedera HTS, calisthenics engine, and WCO ecosystem architecture.",
+      "ogImage": "/og/default.png",
+      "headline": "Whitepaper",
+      "index": true,
+      "priority": 0.65
+    }
+  }
+}

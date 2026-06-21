@@ -14,6 +14,8 @@ import { X } from "lucide-react";
 import { Toaster } from "sonner";
 import { MobileBottomNav } from "./mobile-bottom-nav";
 import { PageTransition, ScrollProgress } from "./ui-enhancements";
+import { SeoHead } from "./seo-head";
+import { SocialLinks } from "./social-links";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -39,6 +41,7 @@ export function Layout() {
     <div className="min-h-screen bg-[#0B1120] text-[#E8ECF0] relative overflow-x-hidden" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       {/* Beta Disclaimer Modal */}
       <BetaDisclaimer />
+      <SeoHead />
       <ScrollToTop />
 
       {/* VIP Global Effects Layer */}
@@ -114,6 +117,7 @@ export function Layout() {
                   <Link to="/athletes" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Athletes</Link>
                   <Link to="/nfts" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>NFT Collection</Link>
                   <Link to="/governance" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Governors Hub</Link>
+                  <Link to="/calisthenics" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Calisthenics</Link>
                   <button onClick={() => setShowSponsorModal(true)} className={`block cursor-pointer transition-colors text-left ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Become a Sponsor</button>
                 </div>
               </div>
@@ -128,14 +132,7 @@ export function Layout() {
               </div>
               <div>
                 <h4 className={`font-bold mb-3 ${vipActive ? "vip-gold-text" : "text-[#E8ECF0]"}`} style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.75rem", letterSpacing: "0.1em" }}>COMMUNITY</h4>
-                <div className="space-y-2 text-sm text-[#8494A7]">
-                  <a href="https://discord.com/invite/Zt52bf8Ve" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Discord</a>
-                  <a href="https://x.com/WCO_ORG" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Twitter / X</a>
-                  <a href="https://www.instagram.com/world_calisthenics_org/" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Instagram</a>
-                  <a href="https://www.youtube.com/@WorldCalisthenicsOrg" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>YouTube</a>
-                  <a href="https://t.me" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Telegram</a>
-                  <a href="https://worldcalisthenics.org" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>WCO Website</a>
-                </div>
+                <SocialLinks />
               </div>
             </div>
             <div className={`mt-6 sm:mt-8 pt-6 sm:pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-4 ${vipActive ? "border-[#D4A843]/10" : "border-[#4274B9]/10"}`}>
