@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/toolti
 import { EXERCISES as SERVER_BASE_EXERCISES } from "../../../supabase/functions/make-server-57fcb0ee/cali_library";
 import confetti from "canvas-confetti";
 import { ExerciseYouTubeLink } from "../components/cali/exercise-youtube-link";
+import { CaliFeaturedAthleteEditor } from "../components/cali/cali-featured-athlete-editor";
 
 const ORBIT = { fontFamily: "Orbitron, sans-serif" } as const;
 const DMS = { fontFamily: "'DM Sans', sans-serif" } as const;
@@ -943,6 +944,14 @@ export function CalisthenicsAdminPage({
         ) : null}
         <div className="text-[10px] text-[#8494A7] mt-1">Click EDIT / NEW EXERCISE to open the scrollable library and editor (with category filter). Every saved change flows directly into user workouts via the live override system.</div>
       </section>
+
+      {adminCredentials && (
+        <CaliFeaturedAthleteEditor
+          sessionToken={adminCredentials.token}
+          wallet={adminCredentials.wallet}
+          disabled={!hasAdminSession}
+        />
+      )}
 
       <div className="text-center text-[10px] text-[#8494A7] mt-8">WCO Calisthenics Routine Operator Console — educational tooltips • live simulate • overrides instantly live for users • 111+ exercises • 250 max</div>
       </div>

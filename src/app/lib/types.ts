@@ -407,6 +407,25 @@ export interface AthleteFormData {
   eliteAccess?: boolean;         // Elite Tech Vault whitelist
 }
 
+/** Weekly/monthly spotlight in the Elite Tech Vault — edited via Cali admin console */
+export interface EliteFeaturedAthlete {
+  enabled: boolean;
+  periodType: "weekly" | "monthly";
+  periodLabel: string;
+  athleteName: string;
+  tagline: string;
+  country: string;
+  description: string;
+  powerMoves: string[];
+  accolades: string[];
+  highlightVideoUrl: string;
+  photoUrl: string;
+  socials: AthleteSocials;
+  athleteId?: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Arena Chat
 // ---------------------------------------------------------------------------

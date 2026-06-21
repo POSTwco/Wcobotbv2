@@ -1507,6 +1507,40 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       return c.json({ success: true });
     } catch { return c.json({ success: false }, 500); }
   });
+
+  const FEATURED_KV_KEY = "elite:featured-athlete";
+  app.get(`${PREFIX}/admin/cali/featured-athlete`, requireAdminSession, async (c) => {
+    try {
+      const featured = (await kv.get(FEATURED_KV_KEY)) || null;
+      return c.json({ success: true, data: { featured } });
+    } catch {
+      return c.json({ success: false, error: "Failed to load featured athlete" }, 500);
+    }
+  });
+  app.post(`${PREFIX}/admin/cali/featured-athlete`, requireAdminSession, async (c) => {
+    const adminWallet = (c.get("adminWallet") as string) ?? "admin";
+    let body: any = {};
+    try { body = await c.req.json(); } catch {}
+    const featured = {
+      enabled: body?.enabled === true,
+      periodType: body?.periodType === "weekly" ? "weekly" : "monthly",
+      periodLabel: sanitizeString(body?.periodLabel || "", 120),
+      athleteName: sanitizeString(body?.athleteName || "", 80),
+      tagline: sanitizeString(body?.tagline || "", 160),
+      country: sanitizeString(body?.country || "", 60),
+      description: sanitizeString(body?.description || "", 2000),
+      powerMoves: Array.isArray(body?.powerMoves) ? body.powerMoves.slice(0, 12) : [],
+      accolades: Array.isArray(body?.accolades) ? body.accolades.slice(0, 12) : [],
+      highlightVideoUrl: sanitizeString(body?.highlightVideoUrl || "", 2048),
+      photoUrl: sanitizeString(body?.photoUrl || "", 2048),
+      socials: body?.socials || {},
+      athleteId: sanitizeString(body?.athleteId || "", 64),
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminWallet,
+    };
+    await kv.set(FEATURED_KV_KEY, featured);
+    return c.json({ success: true, data: { featured } });
+  });
 }
 
 // ---------------------------------------------------------------------------

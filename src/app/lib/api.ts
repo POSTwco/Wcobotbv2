@@ -754,6 +754,14 @@ export const api = {
     request<{ id: string; total: number }>(
       "/admin/cali/exercise", { method: "POST", body: payload, adminWallet, sessionToken }),
 
+  getCaliFeaturedAthlete: (adminWallet: string, sessionToken: string) =>
+    request<{ featured: import("./types").EliteFeaturedAthlete | null }>(
+      "/admin/cali/featured-athlete", { adminWallet, sessionToken }),
+
+  saveCaliFeaturedAthlete: (adminWallet: string, sessionToken: string, featured: import("./types").EliteFeaturedAthlete) =>
+    request<{ featured: import("./types").EliteFeaturedAthlete }>(
+      "/admin/cali/featured-athlete", { method: "POST", body: featured, adminWallet, sessionToken }),
+
   // ---------------------------------------------------------------------------
   // Calisthenics (HBAR-gated workout tab)
   // ---------------------------------------------------------------------------
@@ -914,6 +922,9 @@ export const api = {
 
     history: (eliteSessionToken: string) =>
       request<{ items: any[]; total: number }>("/elite/history", { eliteSessionToken }),
+
+    getFeaturedAthlete: () =>
+      request<{ featured: import("./types").EliteFeaturedAthlete | null }>("/elite/featured-athlete"),
   },
 };
 
@@ -925,7 +936,7 @@ try {
     const a: any = api.admin;
     const root = api;
     const tt = a.testTools || {};
-    const caliMethodNames = ['getCaliStats', 'getCaliLibrary', 'saveCaliOverride', 'getCaliPhotos', 'saveCaliPhotos', 'saveCaliCustomRoutine', 'getCaliCustomRoutines', 'addCaliExercise'];
+    const caliMethodNames = ['getCaliStats', 'getCaliLibrary', 'saveCaliOverride', 'getCaliPhotos', 'saveCaliPhotos', 'saveCaliCustomRoutine', 'getCaliCustomRoutines', 'addCaliExercise', 'getCaliFeaturedAthlete', 'saveCaliFeaturedAthlete'];
     caliMethodNames.forEach(name => {
       if (!a[name]) {
         if (root[name]) {

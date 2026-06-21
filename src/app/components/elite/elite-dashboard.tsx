@@ -4,6 +4,7 @@ import { Crown, Loader2, ChevronRight, Wrench, Sparkles, ArrowLeft } from "lucid
 import { api } from "../../lib/api";
 import { useEliteSession } from "./elite-context";
 import { EliteSponsoredAthleteCta } from "./elite-sponsored-athlete-cta";
+import { EliteFeaturedAthleteSpotlight } from "./elite-featured-athlete";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -143,6 +144,8 @@ export function EliteDashboard() {
       </Link>
 
       <EliteSponsoredAthleteCta />
+
+      <EliteFeaturedAthleteSpotlight />
     </div>
   );
 }

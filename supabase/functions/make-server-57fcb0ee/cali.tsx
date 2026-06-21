@@ -1907,6 +1907,76 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       return c.json({ success: true, data: { routines: [] } });
     }
   });
+
+  const FEATURED_KV_KEY = "elite:featured-athlete";
+
+  const sanitizeFeaturedAthlete = (body: any, adminWallet?: string) => {
+    const isHttpUrl = (u: string) => /^https?:\/\//i.test(u);
+    const strList = (arr: unknown, max: number, len: number) =>
+      Array.isArray(arr)
+        ? arr.slice(0, max).map((s) => sanitizeString(String(s), len)).filter(Boolean)
+        : [];
+    const highlightVideoUrl = sanitizeString(body?.highlightVideoUrl || "", 2048);
+    const photoUrl = sanitizeString(body?.photoUrl || "", 2048);
+    return {
+      enabled: body?.enabled === true,
+      periodType: body?.periodType === "weekly" ? "weekly" : "monthly",
+      periodLabel: sanitizeString(body?.periodLabel || "", 120),
+      athleteName: sanitizeString(body?.athleteName || "", 80),
+      tagline: sanitizeString(body?.tagline || "", 160),
+      country: sanitizeString(body?.country || "", 60),
+      description: sanitizeString(body?.description || "", 2000),
+      powerMoves: strList(body?.powerMoves, 12, 120),
+      accolades: strList(body?.accolades, 12, 160),
+      highlightVideoUrl: highlightVideoUrl && isHttpUrl(highlightVideoUrl) ? highlightVideoUrl : "",
+      photoUrl: photoUrl && isHttpUrl(photoUrl) ? photoUrl : "",
+      socials: {
+        instagram: sanitizeString(body?.socials?.instagram || "", 256),
+        twitter: sanitizeString(body?.socials?.twitter || "", 256),
+        youtube: sanitizeString(body?.socials?.youtube || "", 256),
+        website: sanitizeString(body?.socials?.website || "", 256),
+      },
+      athleteId: sanitizeString(body?.athleteId || "", 64),
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminWallet || "",
+    };
+  };
+
+  registerAdmin("get", `/admin/cali/featured-athlete`, requireAdminSession, async (c) => {
+    try {
+      const featured = (await kv.get(FEATURED_KV_KEY)) || null;
+      return c.json({ success: true, data: { featured } });
+    } catch {
+      return c.json({ success: false, error: "Failed to load featured athlete" }, 500);
+    }
+  });
+
+  registerAdmin("post", `/admin/cali/featured-athlete`, requireAdminSession, async (c) => {
+    const adminWallet = (c.get("adminWallet") as string) ?? "admin";
+    const rl = await checkRateLimit(`cali-admin-featured:${adminWallet}`, 20, 60_000);
+    if (rl.limited) return c.json({ success: false, error: "Rate limited" }, 429);
+
+    let body: any = {};
+    try { body = await c.req.json(); } catch {}
+
+    const featured = sanitizeFeaturedAthlete(body, adminWallet);
+    if (featured.enabled) {
+      if (!featured.athleteName) {
+        return c.json({ success: false, error: "Athlete name required when spotlight is enabled" }, 400);
+      }
+      if (!featured.highlightVideoUrl) {
+        return c.json({ success: false, error: "Highlight video URL required (Supabase bucket https://...)" }, 400);
+      }
+    }
+
+    try {
+      await kv.set(FEATURED_KV_KEY, featured);
+      console.log(`[ADMIN-CALI] featured athlete saved by ${adminWallet}`);
+      return c.json({ success: true, data: { featured } });
+    } catch {
+      return c.json({ success: false, error: "Save failed" }, 500);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

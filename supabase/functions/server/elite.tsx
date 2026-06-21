@@ -557,6 +557,18 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
     return c.json({ success: true, data: { log } });
   });
 
+  app.get(`${PREFIX}/elite/featured-athlete`, async (c) => {
+    try {
+      const raw: any = await kv.get("elite:featured-athlete");
+      if (!raw || raw.enabled !== true) {
+        return c.json({ success: true, data: { featured: null } });
+      }
+      return c.json({ success: true, data: { featured: raw } });
+    } catch {
+      return c.json({ success: true, data: { featured: null } });
+    }
+  });
+
   app.get(`${PREFIX}/elite/history`, requireEliteSession, async (c) => {
     const accountId = c.get("eliteAccountId") as string;
     const prefix = `elite:user:${accountId}:log:`;
