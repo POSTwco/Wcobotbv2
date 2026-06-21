@@ -69,17 +69,23 @@ export function SponsorsTab({ wallet, sessionToken }: { wallet: string; sessionT
   // ── Save (create or update) ────────────────────────────────────────────
   const saveSponsor = useCallback(async () => {
     if (!editingSponsor?.name) { toast.error("Sponsor name is required"); return; }
+    const requestedTiers: SponsorTier[] = editingSponsor.tiers?.length
+      ? editingSponsor.tiers
+      : (editingSponsor.tier ? [editingSponsor.tier] : ["standard"]);
     setSaving(true);
     try {
       const res = await api.admin.saveSponsor(editingSponsor, wallet, sessionToken);
       if (res.success && res.data) {
-        if (editingSponsor.id) {
-          setSponsors((prev) => prev.map((s) => s.id === res.data!.id ? res.data! : s));
-        } else {
-          setSponsors((prev) => [...prev, res.data!]);
-        }
-        toast.success(`Sponsor "${res.data.name}" ${editingSponsor.id ? "updated" : "created"}!`);
         setEditingSponsor(null);
+        await load();
+        const savedTiers: SponsorTier[] = res.data.tiers?.length
+          ? res.data.tiers
+          : [res.data.tier || "standard"];
+        if (requestedTiers.includes("routine") && !savedTiers.includes("routine")) {
+          toast.error((res as any).warning || "Routine tier was not saved — redeploy the edge function, then try again.");
+        } else {
+          toast.success(`Sponsor "${res.data.name}" ${editingSponsor.id ? "updated" : "created"}!`);
+        }
       } else {
         toast.error(res.error || "Failed to save sponsor");
       }
@@ -88,7 +94,7 @@ export function SponsorsTab({ wallet, sessionToken }: { wallet: string; sessionT
     } finally {
       setSaving(false);
     }
-  }, [editingSponsor, wallet, sessionToken]);
+  }, [editingSponsor, wallet, sessionToken, load]);
 
   // ── Toggle active ────────────────────────────────────────────────────
   const toggleActive = useCallback(async (id: string) => {

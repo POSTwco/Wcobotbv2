@@ -2923,6 +2923,17 @@ app.get(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
   }
 });
 
+const ALLOWED_SPONSOR_TIERS = ["title", "premium", "standard", "routine"] as const;
+
+function normalizeSponsorTiers(body: any, existing: any): string[] {
+  if (Array.isArray(body.tiers)) {
+    const filtered = body.tiers.filter((t: string) => ALLOWED_SPONSOR_TIERS.includes(t as typeof ALLOWED_SPONSOR_TIERS[number]));
+    return filtered.length > 0 ? filtered : ["standard"];
+  }
+  const fallback = existing?.tiers?.length ? existing.tiers : [existing?.tier || "standard"];
+  return fallback.filter((t: string) => ALLOWED_SPONSOR_TIERS.includes(t as typeof ALLOWED_SPONSOR_TIERS[number]));
+}
+
 app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
   try {
     const body = await c.req.json();
@@ -2933,6 +2944,14 @@ app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
       existing = await kv.get(`sponsor:${id}`);
       if (!existing) return c.json({ success: false, error: `Sponsor ${id} not found` }, 404);
     }
+    const requestedTiers: string[] = Array.isArray(body.tiers) ? body.tiers : [];
+    const normalizedTiers = normalizeSponsorTiers(body, existing);
+    const tierWarning = requestedTiers.includes("routine") && !normalizedTiers.includes("routine")
+      ? "Routine tier was not saved — redeploy the make-server-57fcb0ee edge function."
+      : undefined;
+    if (tierWarning) {
+      console.log(`[SPONSORS] ${tierWarning} Sponsor: ${body.name || existing?.name || id}`);
+    }
     const sponsor = {
       id,
       name: sanitizeString(body.name || existing?.name || "", 200),
@@ -2942,8 +2961,8 @@ app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
       productImageUrl: sanitizeString(body.productImageUrl || existing?.productImageUrl || "", 500),
       secondaryLogoUrl: sanitizeString(body.secondaryLogoUrl || existing?.secondaryLogoUrl || "", 500),
       websiteUrl: sanitizeString(body.websiteUrl || existing?.websiteUrl || "", 500),
-      tier: ["title", "premium", "standard", "routine"].includes(body.tier) ? body.tier : (existing?.tier || "standard"),
-      tiers: Array.isArray(body.tiers) ? body.tiers.filter((t: string) => ["title", "premium", "standard", "routine"].includes(t)) : (existing?.tiers || [existing?.tier || "standard"]),
+      tier: ALLOWED_SPONSOR_TIERS.includes(body.tier) ? body.tier : (normalizedTiers[0] || existing?.tier || "standard"),
+      tiers: normalizedTiers,
       active: typeof body.active === "boolean" ? body.active : (existing?.active ?? true),
       displayOrder: typeof body.displayOrder === "number" ? body.displayOrder : (existing?.displayOrder ?? 0),
       customText: sanitizeString(body.customText || existing?.customText || "", 300),
@@ -2961,7 +2980,7 @@ app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
     };
     await kv.set(`sponsor:${id}`, sponsor);
     console.log(`[ADMIN] ${isUpdate ? "Updated" : "Created"} sponsor: ${sponsor.name} (${id}, tiers: ${(sponsor.tiers || [sponsor.tier]).join(",")}). Admin: ${c.get("adminWallet")}`);
-    return c.json({ success: true, data: sponsor });
+    return c.json({ success: true, data: sponsor, ...(tierWarning ? { warning: tierWarning } : {}) });
   } catch (error) {
     console.log(`[ADMIN] Error saving sponsor: ${error}`);
     return c.json({ success: false, error: safeErrorMsg("Failed to save sponsor") }, 500);

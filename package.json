@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "deploy:edge": "supabase functions deploy make-server-57fcb0ee"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
