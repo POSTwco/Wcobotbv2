@@ -36,8 +36,10 @@ export function EliteDashboard() {
       setSkillTrack(res.data.profile.skillTrack || "static");
       setDurationTarget(res.data.profile.durationTarget || 90);
     } else {
+      // Use defaults so generate still works if profile read fails transiently
+      setProfile({ skillTrack: "static", durationTarget: 90, equipment: ["bar", "none"] });
       elite.handleAuthError(res.code);
-      setError(res.error || "Failed to load profile");
+      setError(res.error || "Failed to load profile — you can still generate a session.");
     }
     setLoading(false);
   }, [elite.sessionToken, elite.handleAuthError]);

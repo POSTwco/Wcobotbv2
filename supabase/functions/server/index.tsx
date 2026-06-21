@@ -316,7 +316,7 @@ app.use(
   "/*",
   cors({
     origin: _corsOriginChecker,
-    allowHeaders: ["Content-Type", "Authorization", "X-Admin-Wallet", "X-Admin-Session", "X-Wallet-Session", "X-Cali-Session"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Admin-Wallet", "X-Admin-Session", "X-Wallet-Session", "X-Cali-Session", "X-Elite-Session"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
