@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router";
+import { motion } from "motion/react";
 import { Crown, Loader2, ChevronRight, Wrench, Sparkles, ArrowLeft } from "lucide-react";
 import { api } from "../../lib/api";
 import { useEliteSession } from "./elite-context";
@@ -8,6 +9,22 @@ import { EliteFeaturedAthleteSpotlight } from "./elite-featured-athlete";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+
+const HEADER_STYLES_ID = "elite-pro-vault-header-keyframes";
+
+function ensureHeaderStyles() {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(HEADER_STYLES_ID)) return;
+  const style = document.createElement("style");
+  style.id = HEADER_STYLES_ID;
+  style.textContent = `
+    @keyframes elite-pro-vault-glow-pulse {
+      0%, 100% { opacity: 0.5; transform: scale(0.98); }
+      50%      { opacity: 0.85; transform: scale(1.02); }
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 const TRACKS = [
   { id: "static", label: "Static Power", desc: "Holds 3s+ — levers, planches, flags" },
@@ -46,6 +63,7 @@ export function EliteDashboard() {
     setLoading(false);
   }, [elite.sessionToken, elite.handleAuthError]);
 
+  useEffect(() => { ensureHeaderStyles(); }, []);
   useEffect(() => { load(); }, [load]);
 
   const onGenerate = async () => {
@@ -77,14 +95,77 @@ export function EliteDashboard() {
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Calisthenics
       </Link>
 
-      <div className="rounded-2xl border border-[#D4A843]/25 p-6 mb-8" style={{ background: "linear-gradient(135deg, rgba(212,168,67,0.06), rgba(11,17,32,0.6))" }}>
-        <div className="flex items-center gap-3 mb-2">
-          <Crown className="w-8 h-8 text-[#D4A843]" />
-          <h1 className="text-xl sm:text-2xl font-bold text-white" style={orbitron}>TECH VAULT UNLOCKED</h1>
+      <div className="relative mb-8">
+        <div
+          className="absolute -inset-1.5 rounded-[1.35rem] pointer-events-none"
+          style={{
+            background: "radial-gradient(ellipse at 50% 50%, rgba(212,168,67,0.45) 0%, rgba(66,116,185,0.2) 50%, transparent 75%)",
+            filter: "blur(16px)",
+            animation: "elite-pro-vault-glow-pulse 3s ease-in-out infinite",
+          }}
+          aria-hidden
+        />
+        <div
+          className="absolute -inset-[2px] rounded-[1.25rem] pointer-events-none"
+          style={{
+            background: `linear-gradient(
+              135deg,
+              rgba(212,168,67,0.7) 0%,
+              rgba(168,216,234,0.45) 40%,
+              rgba(212,168,67,0.55) 70%,
+              rgba(212,168,67,0.7) 100%
+            )`,
+          }}
+          aria-hidden
+        />
+        <div
+          className="relative rounded-2xl overflow-hidden border border-white/[0.12] p-6"
+          style={{
+            background: `linear-gradient(
+              135deg,
+              rgba(212,168,67,0.14) 0%,
+              rgba(11,17,32,0.78) 35%,
+              rgba(66,116,185,0.08) 65%,
+              rgba(212,168,67,0.1) 100%
+            )`,
+            backdropFilter: "blur(20px) saturate(1.6)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.6)",
+            boxShadow:
+              "0 0 40px rgba(212,168,67,0.15), inset 0 1px 0 rgba(255,248,220,0.15), inset 0 -8px 24px rgba(0,0,0,0.2)",
+          }}
+        >
+          <div
+            className="absolute inset-0 backdrop-blur-[2px] bg-white/[0.03] pointer-events-none"
+            style={{ boxShadow: "inset 0 0 28px rgba(255,255,255,0.04)" }}
+            aria-hidden
+          />
+          <motion.div
+            className="absolute inset-0 mix-blend-screen pointer-events-none"
+            style={{
+              background: `linear-gradient(
+                125deg,
+                transparent 0%,
+                rgba(201,162,39,0.1) 18%,
+                rgba(168,216,234,0.14) 38%,
+                rgba(212,168,67,0.12) 68%,
+                transparent 88%
+              )`,
+              backgroundSize: "220% 220%",
+            }}
+            animate={{ backgroundPosition: ["0% 40%", "100% 60%", "0% 40%"] }}
+            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+            aria-hidden
+          />
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-2">
+              <Crown className="w-8 h-8 text-[#D4A843] drop-shadow-[0_0_8px_rgba(212,168,67,0.5)]" />
+              <h1 className="text-xl sm:text-2xl font-bold text-white" style={orbitron}>PRO VAULT UNLOCKED</h1>
+            </div>
+            <p className="text-sm text-[#A3B0C2]" style={dmSans}>
+              PRO CALISTHENICS · BATTLE OF THE BARS · Elite 1–2 hour skill sessions. Copy → drill → dominate.
+            </p>
+          </div>
         </div>
-        <p className="text-sm text-[#A3B0C2]" style={dmSans}>
-          PRO CALISTHENICS · BATTLE OF THE BARS · Elite 1–2 hour skill sessions. Copy → drill → dominate.
-        </p>
       </div>
 
       <section className="mb-6">
