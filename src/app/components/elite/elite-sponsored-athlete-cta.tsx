@@ -19,18 +19,14 @@ function ensureStyles() {
   const style = document.createElement("style");
   style.id = STYLES_ID;
   style.textContent = `
-    @keyframes elite-cta-border-spin {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
     @keyframes elite-cta-pulse-ring {
       0%   { transform: scale(0.98); opacity: 0.55; }
       50%  { transform: scale(1.02); opacity: 0.25; }
       100% { transform: scale(1.06); opacity: 0; }
     }
     @keyframes elite-cta-sparkle {
-      0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
-      50%      { opacity: 1; transform: scale(1) rotate(180deg); }
+      0%, 100% { opacity: 0; transform: scale(0); }
+      50%      { opacity: 1; transform: scale(1); }
     }
   `;
   document.head.appendChild(style);
@@ -49,7 +45,7 @@ export function EliteSponsoredAthleteCta() {
   return (
     <Link
       to="/apply"
-      className="block mb-8 group outline-none focus-visible:ring-2 focus-visible:ring-[#D4A843]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1120] rounded-2xl"
+      className="block group outline-none focus-visible:ring-2 focus-visible:ring-[#D4A843]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1120] rounded-2xl"
       aria-label="Become a Pro WCO Sponsored Athlete — apply on Battle of the Bars"
     >
       <motion.div
@@ -58,23 +54,19 @@ export function EliteSponsoredAthleteCta() {
         whileTap={{ scale: 0.99 }}
         transition={{ type: "spring", stiffness: 400, damping: 28 }}
       >
-        {/* Outer iridescent radiance */}
-        <motion.div
-          className="absolute -inset-1 rounded-[1.35rem] opacity-60 mix-blend-screen pointer-events-none"
+        {/* Static iridescent radiance */}
+        <div
+          className="absolute -inset-1 rounded-[1.35rem] opacity-50 mix-blend-screen pointer-events-none"
           style={{
-            background: `conic-gradient(
-              from 0deg,
-              rgba(212,168,67,0.5),
-              rgba(168,216,234,0.45),
-              rgba(196,181,253,0.4),
-              rgba(232,180,184,0.35),
-              rgba(240,208,120,0.5),
-              rgba(212,168,67,0.5)
+            background: `linear-gradient(
+              135deg,
+              rgba(212,168,67,0.45) 0%,
+              rgba(168,216,234,0.35) 35%,
+              rgba(196,181,253,0.3) 65%,
+              rgba(232,180,184,0.25) 100%
             )`,
             filter: "blur(14px)",
           }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
           aria-hidden
         />
 
@@ -88,25 +80,20 @@ export function EliteSponsoredAthleteCta() {
           aria-hidden
         />
 
-        {/* Spinning gradient border */}
-        <div className="absolute -inset-[2px] rounded-[1.25rem] overflow-hidden pointer-events-none" aria-hidden>
-          <div
-            className="absolute inset-[-50%]"
-            style={{
-              background: `conic-gradient(
-                from 0deg,
-                transparent 0deg,
-                rgba(212,168,67,0.9) 40deg,
-                rgba(168,216,234,0.7) 120deg,
-                rgba(196,181,253,0.7) 200deg,
-                rgba(232,180,184,0.6) 280deg,
-                rgba(212,168,67,0.9) 340deg,
-                transparent 360deg
-              )`,
-              animation: "elite-cta-border-spin 6s linear infinite",
-            }}
-          />
-        </div>
+        {/* Static gradient border */}
+        <div
+          className="absolute -inset-[2px] rounded-[1.25rem] pointer-events-none"
+          style={{
+            background: `linear-gradient(
+              135deg,
+              rgba(212,168,67,0.7) 0%,
+              rgba(168,216,234,0.5) 40%,
+              rgba(196,181,253,0.5) 70%,
+              rgba(212,168,67,0.7) 100%
+            )`,
+          }}
+          aria-hidden
+        />
 
         {/* Glass body */}
         <div
@@ -193,17 +180,15 @@ export function EliteSponsoredAthleteCta() {
 
           {/* Content */}
           <div className="relative z-10 flex items-center gap-4 p-5 sm:p-6">
-            <motion.div
+            <div
               className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center border border-[#D4A843]/35"
               style={{
                 background: "linear-gradient(145deg, rgba(212,168,67,0.25), rgba(11,17,32,0.5))",
                 boxShadow: "0 0 24px rgba(212,168,67,0.25), inset 0 1px 0 rgba(255,248,220,0.2)",
               }}
-              animate={{ rotate: [-2, 2, -2] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
             >
               <Award className="w-7 h-7 sm:w-8 sm:h-8 text-[#F0D078] drop-shadow-[0_0_8px_rgba(212,168,67,0.6)]" />
-            </motion.div>
+            </div>
 
             <div className="flex-1 min-w-0">
               <p
@@ -223,17 +208,15 @@ export function EliteSponsoredAthleteCta() {
               </p>
             </div>
 
-            <motion.div
+            <div
               className="shrink-0 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-[#D4A843]/40"
               style={{
                 background: "linear-gradient(135deg, rgba(212,168,67,0.2), rgba(184,134,11,0.15))",
                 boxShadow: "0 0 20px rgba(212,168,67,0.2)",
               }}
-              animate={{ x: [0, 4, 0] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
             >
               <ArrowRight className="w-5 h-5 text-[#F0D078] group-hover:translate-x-0.5 transition-transform" />
-            </motion.div>
+            </div>
           </div>
         </div>
       </motion.div>

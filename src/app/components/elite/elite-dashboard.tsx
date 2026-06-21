@@ -86,8 +86,6 @@ export function EliteDashboard() {
         </p>
       </div>
 
-      <EliteSponsoredAthleteCta />
-
       <section className="mb-6">
         <h2 className="text-xs font-bold tracking-widest text-[#D4A843] mb-3" style={orbitron}>SKILL TRACK</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -138,11 +136,13 @@ export function EliteDashboard() {
 
       <Link
         to="/calisthenics/elite/custom"
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#D4A843]/30 text-[#D4A843] text-sm font-semibold hover:bg-[#D4A843]/5"
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#D4A843]/30 text-[#D4A843] text-sm font-semibold hover:bg-[#D4A843]/5 mb-4"
         style={dmSans}
       >
         <Wrench className="w-4 h-4" /> Build Custom Workout
       </Link>
+
+      <EliteSponsoredAthleteCta />
     </div>
   );
 }
