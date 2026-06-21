@@ -15,6 +15,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router";
+import { motion } from "motion/react";
 import {
   Dumbbell, Flame, Trophy, Settings2, RefreshCw, Loader2, AlertCircle,
   ChevronRight, Calendar, Crown, Lock,
@@ -216,6 +217,9 @@ export function CaliDashboard() {
         </div>
       )}
 
+      {/* Pro Tech Vault — above generate; locked overlay when unqualified */}
+      <EliteVaultCard allowed={eliteAllowed} walletConnected={wallet.connected} />
+
       {/* Primary CTA */}
       <button
         onClick={onGenerate}
@@ -231,38 +235,6 @@ export function CaliDashboard() {
         {generating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Dumbbell className="w-5 h-5" />}
         {generating ? "Building workout…" : "Generate today's workout"}
       </button>
-
-      {/* Elite Tech Vault */}
-      {eliteAllowed === true ? (
-        <Link
-          to="/calisthenics/elite"
-          className="block rounded-2xl border border-[#D4A843]/30 p-4 sm:p-5 hover:border-[#D4A843]/50 transition-all"
-          style={{ background: "linear-gradient(135deg, rgba(212,168,67,0.08), rgba(11,17,32,0.7))" }}
-        >
-          <div className="flex items-center gap-3">
-            <Crown className="w-8 h-8 text-[#D4A843]" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold tracking-widest text-[#D4A843]" style={orbitron}>PRO TECH VAULT</p>
-              <p className="text-sm text-white font-semibold" style={dmSans}>Battle of the Bars Elite Training</p>
-              <p className="text-[0.65rem] text-[#8494A7] mt-0.5" style={dmSans}>45 vault techniques · 60–120 min skill sessions</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-[#D4A843]" />
-          </div>
-        </Link>
-      ) : eliteAllowed === false ? (
-        <div
-          className="rounded-2xl border border-[#4274B9]/15 p-4 opacity-80"
-          style={{ background: "rgba(11,17,32,0.5)" }}
-        >
-          <div className="flex items-center gap-3">
-            <Lock className="w-6 h-6 text-[#8494A7]" />
-            <div>
-              <p className="text-xs font-bold text-[#8494A7]" style={orbitron}>PRO TECH VAULT</p>
-              <p className="text-[0.65rem] text-[#8494A7]/80" style={dmSans}>Governors NFT or elite whitelist required</p>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {/* Workout history */}
       <div
@@ -346,6 +318,98 @@ export function CaliDashboard() {
       </div>
     </div>
   );
+}
+
+function EliteVaultCard({
+  allowed,
+  walletConnected,
+}: {
+  allowed: boolean | null;
+  walletConnected: boolean;
+}) {
+  const unlocked = allowed === true;
+  const checking = allowed === null;
+
+  const inner = (
+    <div
+      className="relative rounded-2xl overflow-hidden border p-5 sm:p-6"
+      style={{
+        background: unlocked
+          ? "linear-gradient(135deg, rgba(212,168,67,0.14), rgba(11,17,32,0.78))"
+          : "linear-gradient(135deg, rgba(212,168,67,0.06), rgba(11,17,32,0.85))",
+        borderColor: unlocked ? "rgba(212,168,67,0.45)" : "rgba(212,168,67,0.2)",
+        boxShadow: unlocked
+          ? "0 0 32px rgba(212,168,67,0.22), inset 0 1px 0 rgba(255,248,220,0.12)"
+          : "0 0 16px rgba(212,168,67,0.08)",
+        backdropFilter: "blur(12px)",
+      }}
+    >
+      <div className="flex items-center gap-4">
+        <div
+          className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center shrink-0"
+          style={{
+            background: unlocked
+              ? "linear-gradient(135deg, #D4A843, #B8860B)"
+              : "linear-gradient(135deg, rgba(212,168,67,0.25), rgba(11,17,32,0.6))",
+            boxShadow: unlocked ? "0 0 20px rgba(212,168,67,0.4)" : undefined,
+          }}
+        >
+          <Crown className={`w-7 h-7 sm:w-8 sm:h-8 ${unlocked ? "text-[#0B1120]" : "text-[#D4A843]/70"}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold tracking-widest text-[#D4A843]" style={orbitron}>PRO TECH VAULT</p>
+          <p className="text-base sm:text-lg text-white font-bold mt-0.5" style={dmSans}>
+            Battle of the Bars Elite Training
+          </p>
+          <p className="text-[0.7rem] text-[#8494A7] mt-1" style={dmSans}>
+            45 vault techniques · 60–120 min skill sessions
+          </p>
+        </div>
+        {unlocked && <ChevronRight className="w-6 h-6 text-[#D4A843] shrink-0" />}
+      </div>
+
+      {!unlocked && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl"
+          style={{
+            background: "rgba(11,17,32,0.72)",
+            backdropFilter: "blur(3px)",
+          }}
+        >
+          {checking ? (
+            <Loader2 className="w-8 h-8 text-[#D4A843] animate-spin" />
+          ) : (
+            <>
+              <div
+                className="w-14 h-14 rounded-full flex items-center justify-center border-2 border-[#D4A843]/50"
+                style={{ boxShadow: "0 0 24px rgba(212,168,67,0.25)" }}
+              >
+                <Lock className="w-7 h-7 text-[#D4A843]" />
+              </div>
+              <p className="text-sm font-bold tracking-widest text-[#F0D078]" style={orbitron}>LOCKED</p>
+              <p className="text-[0.65rem] text-[#A3B0C2] text-center max-w-[260px] px-4" style={dmSans}>
+                {walletConnected
+                  ? "WCO Governors NFT or elite athlete whitelist required to unlock"
+                  : "Connect wallet — Governors NFT or elite athlete access unlocks the vault"}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  if (unlocked) {
+    return (
+      <motion.div whileHover={{ scale: 1.015 }} transition={{ type: "spring", stiffness: 380, damping: 26 }}>
+        <Link to="/calisthenics/elite" className="block outline-none focus-visible:ring-2 focus-visible:ring-[#D4A843]/60 rounded-2xl">
+          {inner}
+        </Link>
+      </motion.div>
+    );
+  }
+
+  return inner;
 }
 
 function StatCard({
