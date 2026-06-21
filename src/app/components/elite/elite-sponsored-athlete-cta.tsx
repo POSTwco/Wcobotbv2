@@ -3,10 +3,13 @@
  * Links to the existing /apply athlete application flow.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { Award, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { api } from "../../lib/api";
+import type { Athlete } from "../../lib/types";
+import { MiniAthleteCardTeaser } from "./mini-athlete-card-teaser";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -39,8 +42,23 @@ const SPARKLES = [
   { bottom: "28%", right: "12%", delay: 1.8 },
 ] as const;
 
+function pickTopAthlete(athletes: Athlete[]): Athlete | null {
+  if (!athletes.length) return null;
+  const sorted = [...athletes].sort((a, b) => (b.totalPowerRating || 0) - (a.totalPowerRating || 0));
+  return sorted[0];
+}
+
 export function EliteSponsoredAthleteCta() {
-  useEffect(() => { ensureStyles(); }, []);
+  const [topAthlete, setTopAthlete] = useState<Athlete | null>(null);
+
+  useEffect(() => {
+    ensureStyles();
+    api.getAthletes().then((res) => {
+      if (res.success && res.data?.length) {
+        setTopAthlete(pickTopAthlete(res.data));
+      }
+    }).catch(() => {});
+  }, []);
 
   return (
     <Link
@@ -179,17 +197,7 @@ export function EliteSponsoredAthleteCta() {
           ))}
 
           {/* Content */}
-          <div className="relative z-10 flex items-center gap-4 p-5 sm:p-6">
-            <div
-              className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center border border-[#D4A843]/35"
-              style={{
-                background: "linear-gradient(145deg, rgba(212,168,67,0.25), rgba(11,17,32,0.5))",
-                boxShadow: "0 0 24px rgba(212,168,67,0.25), inset 0 1px 0 rgba(255,248,220,0.2)",
-              }}
-            >
-              <Award className="w-7 h-7 sm:w-8 sm:h-8 text-[#F0D078] drop-shadow-[0_0_8px_rgba(212,168,67,0.6)]" />
-            </div>
-
+          <div className="relative z-10 flex items-center gap-3 sm:gap-4 p-4 sm:p-5">
             <div className="flex-1 min-w-0">
               <p
                 className="text-[0.6rem] sm:text-xs font-bold tracking-[0.28em] text-[#A8D8EA] mb-1"
@@ -204,12 +212,26 @@ export function EliteSponsoredAthleteCta() {
                 Become a Pro WCO Sponsored Athlete
               </h2>
               <p className="text-[0.7rem] sm:text-xs text-[#A3B0C2] mt-1.5 leading-relaxed" style={dmSans}>
-                Apply to Battle of the Bars — compete on the official athlete roster.
+                Apply to Battle of the Bars — your card could look like this.
               </p>
             </div>
 
+            {topAthlete && (
+              <div className="relative shrink-0">
+                <div
+                  className="absolute -inset-1 rounded-xl opacity-60 pointer-events-none"
+                  style={{
+                    background: `radial-gradient(ellipse at 50% 50%, ${topAthlete.nftCardBorderColor || "#D4A843"}40 0%, transparent 70%)`,
+                    filter: "blur(6px)",
+                  }}
+                  aria-hidden
+                />
+                <MiniAthleteCardTeaser athlete={topAthlete} />
+              </div>
+            )}
+
             <div
-              className="shrink-0 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-[#D4A843]/40"
+              className="shrink-0 hidden sm:flex items-center justify-center w-10 h-10 rounded-full border border-[#D4A843]/40"
               style={{
                 background: "linear-gradient(135deg, rgba(212,168,67,0.2), rgba(184,134,11,0.15))",
                 boxShadow: "0 0 20px rgba(212,168,67,0.2)",
