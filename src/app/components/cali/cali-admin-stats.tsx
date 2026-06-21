@@ -16,7 +16,6 @@ interface Stats {
   totalAnchored: number;
   workoutsLast24h: number;
   activeWallets: number;
-  topExercises: Array<{ exerciseId: string; name: string; count: number }>;
   libraryVersion: string;
   // Live ops numbers required for the clickable states panel + dedicated ops page
   caliSignInsToday?: number;
@@ -91,23 +90,10 @@ export function CaliAdminStats({
           </div>
 
           {/* NEW: prominent live sign-ins + total generated (per user request for states panel) */}
-          <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="grid grid-cols-2 gap-2">
             <Cell icon={<UserCheck className="w-3 h-3" />} label="SIGN-INS (live)" value={signInsToday} sub={`${signInsTotal.toLocaleString()} total`} />
             <Cell icon={<Play className="w-3 h-3" />} label="WORKOUTS GEN" value={gensTotal} sub="total generated" />
           </div>
-
-          {stats.topExercises.length > 0 && (
-            <div className="text-[0.6rem] text-[#8494A7]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-              <span className="text-[#A3B0C2]">Top exercises:</span>{" "}
-              {stats.topExercises.map((e, i) => (
-                <span key={e.exerciseId}>
-                  {i > 0 && " · "}
-                  {e.name} <span className="text-[#6AA3E0]">×{e.count}</span>
-                </span>
-              ))}
-            </div>
-          )}
-
         </>
       ) : loading ? (
         <p className="text-[0.65rem] text-[#8494A7]">Loading stats…</p>
