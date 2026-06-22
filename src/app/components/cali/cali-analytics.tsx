@@ -5,7 +5,6 @@ import { ArrowLeft, BarChart3, Flame, Loader2, Trophy } from "lucide-react";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 import { CaliLoader } from "./cali-loader";
-import { CaliAthleteTierCard } from "./cali-athlete-tier-card";
 import { CaliMetricTile } from "./cali-metric-tile";
 import { CaliMovementChart } from "./cali-movement-chart";
 import {
@@ -82,7 +81,34 @@ export function CaliAnalytics() {
         </p>
       )}
 
-      <CaliAthleteTierCard summary={summary} loading={loading} />
+      {summary && (
+        <div
+          className="rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 flex-wrap"
+          style={{ background: "rgba(11,17,32,0.6)", borderColor: (ATHLETE_TIER_CONFIG[summary.athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).border }}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="text-[0.55rem] font-bold px-2 py-0.5 rounded-full"
+              style={{
+                ...(ATHLETE_TIER_CONFIG[summary.athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED),
+                fontFamily: "Orbitron, sans-serif",
+                background: (ATHLETE_TIER_CONFIG[summary.athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).bg,
+                border: `1px solid ${(ATHLETE_TIER_CONFIG[summary.athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).border}`,
+                color: (ATHLETE_TIER_CONFIG[summary.athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).color,
+              }}
+            >
+              {(ATHLETE_TIER_CONFIG[summary.athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).label}
+            </span>
+            <span className="text-lg font-bold text-white" style={orbitron}>
+              {summary.athleteScore}
+              <span className="text-xs text-[#8494A7] font-normal"> / 100</span>
+            </span>
+          </div>
+          <p className="text-xs text-[#8494A7] flex-1 min-w-[12rem]" style={dmSans}>
+            {summary.tierJudgment}
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-2">
         {RANGES.map((r) => (
@@ -116,6 +142,18 @@ export function CaliAnalytics() {
         </div>
         <CaliMovementChart data={sparkline} metric="movementIndex" label="Movement Index" color="#D4A843" />
       </div>
+
+      {sparkline.length > 1 && (
+        <div
+          className="rounded-2xl border p-4 sm:p-5"
+          style={{ background: "rgba(11,17,32,0.6)", borderColor: "rgba(66,116,185,0.15)" }}
+        >
+          <h2 className="text-sm font-bold tracking-widest text-[#E8ECF0] mb-3" style={orbitron}>
+            ATHLETE INDEX · {range.toUpperCase()}
+          </h2>
+          <CaliMovementChart data={sparkline} metric="athleteScore" label="Athlete Index" color="#4274B9" />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <CaliMetricTile
@@ -158,17 +196,18 @@ export function CaliAnalytics() {
               <p className="text-[0.65rem] text-[#8494A7]" style={dmSans}>Best: {summary.streakLongest}</p>
             </div>
           </div>
-          <div
-            className="rounded-2xl border p-4 flex items-center gap-3"
+          <Link
+            to="/calisthenics/prs"
+            className="rounded-2xl border p-4 flex items-center gap-3 hover:border-[#D4A843]/35 hover:bg-white/[0.02] transition-colors"
             style={{ background: "rgba(11,17,32,0.6)", borderColor: "rgba(66,116,185,0.15)" }}
           >
             <Trophy className="w-5 h-5 text-[#D4A843]" />
             <div>
               <p className="text-[0.6rem] text-[#8494A7] tracking-widest" style={orbitron}>PRS</p>
               <p className="text-xl font-bold text-white" style={orbitron}>{summary.prCount}</p>
-              <p className="text-[0.65rem] text-[#8494A7]" style={dmSans}>{summary.sessions7d} sessions / 7d</p>
+              <p className="text-[0.65rem] text-[#8494A7]" style={dmSans}>View all records →</p>
             </div>
-          </div>
+          </Link>
         </div>
       )}
 
