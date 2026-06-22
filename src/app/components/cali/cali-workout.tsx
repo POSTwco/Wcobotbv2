@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import {
-  ArrowLeft, RefreshCw, Loader2, AlertCircle, CheckCircle2, Anchor, Info, Trophy,
+  ArrowLeft, RefreshCw, Loader2, AlertCircle, CheckCircle2, Anchor, Info, Trophy, HelpCircle,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
@@ -25,6 +25,10 @@ import {
   xpForSet, xpForBlock, xpForPr, xpForWorkoutComplete,
 } from "../../lib/cali-workout-xp";
 import { CALI_WORKOUT_ACTION_BAR_BOTTOM } from "../../lib/cali-workout-layout";
+import { CaliWorkoutTutorial } from "./cali-workout-tutorial";
+import { useCaliWorkoutTutorial } from "../../hooks/use-cali-workout-tutorial";
+import { shouldRunTutorial } from "../../lib/cali-workout-tutorial";
+import type { CaliTutorialLevel } from "../../lib/cali-workout-tutorial";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -297,41 +301,6 @@ export function CaliWorkout() {
     [plan, actuals, loggedSets, executeLogAllSets],
   );
 
-  const onComplete = async () => {
-    if (!cali.sessionToken || !plan) return;
-    setCompleting(true);
-    const completedAt = new Date().toISOString();
-    const bulk: LoggedSet[] = [];
-    for (const [key, a] of Object.entries(actuals)) {
-      const [b, i, s] = key.split("|").map(Number);
-      const v = Number(a.value);
-      if (!Number.isFinite(v) || v <= 0) continue;
-      const set: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: v };
-      const rpe = Number(a.rpe);
-      if (a.rpe && Number.isFinite(rpe) && rpe >= 1 && rpe <= 10) set.rpe = rpe;
-      if (a.note?.trim()) set.note = a.note.trim();
-      bulk.push(set);
-    }
-    const res = await api.cali.logSets(cali.sessionToken, plan.workoutId, bulk, {
-      completed: true,
-      completedAt,
-    });
-    setCompleting(false);
-    if (!res.success || !res.data) {
-      cali.handleAuthError(res.code);
-      toast.error(res.error || "Couldn't complete the workout.");
-      return;
-    }
-    for (const k of Object.keys(actuals)) {
-      lastSavedRef.current[k] = `${actuals[k].value}|${actuals[k].rpe}|${actuals[k].note}`;
-    }
-    const newStreak = res.data.streak?.current ?? 0;
-    setStreak(newStreak);
-    setFinalStreak(newStreak);
-    setXp((x) => x + xpForWorkoutComplete());
-    setShowCelebration(true);
-  };
-
   const onAnchor = async () => {
     if (!cali.sessionToken || !plan) return;
     setAnchoring(true);
@@ -417,9 +386,90 @@ export function CaliWorkout() {
   const focusedItem = activeItems[focusedItemIndex] ?? activeItems[0] ?? null;
   const workoutSwapsLeft = plan ? swapLimitsFor(plan, activeBlock, 0).workoutRemaining : 0;
 
+  const {
+    step: tutorialStep,
+    isActive: tutorialActive,
+    advance: tutorialAdvance,
+    skip: tutorialSkip,
+    replay: tutorialReplay,
+    completeTutorial,
+  } = useCaliWorkoutTutorial({
+    level: plan?.level ?? 0,
+    planBlocks: plan?.blocks ?? null,
+    setsLogged,
+    setsTotal,
+    activeBlock,
+    loggedSets,
+    actuals,
+    completedBlocks,
+  });
+
+  const executeComplete = useCallback(async () => {
+    if (!cali.sessionToken || !plan) return;
+    setCompleting(true);
+    const completedAt = new Date().toISOString();
+    const bulk: LoggedSet[] = [];
+    for (const [key, a] of Object.entries(actuals)) {
+      const [b, i, s] = key.split("|").map(Number);
+      const v = Number(a.value);
+      if (!Number.isFinite(v) || v <= 0) continue;
+      const set: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: v };
+      const rpe = Number(a.rpe);
+      if (a.rpe && Number.isFinite(rpe) && rpe >= 1 && rpe <= 10) set.rpe = rpe;
+      if (a.note?.trim()) set.note = a.note.trim();
+      bulk.push(set);
+    }
+    const res = await api.cali.logSets(cali.sessionToken, plan.workoutId, bulk, {
+      completed: true,
+      completedAt,
+    });
+    setCompleting(false);
+    if (!res.success || !res.data) {
+      cali.handleAuthError(res.code);
+      toast.error(res.error || "Couldn't complete the workout.");
+      return;
+    }
+    for (const k of Object.keys(actuals)) {
+      lastSavedRef.current[k] = `${actuals[k].value}|${actuals[k].rpe}|${actuals[k].note}`;
+    }
+    const newStreak = res.data.streak?.current ?? 0;
+    setStreak(newStreak);
+    setFinalStreak(newStreak);
+    setXp((x) => x + xpForWorkoutComplete());
+    completeTutorial();
+    setShowCelebration(true);
+  }, [actuals, plan, cali, completeTutorial]);
+
+  const onComplete = useCallback(() => {
+    if (!plan) return;
+    if (shouldRunTutorial(plan.level) && setsLogged < setsTotal) {
+      const remaining = setsTotal - setsLogged;
+      toast(`You have ${remaining} set${remaining === 1 ? "" : "s"} left — log them to finish your workout.`, {
+        duration: 14000,
+        action: {
+          label: "Log what I have",
+          onClick: () => void executeComplete(),
+        },
+        cancel: {
+          label: "Keep logging",
+          onClick: () => {},
+        },
+      });
+      return;
+    }
+    void executeComplete();
+  }, [plan, setsLogged, setsTotal, executeComplete]);
+
   useEffect(() => {
     setFocusedItemIndex(0);
   }, [activeBlock]);
+
+  useEffect(() => {
+    if (tutorialStep !== "nextExercise") return;
+    const cards = document.querySelectorAll('[data-cali-tutorial="exercise-card"]');
+    const target = cards.length > 1 ? cards[1] : cards[0];
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [tutorialStep]);
 
   if (loading) {
     return <CaliLoader variant="workout" />;
@@ -442,24 +492,40 @@ export function CaliWorkout() {
         <Link to="/calisthenics" className="flex items-center gap-1.5 text-xs text-[#8494A7] hover:text-[#E8ECF0]" style={dmSans}>
           <ArrowLeft className="w-4 h-4" /> Dashboard
         </Link>
-        <span className="text-[0.65rem] text-[#8494A7]" style={dmSans}>
-          L{plan.level} · ~{estMin} min · {workoutSwapsLeft} swap{workoutSwapsLeft === 1 ? "" : "s"} left
-        </span>
+        <div className="flex items-center gap-2">
+          {shouldRunTutorial(plan.level) && (
+            <button
+              type="button"
+              onClick={tutorialReplay}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[0.6rem] font-bold text-[#6AA3E0] border border-[#4274B9]/25 hover:bg-[#4274B9]/10"
+              style={dmSans}
+              title="Replay workout guide"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              Guide
+            </button>
+          )}
+          <span className="text-[0.65rem] text-[#8494A7]" style={dmSans}>
+            L{plan.level} · ~{estMin} min · {workoutSwapsLeft} swap{workoutSwapsLeft === 1 ? "" : "s"} left
+          </span>
+        </div>
       </div>
 
-      <CaliWorkoutProgress
-        setsLogged={setsLogged}
-        setsTotal={setsTotal}
-        xp={xp}
-        blockIndex={activeBlock}
-        blockTotal={plan.blocks.length}
-        blockName={plan.blocks[activeBlock]?.name ?? ""}
-        level={plan.level}
-        streak={streak}
-      />
+      <div data-cali-tutorial="progress">
+        <CaliWorkoutProgress
+          setsLogged={setsLogged}
+          setsTotal={setsTotal}
+          xp={xp}
+          blockIndex={activeBlock}
+          blockTotal={plan.blocks.length}
+          blockName={plan.blocks[activeBlock]?.name ?? ""}
+          level={plan.level}
+          streak={streak}
+        />
+      </div>
 
       {/* Block tabs */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" data-cali-tutorial="block-tabs">
         {plan.blocks.map((block, b) => (
           <button
             key={b}
@@ -505,6 +571,12 @@ export function CaliWorkout() {
                 swapping={swappingSlot === `${activeBlock}|${i}`}
                 swapsSlotRemaining={slotLimits.slotRemaining}
                 swapsWorkoutRemaining={slotLimits.workoutRemaining}
+                tutorialExerciseAnchor={
+                  (activeBlock === 0 && i === 0 && tutorialStep !== "nextExercise")
+                  || (activeBlock === 0 && i === 1 && tutorialStep === "nextExercise")
+                }
+                tutorialLogAnchor={activeBlock === 0 && i === 0 && (tutorialStep === "logSets" || tutorialStep === "enterSet")}
+                tutorialSetAnchor={activeBlock === 0 && i === 0 && tutorialStep === "enterSet"}
               />
             );
           })}
@@ -522,6 +594,15 @@ export function CaliWorkout() {
 
       {/* Coach toast */}
       <CaliCoachToast message={coachMessage} onDismiss={() => setCoachMessage(null)} />
+
+      {tutorialActive && (plan.level === 1 || plan.level === 2) && (
+        <CaliWorkoutTutorial
+          step={tutorialStep}
+          level={plan.level as CaliTutorialLevel}
+          onAdvance={tutorialAdvance}
+          onSkip={tutorialSkip}
+        />
+      )}
 
       {/* Victory overlay */}
       <CaliWorkoutCelebration
@@ -560,6 +641,7 @@ export function CaliWorkout() {
           <button
             onClick={onComplete}
             disabled={completing}
+            data-cali-tutorial="complete-workout"
             className="flex-[2] flex items-center justify-center gap-2 min-h-[44px] py-3 rounded-xl text-xs font-bold disabled:opacity-60"
             style={{
               ...dmSans,

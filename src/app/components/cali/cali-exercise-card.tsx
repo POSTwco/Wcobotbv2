@@ -49,6 +49,9 @@ interface Props {
   swapsWorkoutRemaining?: number;
   variant?: "cali" | "elite";
   showNotes?: boolean;
+  tutorialExerciseAnchor?: boolean;
+  tutorialLogAnchor?: boolean;
+  tutorialSetAnchor?: boolean;
 }
 
 export function CaliExerciseCard({
@@ -56,6 +59,7 @@ export function CaliExerciseCard({
   isFocused, gender, onFocus, onChangeActual, onLogAllSets,
   onSwap, swapping, swapsSlotRemaining = 0, swapsWorkoutRemaining = 0,
   variant = "cali", showNotes = false,
+  tutorialExerciseAnchor = false, tutorialLogAnchor = false, tutorialSetAnchor = false,
 }: Props) {
   const isElite = variant === "elite";
   const cardAccent = isElite ? "#D4A843" : (CATEGORY_COLORS[item.category] ?? "#4274B9");
@@ -80,6 +84,7 @@ export function CaliExerciseCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4, ease: "easeOut" }}
       className="rounded-2xl border overflow-hidden transition-all duration-200"
+      {...(tutorialExerciseAnchor ? { "data-cali-tutorial": "exercise-card" } : {})}
       style={{
         background: isElite
           ? "linear-gradient(160deg, rgba(212,168,67,0.06), rgba(11,17,32,0.92))"
@@ -284,6 +289,7 @@ export function CaliExerciseCard({
               logged={loggedSets.has(key)}
               onChange={(patch) => onChangeActual(key, patch)}
               showNotes={showNotes}
+              tutorialSetAnchor={tutorialSetAnchor && s === 0}
             />
           );
         })}
@@ -294,6 +300,7 @@ export function CaliExerciseCard({
             onClick={() => onLogAllSets(blockIndex, itemIndex)}
             disabled={savingExercise || pendingCount === 0}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 min-h-[48px] rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98] disabled:hover:scale-100 transition-all duration-200"
+            {...(tutorialLogAnchor ? { "data-cali-tutorial": "log-all" } : {})}
             style={{
               ...dmSans,
               background: "linear-gradient(135deg, #D4A843, #B8860B)",

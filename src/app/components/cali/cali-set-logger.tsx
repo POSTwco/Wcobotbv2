@@ -26,10 +26,12 @@ interface Props {
   logged: boolean;
   onChange: (patch: Partial<SetState>) => void;
   showNotes?: boolean;
+  tutorialSetAnchor?: boolean;
 }
 
 export function CaliSetLogger({
   setIndex, metric, targetLow, targetHigh, state, logged, onChange, showNotes = false,
+  tutorialSetAnchor = false,
 }: Props) {
   const placeholder = metric === "reps" ? `${targetLow}–${targetHigh}` : `${targetLow}–${targetHigh}s`;
   const unitLabel = metric === "reps" ? "reps" : "seconds";
@@ -77,6 +79,7 @@ export function CaliSetLogger({
           className={`sm:w-28 ${inputClass}`}
           style={dmSans}
           aria-label={`Set ${setIndex + 1} ${unitLabel}`}
+          {...(tutorialSetAnchor ? { "data-cali-tutorial": "set-input" } : {})}
         />
 
         <input
