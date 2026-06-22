@@ -34,6 +34,7 @@ const EMPTY_SPARKLINES: MetricSparklines = {
   effort: [],
   movement: [],
   volume: [],
+  hypertrophy: [],
 };
 
 function confidenceLabel(c: StatsSummary["dataConfidence"]): string {
@@ -214,6 +215,9 @@ export function CaliAnalytics() {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <p className="col-span-full text-[0.6rem] text-[#8494A7] -mb-1" style={dmSans}>
+          Hypertrophy scores max RPE (10), failure signals, and reps above prescription — log RPE every set.
+        </p>
         <CaliMetricTile
           label="CONSISTENCY"
           value={summary ? `${summary.consistency}` : "—"}
@@ -234,7 +238,7 @@ export function CaliAnalytics() {
           delta={summary?.deltas.hypertrophy7d ?? 0}
           deltaSuffix="%"
           accent="#10b981"
-          sparkData={metricSparklines.volume}
+          sparkData={metricSparklines.hypertrophy}
         />
         <CaliMetricTile
           label="MOVEMENT"

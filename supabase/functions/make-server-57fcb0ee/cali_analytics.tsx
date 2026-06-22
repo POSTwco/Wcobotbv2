@@ -38,6 +38,18 @@ export interface DailyStats {
   avgRpe: number | null;
   maxLevel: 1 | 2 | 3 | 4;
   prHits: number;
+  /** Sets with RPE logged (required for hypertrophy scoring). */
+  setsWithRpe: number;
+  /** RPE 10 sets — true max effort. */
+  maxEffortSets: number;
+  /** RPE 10 or explicit failure note. */
+  failureSets: number;
+  /** Logged value above prescription high target. */
+  overTargetSets: number;
+  /** Sum of per-set hypertrophy scores (0–100 each). */
+  hypertrophySignalSum: number;
+  /** Sets scored against plan targets + RPE. */
+  hypertrophyScoredSets: number;
   categories: Record<string, CategoryVolume>;
   updatedAt: number;
 }
@@ -53,6 +65,12 @@ interface WorkoutDayContrib {
   rpeCount: number;
   maxLevel: 1 | 2 | 3 | 4;
   prHits: number;
+  setsWithRpe: number;
+  maxEffortSets: number;
+  failureSets: number;
+  overTargetSets: number;
+  hypertrophySignalSum: number;
+  hypertrophyScoredSets: number;
   categories: Record<string, CategoryVolume>;
 }
 
@@ -67,6 +85,7 @@ export interface MetricSparklines {
   effort: number[];
   movement: number[];
   volume: number[];
+  hypertrophy: number[];
 }
 
 interface PlanLike {
@@ -116,6 +135,7 @@ export interface StatsSparkPoint {
   volume: number;
   consistency: number;
   effort: number;
+  hypertrophy: number;
 }
 
 export interface PRHistoryEntry {
@@ -141,7 +161,17 @@ interface LogSet {
   exerciseId: string;
   metric: "reps" | "time_sec";
   value: number;
+  blockIndex?: number;
+  itemIndex?: number;
+  setIndex?: number;
   rpe?: number;
+  note?: string;
+}
+
+interface SetTarget {
+  metric: "reps" | "time_sec";
+  low: number;
+  high: number;
 }
 
 interface PRChangeLike {
@@ -179,7 +209,7 @@ function prHistKey(accountId: string, exerciseId: string) {
 }
 
 function backfillFlagKey(accountId: string) {
-  return `cali:user:${accountId}:stats:backfill:v1`;
+  return `cali:user:${accountId}:stats:backfill:v2`;
 }
 
 /** Baseline positive signal when a wallet sets its first PR (no prior record). */
@@ -200,9 +230,121 @@ function emptyDaily(dateKey: string): DailyStats {
     avgRpe: null,
     maxLevel: 1,
     prHits: 0,
+    setsWithRpe: 0,
+    maxEffortSets: 0,
+    failureSets: 0,
+    overTargetSets: 0,
+    hypertrophySignalSum: 0,
+    hypertrophyScoredSets: 0,
     categories: {},
     updatedAt: Date.now(),
   };
+}
+
+const FAILURE_NOTE_RE = /\b(fail(?:ed|ure)?|to\s*failure|max\s*effort|couldn'?t|no\s*reps?\s*left)\b/i;
+
+function isFailureSignal(set: LogSet): boolean {
+  if (typeof set.rpe === "number" && set.rpe >= 10) return true;
+  return Boolean(set.note && FAILURE_NOTE_RE.test(set.note));
+}
+
+function getTargetForSet(plan: PlanLike, set: LogSet): SetTarget | null {
+  if (!Number.isInteger(set.blockIndex) || !Number.isInteger(set.itemIndex)) return null;
+  const block = plan.blocks[set.blockIndex!];
+  const item = block?.items?.[set.itemIndex!];
+  if (!item?.target) return null;
+  return item.target as SetTarget;
+}
+
+/**
+ * Per-set hypertrophy stimulus (0–100).
+ * High scores require max RPE (10), failure signals, and/or reps well above prescription.
+ * Sets without RPE log 0 — hypertrophy can't be inferred from volume alone.
+ */
+function scoreSetHypertrophy(set: LogSet, target: SetTarget | null): number {
+  if (typeof set.rpe !== "number" || set.rpe < 1 || set.rpe > 10) return 0;
+
+  let score = 0;
+  const maxEffort = set.rpe >= 10;
+  const nearMax = set.rpe >= 9;
+  const failure = isFailureSignal(set);
+
+  if (maxEffort && failure) score += 55;
+  else if (maxEffort) score += 25;
+  else if (nearMax && failure) score += 35;
+  else if (nearMax) score += 12;
+  else if (set.rpe >= 8) score += 5;
+
+  if (target && set.metric === target.metric && set.value > 0) {
+    const high = target.high;
+    if (set.value > high) {
+      const overshoot = (set.value - high) / Math.max(1, high);
+      score += Math.min(45, Math.round(overshoot * 120));
+    }
+  }
+
+  return Math.min(100, score);
+}
+
+function emptyHypertrophyContrib() {
+  return {
+    setsWithRpe: 0,
+    maxEffortSets: 0,
+    failureSets: 0,
+    overTargetSets: 0,
+    hypertrophySignalSum: 0,
+    hypertrophyScoredSets: 0,
+  };
+}
+
+function aggregateHypertrophyFromSets(plan: PlanLike, sets: LogSet[]) {
+  const out = emptyHypertrophyContrib();
+  for (const set of sets) {
+    if (set.value <= 0) continue;
+    const target = getTargetForSet(plan, set);
+    const hasRpe = typeof set.rpe === "number" && set.rpe >= 1 && set.rpe <= 10;
+    if (hasRpe) {
+      out.setsWithRpe += 1;
+      if (set.rpe >= 10) out.maxEffortSets += 1;
+      if (isFailureSignal(set)) out.failureSets += 1;
+    }
+    if (target && set.metric === target.metric && set.value > target.high) {
+      out.overTargetSets += 1;
+    }
+    const setScore = scoreSetHypertrophy(set, target);
+    if (setScore > 0 || hasRpe) {
+      out.hypertrophyScoredSets += 1;
+      out.hypertrophySignalSum += setScore;
+    }
+  }
+  return out;
+}
+
+function hypertrophyPctFromDailies(dailies: DailyStats[]): number {
+  const window = dailies.slice(-30);
+  let signalSum = 0;
+  let scoredSets = 0;
+  let withRpe = 0;
+  let maxEffort = 0;
+  let failure = 0;
+
+  for (const d of window) {
+    signalSum += d.hypertrophySignalSum ?? 0;
+    scoredSets += d.hypertrophyScoredSets ?? 0;
+    withRpe += d.setsWithRpe ?? 0;
+    maxEffort += d.maxEffortSets ?? 0;
+    failure += d.failureSets ?? 0;
+  }
+
+  if (scoredSets === 0 || withRpe === 0) return 0;
+
+  const avgSetScore = signalSum / scoredSets;
+  const maxEffortRate = maxEffort / withRpe;
+  const failureRate = failure / withRpe;
+
+  // Blend average set quality with max-effort/failure rates — 100% requires dominant max-effort failure work.
+  const blended = avgSetScore * 0.55 + maxEffortRate * 100 * 0.25 + failureRate * 100 * 0.20;
+  return Math.min(100, Math.round(blended));
 }
 
 function emptyCategories(): Record<string, CategoryVolume> {
@@ -249,6 +391,7 @@ function buildContribFromLog(
   }
 
   const plannedSets = countPlannedSets(plan as WorkoutPlan);
+  const hypo = aggregateHypertrophyFromSets(plan, sets);
   return {
     workoutId,
     setsLogged: sets.length,
@@ -260,6 +403,7 @@ function buildContribFromLog(
     rpeCount,
     maxLevel: Math.min(4, Math.max(1, plan.level)) as 1 | 2 | 3 | 4,
     prHits,
+    ...hypo,
     categories,
   };
 }
@@ -283,6 +427,12 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
     daily.volumeReps -= c.volumeReps;
     daily.volumeTimeSec -= c.volumeTimeSec;
     daily.prHits = Math.max(0, daily.prHits - c.prHits);
+    daily.setsWithRpe = Math.max(0, daily.setsWithRpe - c.setsWithRpe);
+    daily.maxEffortSets = Math.max(0, daily.maxEffortSets - c.maxEffortSets);
+    daily.failureSets = Math.max(0, daily.failureSets - c.failureSets);
+    daily.overTargetSets = Math.max(0, daily.overTargetSets - c.overTargetSets);
+    daily.hypertrophySignalSum = Math.max(0, daily.hypertrophySignalSum - c.hypertrophySignalSum);
+    daily.hypertrophyScoredSets = Math.max(0, daily.hypertrophyScoredSets - c.hypertrophyScoredSets);
     mergeCategoryDelta(daily.categories, c.categories, -1);
   };
   const add = (c: WorkoutDayContrib) => {
@@ -291,6 +441,12 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
     daily.volumeReps += c.volumeReps;
     daily.volumeTimeSec += c.volumeTimeSec;
     daily.prHits += c.prHits;
+    daily.setsWithRpe += c.setsWithRpe;
+    daily.maxEffortSets += c.maxEffortSets;
+    daily.failureSets += c.failureSets;
+    daily.overTargetSets += c.overTargetSets;
+    daily.hypertrophySignalSum += c.hypertrophySignalSum;
+    daily.hypertrophyScoredSets += c.hypertrophyScoredSets;
     mergeCategoryDelta(daily.categories, c.categories, 1);
     if (c.maxLevel > daily.maxLevel) daily.maxLevel = c.maxLevel;
   };
@@ -416,13 +572,7 @@ function computeScores(
   const levelScore = Math.min(100, Math.round((avgLevel / 3) * 100));
   const effort = Math.min(100, Math.round(avgCompletion * 0.5 + rpeScore * 0.25 + levelScore * 0.25));
 
-  const volThisWeek = weekVolume(dailies, dailies.length - 1);
-  const volLastWeek = dailies.length >= 8
-    ? weekVolume(dailies, dailies.length - 8)
-    : 0;
-  const hypertrophyPct = volLastWeek > 0
-    ? Math.round(((volThisWeek - volLastWeek) / volLastWeek) * 1000) / 10
-    : (volThisWeek > 0 ? 100 : 0);
+  const hypertrophyPct = hypertrophyPctFromDailies(dailies);
 
   const movementIndex = Math.min(100, Math.max(0, Math.round(50 + movementDeltaAvg)));
 
@@ -473,7 +623,11 @@ async function loadDailyRecords(accountId: string, days: number): Promise<DailyS
     try {
       const raw: any = await kv.get(dailyKey(accountId, dateKey));
       if (raw && raw.dateKey === dateKey) {
-        out.push(raw as DailyStats);
+        out.push({
+          ...emptyDaily(dateKey),
+          ...(raw as DailyStats),
+          dateKey,
+        });
       } else {
         out.push(emptyDaily(dateKey));
       }
@@ -555,8 +709,7 @@ export async function processLogAnalytics(args: {
     try {
       const raw: any = await kv.get(wKey);
       if (raw && raw.workoutId === workoutId) {
-        oldContrib = raw as WorkoutDayContrib;
-        if (typeof oldContrib.prHits !== "number") oldContrib.prHits = 0;
+        oldContrib = { ...emptyHypertrophyContrib(), prHits: 0, ...(raw as WorkoutDayContrib) };
       }
     } catch { /* ignore */ }
 
@@ -682,6 +835,7 @@ async function sparklineFromDailies(
       volume: totalVolume(dailies[i]),
       consistency: partial.consistency,
       effort: partial.effort,
+      hypertrophy: partial.hypertrophyPct,
     });
   }
   return points;
@@ -693,6 +847,7 @@ function buildMetricSparklines(sparkline: StatsSparkPoint[]): MetricSparklines {
     effort: sparkline.map((p) => p.effort),
     movement: sparkline.map((p) => p.movementIndex),
     volume: sparkline.map((p) => p.volume),
+    hypertrophy: sparkline.map((p) => p.hypertrophy),
   };
 }
 
@@ -889,8 +1044,11 @@ async function needsAnalyticsBackfill(accountId: string): Promise<boolean> {
   const totalLogSets = logs.reduce((s, l) => s + l.sets.length, 0);
   const dailies = await loadDailyRecords(accountId, 90);
   const totalDailySets = dailies.reduce((s, d) => s + d.setsLogged, 0);
+  const missingHypertrophyRollups = dailies.some(
+    (d) => d.setsLogged > 0 && typeof d.hypertrophyScoredSets !== "number",
+  );
 
-  return totalDailySets < totalLogSets * 0.75;
+  return totalDailySets < totalLogSets * 0.75 || missingHypertrophyRollups;
 }
 
 export async function maybeBackfillAnalytics(

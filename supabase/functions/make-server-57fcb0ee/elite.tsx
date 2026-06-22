@@ -70,7 +70,11 @@ async function computeElitePRChanges(
     exerciseId: s.exerciseId,
     metric: s.metric,
     value: s.value,
+    blockIndex: s.blockIndex,
+    itemIndex: s.itemIndex,
+    setIndex: s.setIndex,
     rpe: s.rpe,
+    note: s.note,
   }));
   return computePRChangesFromSets(logSets, prState);
 }

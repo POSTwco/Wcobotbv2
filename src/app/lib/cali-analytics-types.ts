@@ -42,6 +42,7 @@ export interface StatsSparkPoint {
   volume: number;
   consistency: number;
   effort: number;
+  hypertrophy: number;
 }
 
 export interface DailyActivityPoint {
@@ -55,6 +56,7 @@ export interface MetricSparklines {
   effort: number[];
   movement: number[];
   volume: number[];
+  hypertrophy: number[];
 }
 
 export interface CandlePoint {
