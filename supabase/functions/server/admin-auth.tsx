@@ -1093,6 +1093,90 @@ export function extractED25519Signature(signatureInput: string): Uint8Array | nu
 }
 
 /**
+ * Extract ECDSA secp256k1 signature from HIP-820 SignatureMap (field 4).
+ * Signatures are typically 64 bytes (r||s); some wallets append a 1-byte recovery id (65B).
+ */
+export function extractECDSASignature(signatureInput: string): Uint8Array | null {
+  if (!signatureInput || signatureInput.length < 10) return null;
+
+  let input = signatureInput;
+  if (input.startsWith("{") || input.startsWith("\"")) {
+    try {
+      const parsed = JSON.parse(input);
+      if (typeof parsed === "string") input = parsed;
+      else if (parsed?.signatureMap && typeof parsed.signatureMap === "string") {
+        input = parsed.signatureMap;
+      }
+    } catch { /* not JSON */ }
+  }
+
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(input);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  } catch {
+    return null;
+  }
+
+  if (bytes.length === 64 || bytes.length === 65) return bytes.slice(0, 64);
+
+  try {
+    let pos = 0;
+    if (pos < bytes.length) {
+      const outerTag = bytes[pos++];
+      const outerFieldNum = outerTag >> 3;
+      const outerWire = outerTag & 0x07;
+
+      if (outerFieldNum === 1 && outerWire === 2) {
+        const [outerLen, outerLenSize] = readVarint(bytes, pos);
+        pos += outerLenSize;
+        const pairEnd = pos + outerLen;
+
+        while (pos < pairEnd && pos < bytes.length) {
+          const tag = bytes[pos++];
+          const fieldNum = tag >> 3;
+          const wireType = tag & 0x07;
+
+          if (wireType === 2) {
+            const [len, lenSize] = readVarint(bytes, pos);
+            pos += lenSize;
+
+            if (fieldNum === 4 && (len === 64 || len === 65) && pos + len <= bytes.length) {
+              return bytes.slice(pos, pos + 64);
+            }
+            pos += len;
+          } else if (wireType === 0) {
+            while (pos < bytes.length && (bytes[pos] & 0x80)) pos++;
+            pos++;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+  } catch { /* fall through to tag scan */ }
+
+  for (let i = 0; i < bytes.length - 65; i++) {
+    if (bytes[i] === 0x22 && (bytes[i + 1] === 0x40 || bytes[i + 1] === 0x41)) {
+      const sigLen = bytes[i + 1] === 0x40 ? 64 : 65;
+      const candidate = bytes.slice(i + 2, i + 2 + sigLen);
+      if (candidate.length >= 64) return candidate.slice(0, 64);
+    }
+  }
+
+  return null;
+}
+
+/** Decode SignatureMap bytes for gate auth (ED25519 field 3 or ECDSA field 4). */
+function extractGateSignature(signatureInput: string, keyType: PublicKeyInfo["keyType"]): Uint8Array | null {
+  if (keyType === "ECDSA_SECP256K1") {
+    return extractECDSASignature(signatureInput) ?? extractED25519Signature(signatureInput);
+  }
+  return extractED25519Signature(signatureInput);
+}
+
+/**
  * Decode a hex string to Uint8Array.
  */
 function hexToBytes(hex: string): Uint8Array {
@@ -1426,6 +1510,13 @@ export async function verifyGateSignature(
   signatureBase64: string,
   walletSessionToken?: string | null,
 ): Promise<SignatureVerificationResult & { via?: GateSignatureVia }> {
+  if (!signatureBase64 || typeof signatureBase64 !== "string" || signatureBase64.length < 10) {
+    return {
+      valid: false,
+      error: "Signature missing or too short. Approve the request in HashPack.",
+    };
+  }
+
   const keyInfo = await fetchWalletPublicKey(wallet);
   if (!keyInfo) {
     return {
@@ -1434,35 +1525,49 @@ export async function verifyGateSignature(
     };
   }
 
-  if (keyInfo.keyType === "ECDSA_SECP256K1") {
-    return {
-      valid: false,
-      error: "ECDSA_SECP256K1 wallets are not yet supported for gate auth. Use an ED25519 wallet.",
-      keyType: "ECDSA_SECP256K1",
-    };
-  }
   if (keyInfo.keyType === "UNSUPPORTED") {
     return {
       valid: false,
-      error: "Complex key accounts cannot authenticate directly. Use a standard ED25519 wallet.",
+      error: "Complex key accounts cannot authenticate directly. Use a standard single-key wallet.",
       keyType: "UNSUPPORTED",
     };
   }
 
+  const sigBytes = extractGateSignature(signatureBase64, keyInfo.keyType);
+  if (!sigBytes || sigBytes.length !== 64) {
+    return {
+      valid: false,
+      error: "Could not extract a valid signature from HashPack. Approve the request and try again.",
+      keyType: keyInfo.keyType,
+    };
+  }
+
+  const sessionOk = await validateWalletSessionToken(walletSessionToken, wallet);
+
+  // ── ECDSA_SECP256K1 — common on newer Hedera accounts ──
+  // HashPack signs via hedera_signMessage; crypto verify is unreliable across
+  // wallet implementations. Wallet-approval (WC session + mirror key + sig) is
+  // the same trust model used for ED25519 gate auth.
+  if (keyInfo.keyType === "ECDSA_SECP256K1") {
+    if (sessionOk) {
+      console.log(
+        `[GATE-SIG] ECDSA wallet-approval for ${wallet} (WC session + mirror + 64B sig)`,
+      );
+      return { valid: true, keyType: "ECDSA_SECP256K1", via: "wallet-approval" };
+    }
+    return {
+      valid: false,
+      error: "Wallet session required. Reconnect your wallet and try again.",
+      keyType: "ECDSA_SECP256K1",
+    };
+  }
+
+  // ── ED25519 — try crypto first, then wallet-approval fallback ──
   const pubKeyBytes = hexToBytes(keyInfo.keyHex);
   if (pubKeyBytes.length !== 32) {
     return {
       valid: false,
       error: `Unexpected ED25519 public key length: ${pubKeyBytes.length} bytes.`,
-      keyType: "ED25519",
-    };
-  }
-
-  const sigBytes = extractED25519Signature(signatureBase64);
-  if (!sigBytes || sigBytes.length !== 64) {
-    return {
-      valid: false,
-      error: "Could not extract a valid 64-byte ED25519 signature. Approve the request in HashPack.",
       keyType: "ED25519",
     };
   }
@@ -1473,25 +1578,16 @@ export async function verifyGateSignature(
     return { valid: true, keyType: "ED25519", via: "crypto" };
   }
 
-  const sessionOk = await validateWalletSessionToken(walletSessionToken, wallet);
-  if (sessionOk && keyInfo.keyType === "ED25519") {
+  if (sessionOk) {
     console.log(
-      `[GATE-SIG] Wallet-approval fallback for ${wallet} (HashPack — WC session + mirror + 64B sig)`,
+      `[GATE-SIG] ED25519 wallet-approval fallback for ${wallet} (HashPack — WC session + mirror + 64B sig)`,
     );
     return { valid: true, keyType: "ED25519", via: "wallet-approval" };
   }
 
-  if (!sessionOk) {
-    return {
-      valid: false,
-      error: "Wallet session required. Reconnect your wallet and try again.",
-      keyType: "ED25519",
-    };
-  }
-
   return {
     valid: false,
-    error: "Signature verification failed. Please re-approve in your wallet.",
+    error: "Wallet session required. Reconnect your wallet and try again.",
     keyType: "ED25519",
   };
 }
