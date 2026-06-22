@@ -126,6 +126,7 @@ export interface StatsSummary {
   streakLongest: number;
   prCount: number;
   lastComputedAt: number;
+  analyticsSchemaVersion?: number;
 }
 
 export interface StatsSparkPoint {
@@ -209,8 +210,11 @@ function prHistKey(accountId: string, exerciseId: string) {
 }
 
 function backfillFlagKey(accountId: string) {
-  return `cali:user:${accountId}:stats:backfill:v2`;
+  return `cali:user:${accountId}:stats:backfill:v3`;
 }
+
+/** Bump when rollup/summary formulas change — forces hypertrophy replay for existing wallets. */
+const ANALYTICS_SCHEMA_VERSION = 3;
 
 /** Baseline positive signal when a wallet sets its first PR (no prior record). */
 const FIRST_PR_DELTA_PCT = 5;
@@ -311,10 +315,9 @@ function aggregateHypertrophyFromSets(plan: PlanLike, sets: LogSet[]) {
     if (target && set.metric === target.metric && set.value > target.high) {
       out.overTargetSets += 1;
     }
-    const setScore = scoreSetHypertrophy(set, target);
-    if (setScore > 0 || hasRpe) {
+    if (hasRpe) {
       out.hypertrophyScoredSets += 1;
-      out.hypertrophySignalSum += setScore;
+      out.hypertrophySignalSum += scoreSetHypertrophy(set, target);
     }
   }
   return out;
@@ -336,15 +339,24 @@ function hypertrophyPctFromDailies(dailies: DailyStats[]): number {
     failure += d.failureSets ?? 0;
   }
 
-  if (scoredSets === 0 || withRpe === 0) return 0;
+  // No RPE logged in the window → hypertrophy stimulus unknown, score 0 (not 100).
+  if (withRpe === 0 || scoredSets === 0) return 0;
 
   const avgSetScore = signalSum / scoredSets;
   const maxEffortRate = maxEffort / withRpe;
   const failureRate = failure / withRpe;
 
-  // Blend average set quality with max-effort/failure rates — 100% requires dominant max-effort failure work.
-  const blended = avgSetScore * 0.55 + maxEffortRate * 100 * 0.25 + failureRate * 100 * 0.20;
-  return Math.min(100, Math.round(blended));
+  let blended = avgSetScore * 0.5 + maxEffortRate * 100 * 0.3 + failureRate * 100 * 0.2;
+
+  // Without majority max-effort (RPE 10) sets, cap well below 100.
+  if (maxEffortRate < 0.5) {
+    blended = Math.min(blended, avgSetScore * 0.45);
+  }
+  if (maxEffortRate < 0.9 || failureRate < 0.25) {
+    blended = Math.min(blended, 85);
+  }
+
+  return Math.min(100, Math.max(0, Math.round(blended)));
 }
 
 function emptyCategories(): Record<string, CategoryVolume> {
@@ -613,6 +625,7 @@ function computeScores(
     streakLongest: streak.longest,
     prCount: 0,
     lastComputedAt: Date.now(),
+    analyticsSchemaVersion: ANALYTICS_SCHEMA_VERSION,
   };
 }
 
@@ -1026,7 +1039,33 @@ export async function backfillAnalyticsForWallet(
   await recomputeSummary(accountId);
 }
 
+async function needsHypertrophyRebuild(accountId: string): Promise<boolean> {
+  try {
+    const raw: any = await kv.get(summaryKey(accountId));
+    if (raw && (raw.analyticsSchemaVersion ?? 0) >= ANALYTICS_SCHEMA_VERSION) {
+      return false;
+    }
+  } catch { /* ignore */ }
+
+  const flag: any = await kv.get(backfillFlagKey(accountId));
+  if (flag?.version >= ANALYTICS_SCHEMA_VERSION) return false;
+
+  const dailies = await loadDailyRecords(accountId, 90);
+  const setsLogged = dailies.reduce((s, d) => s + d.setsLogged, 0);
+  if (setsLogged === 0) return false;
+
+  const withRpe = dailies.reduce((s, d) => s + (d.setsWithRpe ?? 0), 0);
+  const hypoSum = dailies.reduce((s, d) => s + (d.hypertrophySignalSum ?? 0), 0);
+
+  if (withRpe > 0 || hypoSum > 0) return true;
+
+  // Rollups missing hypertrophy data — rebuild if logs exist (replay once at v3).
+  return true;
+}
+
 async function needsAnalyticsBackfill(accountId: string): Promise<boolean> {
+  if (await needsHypertrophyRebuild(accountId)) return true;
+
   let caliLogs: any[] = [];
   let eliteLogs: any[] = [];
   try {
@@ -1044,11 +1083,8 @@ async function needsAnalyticsBackfill(accountId: string): Promise<boolean> {
   const totalLogSets = logs.reduce((s, l) => s + l.sets.length, 0);
   const dailies = await loadDailyRecords(accountId, 90);
   const totalDailySets = dailies.reduce((s, d) => s + d.setsLogged, 0);
-  const missingHypertrophyRollups = dailies.some(
-    (d) => d.setsLogged > 0 && typeof d.hypertrophyScoredSets !== "number",
-  );
 
-  return totalDailySets < totalLogSets * 0.75 || missingHypertrophyRollups;
+  return totalDailySets < totalLogSets * 0.75;
 }
 
 export async function maybeBackfillAnalytics(
@@ -1056,15 +1092,21 @@ export async function maybeBackfillAnalytics(
   lookup: ExerciseLookup,
 ): Promise<void> {
   try {
+    const needsRebuild = await needsAnalyticsBackfill(accountId);
     const flag: any = await kv.get(backfillFlagKey(accountId));
-    if (flag?.done) return;
-    if (!(await needsAnalyticsBackfill(accountId))) {
-      await kv.set(backfillFlagKey(accountId), { done: true, skipped: true, at: Date.now() });
+    if (flag?.done && !needsRebuild) return;
+    if (!needsRebuild) {
+      await kv.set(backfillFlagKey(accountId), { done: true, skipped: true, at: Date.now(), version: ANALYTICS_SCHEMA_VERSION });
       return;
     }
     const started = Date.now();
     await backfillAnalyticsForWallet(accountId, lookup);
-    await kv.set(backfillFlagKey(accountId), { done: true, at: Date.now(), ms: Date.now() - started });
+    await kv.set(backfillFlagKey(accountId), {
+      done: true,
+      at: Date.now(),
+      ms: Date.now() - started,
+      version: ANALYTICS_SCHEMA_VERSION,
+    });
     console.log(`[CALI-ANALYTICS] backfill complete for ${accountId} in ${Date.now() - started}ms`);
   } catch (err) {
     console.log(`[CALI-ANALYTICS] backfill failed for ${accountId}: ${err}`);
@@ -1086,15 +1128,8 @@ export async function buildStatsResponse(
 
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
 
-  let summary: StatsSummary | null = null;
-  try {
-    const raw: any = await kv.get(summaryKey(accountId));
-    if (raw && typeof raw.athleteScore === "number") summary = raw as StatsSummary;
-  } catch { /* ignore */ }
-
-  if (!summary) {
-    summary = await recomputeSummary(accountId);
-  }
+  // Always recompute — cached summary can hold stale hypertrophyPct (e.g. old volume-based 100%).
+  const summary = await recomputeSummary(accountId);
 
   const dailies = await loadDailyRecords(accountId, days);
   const streak: StreakLike = { current: summary.streakCurrent, longest: summary.streakLongest };
