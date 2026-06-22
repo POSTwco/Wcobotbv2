@@ -150,6 +150,8 @@ export function CaliWorkout() {
   const blockAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [finalStreak, setFinalStreak] = useState(0);
+  const [celebrationTier, setCelebrationTier] = useState<import("../../lib/cali-analytics-types").AthleteTier | undefined>();
+  const [celebrationMovementDelta, setCelebrationMovementDelta] = useState<number | undefined>();
   const [streak, setStreak] = useState(0);
 
   const [activeBlock, setActiveBlock] = useState(0);
@@ -560,6 +562,11 @@ export function CaliWorkout() {
     setStreak(newStreak);
     setFinalStreak(newStreak);
     setXp((x) => x + xpForWorkoutComplete());
+    const statsRes = await api.cali.stats(cali.sessionToken, "7d");
+    if (statsRes.success && statsRes.data) {
+      setCelebrationTier(statsRes.data.summary.athleteTier);
+      setCelebrationMovementDelta(statsRes.data.summary.deltas.movement7d);
+    }
     completeTutorial();
     setShowCelebration(true);
   }, [actuals, plan, cali, completeTutorial, setsLogged]);
@@ -741,6 +748,8 @@ export function CaliWorkout() {
         xp={xp}
         level={plan.level}
         streak={finalStreak}
+        athleteTier={celebrationTier}
+        movementDelta={celebrationMovementDelta}
         message={getCoachMessage("workoutComplete")}
         onClose={() => setShowCelebration(false)}
       />

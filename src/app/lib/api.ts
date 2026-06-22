@@ -873,6 +873,25 @@ export const api = {
       request<{ streak: { current: number; longest: number; lastDate: string; updatedAt: number } }>(
         "/cali/streak", { caliSessionToken }),
 
+    stats: (caliSessionToken: string, range: import("./cali-analytics-types").StatsRange = "7d") =>
+      request<{
+        summary: import("./cali-analytics-types").StatsSummary;
+        sparkline: import("./cali-analytics-types").StatsSparkPoint[];
+        range: import("./cali-analytics-types").StatsRange;
+      }>(`/cali/stats?range=${encodeURIComponent(range)}`, { caliSessionToken }),
+
+    movementStats: (caliSessionToken: string, limit = 12) =>
+      request<{ movements: import("./cali-analytics-types").MovementStat[] }>(
+        `/cali/stats/movements?limit=${limit}`, { caliSessionToken }),
+
+    prHistory: (caliSessionToken: string, exerciseId: string) =>
+      request<{
+        exerciseId: string;
+        name: string;
+        category: string;
+        history: import("./cali-analytics-types").PRHistoryEntry[];
+      }>(`/cali/stats/pr-history/${encodeURIComponent(exerciseId)}`, { caliSessionToken }),
+
     anchor: (
       caliSessionToken: string,
       workoutId: string,

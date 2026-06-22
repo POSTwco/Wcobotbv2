@@ -25,6 +25,10 @@ import { CaliLoader } from "./cali-loader";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 import { LevelPicker } from "./cali-level-picker";
+import { CaliAthleteTierCard } from "./cali-athlete-tier-card";
+import { CaliMetricTile } from "./cali-metric-tile";
+import { CaliStatsSparkline } from "./cali-stats-sparkline";
+import type { StatsSummary, StatsSparkPoint } from "../../lib/cali-analytics-types";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -72,6 +76,8 @@ export function CaliDashboard() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingLevel, setSavingLevel] = useState(false);
+  const [statsSummary, setStatsSummary] = useState<StatsSummary | null>(null);
+  const [statsSparkline, setStatsSparkline] = useState<StatsSparkPoint[]>([]);
 
   // ── Initial load ───────────────────────────────────────────────────────
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
@@ -79,11 +85,12 @@ export function CaliDashboard() {
     if (!opts?.silent) setLoading(true);
     setError(null);
     const token = cali.sessionToken;
-    const [p, s, r, h] = await Promise.all([
+    const [p, s, r, h, st] = await Promise.all([
       api.cali.getProfile(token),
       api.cali.streak(token),
       api.cali.prs(token),
       api.cali.history(token, { limit: 10 }),
+      api.cali.stats(token, "7d"),
     ]);
     if (p.success && p.data) setProfile(p.data.profile);
     if (s.success && s.data) setStreak(s.data.streak);
@@ -91,6 +98,10 @@ export function CaliDashboard() {
     if (h.success && h.data) {
       setHistory(h.data.items);
       setHistoryTotal(h.data.total);
+    }
+    if (st.success && st.data) {
+      setStatsSummary(st.data.summary);
+      setStatsSparkline(st.data.sparkline);
     }
     if (!p.success) {
       cali.handleAuthError(p.code);
@@ -179,6 +190,62 @@ export function CaliDashboard() {
         </div>
       )}
 
+      {/* Athlete analytics */}
+      <CaliAthleteTierCard summary={statsSummary} loading={loading} />
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <CaliMetricTile
+          label="CONSISTENCY"
+          value={statsSummary ? `${statsSummary.consistency}` : "—"}
+          delta={statsSummary?.deltas.consistency7d ?? 0}
+          accent="#F97316"
+          sparkData={statsSparkline.map((p) => p.athleteScore)}
+          onClick={() => navigate("/calisthenics/analytics")}
+        />
+        <CaliMetricTile
+          label="EFFORT"
+          value={statsSummary ? `${statsSummary.effort}` : "—"}
+          delta={statsSummary?.deltas.effort7d ?? 0}
+          accent="#6AA3E0"
+          onClick={() => navigate("/calisthenics/analytics")}
+        />
+        <CaliMetricTile
+          label="HYPERTROPHY"
+          value={statsSummary ? `${statsSummary.hypertrophyPct}%` : "—"}
+          delta={statsSummary?.deltas.hypertrophy7d ?? 0}
+          deltaSuffix="%"
+          accent="#10b981"
+          sparkData={statsSparkline.map((p) => p.volume)}
+          onClick={() => navigate("/calisthenics/analytics")}
+        />
+        <CaliMetricTile
+          label="MOVEMENT"
+          value={statsSummary ? `${statsSummary.movementIndex}` : "—"}
+          delta={statsSummary?.deltas.movement7d ?? 0}
+          accent="#D4A843"
+          sparkData={statsSparkline.map((p) => p.movementIndex)}
+          onClick={() => navigate("/calisthenics/analytics")}
+        />
+      </div>
+
+      {statsSparkline.length > 1 && (
+        <div
+          className="rounded-2xl border p-4"
+          style={{ background: "rgba(11,17,32,0.6)", borderColor: "rgba(66,116,185,0.15)" }}
+        >
+          <p className="text-[0.6rem] font-bold tracking-widest text-[#8494A7] mb-2" style={orbitron}>
+            7D ATHLETE INDEX
+          </p>
+          <div className="h-20">
+            <CaliStatsSparkline
+              data={statsSparkline.map((p) => p.athleteScore)}
+              color="#4274B9"
+              height={80}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Streak + PR strip */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard
@@ -191,7 +258,7 @@ export function CaliDashboard() {
         <StatCard
           icon={<Trophy className="w-5 h-5" />}
           label="PRs"
-          value={`${prs.length}`}
+          value={`${statsSummary?.prCount ?? prs.length}`}
           sub={prs.length > 0 ? `Latest: ${prs[0].name}` : "Log a set to set your first"}
           accent="#D4A843"
           onClick={() => navigate("/calisthenics/prs")}
@@ -427,7 +494,7 @@ function StatCard({
     <Tag
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`rounded-2xl border p-4 text-left w-full ${
+      className={`rounded-2xl border p-4 text-left w-full min-h-[88px] ${
         onClick ? "cursor-pointer hover:border-[#4274B9]/35 hover:bg-white/[0.03] transition-colors" : ""
       }`}
       style={{

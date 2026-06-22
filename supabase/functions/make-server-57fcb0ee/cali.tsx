@@ -79,6 +79,14 @@ import {
   mergeExercises,
   type ExerciseOverride,
 } from "./cali_library.tsx";
+import {
+  processLogAnalytics,
+  recordPRHistory,
+  buildStatsResponse,
+  buildMovementStats,
+  buildPRHistoryResponse,
+  parseStatsRange,
+} from "./cali_analytics.tsx";
 
 /**
  * Slim id → display projection of the library, built once at module load.
@@ -1477,6 +1485,54 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
+  // GET /cali/stats — athlete analytics summary + sparkline
+  // ─────────────────────────────────────────────────────────────────────────
+  app.get(`${PREFIX}/cali/stats`, requireCaliSession, async (c) => {
+    const accountId = c.get("caliAccountId") as string;
+    const rl = await checkRateLimit(`cali-stats:${accountId}`, 60, 60_000);
+    if (rl.limited) {
+      return c.json(
+        { success: false, error: "Too many stats reads.", code: "RATE_LIMITED", retryAfter: rl.retryAfter },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter || 5) } },
+      );
+    }
+    const range = parseStatsRange(c.req.query("range"));
+    const profile = await loadOrInitProfile(accountId);
+    const { summary, sparkline } = await buildStatsResponse(accountId, range, profile.level);
+    return c.json({ success: true, data: { summary, sparkline, range } });
+  });
+
+  app.get(`${PREFIX}/cali/stats/movements`, requireCaliSession, async (c) => {
+    const accountId = c.get("caliAccountId") as string;
+    const rl = await checkRateLimit(`cali-stats-mov:${accountId}`, 30, 60_000);
+    if (rl.limited) {
+      return c.json(
+        { success: false, error: "Too many movement reads.", code: "RATE_LIMITED", retryAfter: rl.retryAfter },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter || 5) } },
+      );
+    }
+    const limit = clampInt(c.req.query("limit"), 1, 24, 12);
+    const movements = await buildMovementStats(accountId, limit, getExerciseSafe);
+    return c.json({ success: true, data: { movements } });
+  });
+
+  app.get(`${PREFIX}/cali/stats/pr-history/:exerciseId`, requireCaliSession, async (c) => {
+    const accountId = c.get("caliAccountId") as string;
+    const exerciseId = sanitizeString(c.req.param("exerciseId"), 128);
+    if (!exerciseId) return c.json({ success: false, error: "Invalid exerciseId" }, 400);
+    const rl = await checkRateLimit(`cali-stats-prh:${accountId}`, 30, 60_000);
+    if (rl.limited) {
+      return c.json(
+        { success: false, error: "Too many PR history reads.", code: "RATE_LIMITED", retryAfter: rl.retryAfter },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfter || 5) } },
+      );
+    }
+    const result = await buildPRHistoryResponse(accountId, exerciseId, getExerciseSafe);
+    if (!result) return c.json({ success: false, error: "PR history unavailable" }, 503);
+    return c.json({ success: true, data: result });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
   // POST /cali/workout/:id/anchor — STUB until HCS operator keys are set
   // ─────────────────────────────────────────────────────────────────────────
   //
@@ -2582,6 +2638,29 @@ async function persistWorkoutLog(args: {
       } catch (err) {
         console.log(`[CALI-LOG] streak update failed for ${accountId}/${workoutId}: ${err}`);
       }
+    }
+
+    try {
+      await processLogAnalytics({
+        accountId,
+        dateKey: log.dateKey,
+        workoutId,
+        plan,
+        sets: log.sets,
+        completed: Boolean(log.completedAt),
+        prHits: prChanges.length,
+        lookup: getExerciseSafe,
+      });
+      for (const ch of prChanges) {
+        await recordPRHistory({
+          accountId,
+          change: ch,
+          workoutId,
+          level: plan.level,
+        });
+      }
+    } catch (err) {
+      console.log(`[CALI-LOG] analytics update failed for ${accountId}/${workoutId}: ${err}`);
     }
 
     return { log, prChanges, streak };

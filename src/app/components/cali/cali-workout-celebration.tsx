@@ -4,9 +4,10 @@
 
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Trophy, Flame, Zap, ArrowRight } from "lucide-react";
+import { Trophy, Flame, Zap, ArrowRight, TrendingUp } from "lucide-react";
 import { Link } from "react-router";
 import confetti from "canvas-confetti";
+import { ATHLETE_TIER_CONFIG, deltaColor, formatDelta, type AthleteTier } from "../../lib/cali-analytics-types";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -17,6 +18,8 @@ interface Props {
   level: number;
   streak: number;
   message: string;
+  athleteTier?: AthleteTier;
+  movementDelta?: number;
   onClose: () => void;
 }
 
@@ -29,7 +32,9 @@ function fireVictoryConfetti() {
   }, 250);
 }
 
-export function CaliWorkoutCelebration({ open, xp, level, streak, message, onClose }: Props) {
+export function CaliWorkoutCelebration({
+  open, xp, level, streak, message, athleteTier, movementDelta, onClose,
+}: Props) {
   const fired = useRef(false);
 
   useEffect(() => {
@@ -79,6 +84,34 @@ export function CaliWorkoutCelebration({ open, xp, level, streak, message, onClo
             </h2>
             <p className="text-sm text-[#A3B0C2] leading-relaxed mb-6" style={dmSans}>{message}</p>
 
+            {(athleteTier || movementDelta != null) && (
+              <div className="flex items-center justify-center gap-3 mb-5 flex-wrap">
+                {athleteTier && (
+                  <span
+                    className="text-[0.55rem] font-bold px-2.5 py-1 rounded-full"
+                    style={{
+                      ...(ATHLETE_TIER_CONFIG[athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED),
+                      fontFamily: "Orbitron, sans-serif",
+                      background: (ATHLETE_TIER_CONFIG[athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).bg,
+                      border: `1px solid ${(ATHLETE_TIER_CONFIG[athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).border}`,
+                      color: (ATHLETE_TIER_CONFIG[athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).color,
+                    }}
+                  >
+                    {(ATHLETE_TIER_CONFIG[athleteTier] ?? ATHLETE_TIER_CONFIG.UNRANKED).label}
+                  </span>
+                )}
+                {movementDelta != null && (
+                  <span
+                    className="flex items-center gap-1 text-xs font-bold"
+                    style={{ color: deltaColor(movementDelta), fontFamily: "Orbitron, sans-serif" }}
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    Movement {formatDelta(movementDelta)}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-center gap-6 mb-8">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1 text-[#6AA3E0] mb-1">
@@ -116,12 +149,12 @@ export function CaliWorkoutCelebration({ open, xp, level, streak, message, onClo
                 Back to Dashboard <ArrowRight className="w-4 h-4" />
               </Link>
               <Link
-                to="/calisthenics/prs"
+                to="/calisthenics/analytics"
                 onClick={onClose}
                 className="text-xs text-[#6AA3E0] hover:underline py-2"
                 style={dmSans}
               >
-                View your PRs
+                View athlete analytics
               </Link>
             </div>
           </motion.div>

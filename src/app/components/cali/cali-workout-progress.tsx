@@ -81,7 +81,7 @@ export function CaliWorkoutProgress({
             />
           </div>
           <p className="text-[0.55rem] text-[#8494A7] mt-0.5" style={dmSans}>
-            {setsLogged}/{setsTotal} sets · L{level} · {getXpLevelLabel(xp)}
+            Effort {pct}% · {setsLogged}/{setsTotal} sets · L{level} · {getXpLevelLabel(xp)}
           </p>
         </div>
       </div>
