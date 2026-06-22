@@ -1125,6 +1125,11 @@ async function needsHypertrophyRebuild(accountId: string): Promise<boolean> {
   );
 
   if (withRpe > 0 || hypoSum > 0) {
+    try {
+      const raw: any = await kv.get(summaryKey(accountId));
+      if (raw && (raw.analyticsSchemaVersion ?? 0) < ANALYTICS_SCHEMA_VERSION) return true;
+    } catch { /* ignore */ }
+
     // v4 adds elite rollup fields — rebuild if elite logs exist but fields are empty.
     let eliteLogs: any[] = [];
     try {
