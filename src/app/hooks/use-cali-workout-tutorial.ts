@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type CaliTutorialLevel,
   type TutorialStep,
@@ -8,7 +8,6 @@ import {
   isExerciseFullyLogged,
   isTutorialDone,
   markTutorialDone,
-  shouldRunTutorial,
 } from "../lib/cali-workout-tutorial";
 
 interface PlanBlock {
@@ -24,7 +23,6 @@ interface UseCaliWorkoutTutorialInput {
   loggedSets: Set<string>;
   actuals: Record<string, { value: string; rpe: string; note: string }>;
   completedBlocks: Set<number>;
-  forceActive?: boolean;
 }
 
 interface UseCaliWorkoutTutorialResult {
@@ -36,6 +34,8 @@ interface UseCaliWorkoutTutorialResult {
   completeTutorial: () => void;
 }
 
+const TERMINAL_STEPS: TutorialStep[] = ["nextExercise", "switchBlock", "finish"];
+
 export function useCaliWorkoutTutorial({
   level,
   planBlocks,
@@ -45,33 +45,48 @@ export function useCaliWorkoutTutorial({
   loggedSets,
   actuals,
   completedBlocks,
-  forceActive = false,
 }: UseCaliWorkoutTutorialInput): UseCaliWorkoutTutorialResult {
   const tutorialLevel = level === 1 || level === 2 ? (level as CaliTutorialLevel) : null;
 
   const [step, setStep] = useState<TutorialStep>("done");
-  const [manuallyActive, setManuallyActive] = useState(false);
+  const dismissedRef = useRef(false);
+  const armedRef = useRef(false);
 
-  const shouldAutoStart = useMemo(() => {
-    if (!tutorialLevel || !shouldRunTutorial(level)) return false;
-    return !isTutorialDone(tutorialLevel);
-  }, [tutorialLevel, level]);
+  const dismiss = useCallback(() => {
+    dismissedRef.current = true;
+    setStep("done");
+  }, []);
 
+  const skip = useCallback(() => {
+    if (tutorialLevel) markTutorialDone(tutorialLevel);
+    dismiss();
+  }, [tutorialLevel, dismiss]);
+
+  const completeTutorial = useCallback(() => {
+    if (tutorialLevel) markTutorialDone(tutorialLevel);
+    dismiss();
+  }, [tutorialLevel, dismiss]);
+
+  const replay = useCallback(() => {
+    if (!tutorialLevel) return;
+    clearTutorialDone(tutorialLevel);
+    dismissedRef.current = false;
+    armedRef.current = true;
+    setStep("welcome");
+  }, [tutorialLevel]);
+
+  // Auto-start once per workout load — never re-fires after skip/dismiss.
   useEffect(() => {
-    if (!tutorialLevel) {
-      setStep("done");
+    if (!tutorialLevel || !planBlocks?.length) return;
+    if (armedRef.current || dismissedRef.current) return;
+
+    armedRef.current = true;
+    if (isTutorialDone(tutorialLevel)) {
+      dismissedRef.current = true;
       return;
     }
-    if (forceActive || manuallyActive) {
-      if (step === "done") setStep("welcome");
-      return;
-    }
-    if (shouldAutoStart && step === "done") {
-      setStep("welcome");
-    } else if (!shouldAutoStart && !manuallyActive && step !== "done") {
-      setStep("done");
-    }
-  }, [tutorialLevel, shouldAutoStart, forceActive, manuallyActive, step]);
+    setStep("welcome");
+  }, [tutorialLevel, planBlocks]);
 
   const firstExerciseSets = planBlocks?.[0]?.items?.[0]?.sets ?? 0;
   const firstExerciseLogged = useMemo(
@@ -86,31 +101,20 @@ export function useCaliWorkoutTutorial({
   const advance = useCallback(() => {
     setStep((current) => {
       if (current === "done") return "done";
+
+      if (TERMINAL_STEPS.includes(current)) {
+        dismissedRef.current = true;
+        if (tutorialLevel) markTutorialDone(tutorialLevel);
+        return "done";
+      }
+
       return getNextStep(current);
     });
-  }, []);
-
-  const skip = useCallback(() => {
-    if (tutorialLevel) markTutorialDone(tutorialLevel);
-    setManuallyActive(false);
-    setStep("done");
   }, [tutorialLevel]);
 
-  const completeTutorial = useCallback(() => {
-    if (tutorialLevel) markTutorialDone(tutorialLevel);
-    setManuallyActive(false);
-    setStep("done");
-  }, [tutorialLevel]);
-
-  const replay = useCallback(() => {
-    if (!tutorialLevel) return;
-    clearTutorialDone(tutorialLevel);
-    setManuallyActive(true);
-    setStep("welcome");
-  }, [tutorialLevel]);
-
+  // Event-driven transitions — forward only, never rewind.
   useEffect(() => {
-    if (step === "done" || !tutorialLevel) return;
+    if (step === "done" || dismissedRef.current || !tutorialLevel) return;
 
     if (step === "enterSet" && firstSetHasValue) {
       setStep("logSets");
@@ -127,12 +131,11 @@ export function useCaliWorkoutTutorial({
       return;
     }
 
-    if (step === "switchBlock" && setsTotal > 0 && setsLogged >= setsTotal) {
-      setStep("finish");
-      return;
-    }
-
-    if (step === "nextExercise" && setsTotal > 0 && setsLogged >= setsTotal) {
+    if (
+      (step === "nextExercise" || step === "switchBlock")
+      && setsTotal > 0
+      && setsLogged >= setsTotal
+    ) {
       setStep("finish");
     }
   }, [

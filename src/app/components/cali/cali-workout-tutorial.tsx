@@ -57,6 +57,7 @@ function SpotlightCard({
   onAdvance,
   onSkip,
   showNext,
+  advanceLabel,
 }: {
   rect: Rect | null;
   title: string;
@@ -67,6 +68,7 @@ function SpotlightCard({
   onAdvance: () => void;
   onSkip: () => void;
   showNext: boolean;
+  advanceLabel: string;
 }) {
   const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
   const viewportW = typeof window !== "undefined" ? window.innerWidth : 400;
@@ -168,7 +170,7 @@ function SpotlightCard({
                   color: "#fff",
                 }}
               >
-                Got it
+                {advanceLabel}
               </button>
             )}
             <button
@@ -279,7 +281,7 @@ function WelcomeModal({
   );
 }
 
-const MANUAL_ADVANCE_STEPS: TutorialStep[] = ["progress", "preview"];
+const MANUAL_ADVANCE_STEPS: TutorialStep[] = ["progress", "preview", "nextExercise", "switchBlock", "finish"];
 
 export function CaliWorkoutTutorial({ step, level, onAdvance, onSkip }: Props) {
   const [rect, setRect] = useState<Rect | null>(null);
@@ -321,6 +323,10 @@ export function CaliWorkoutTutorial({ step, level, onAdvance, onSkip }: Props) {
 
   const totalSteps = getStepCount();
   const stepNum = getStepIndex(step);
+  const advanceLabel =
+    step === "finish" ? "Start training"
+    : step === "nextExercise" ? "Got it — keep going"
+    : "Got it";
 
   return (
     <AnimatePresence mode="wait">
@@ -337,6 +343,7 @@ export function CaliWorkoutTutorial({ step, level, onAdvance, onSkip }: Props) {
           onAdvance={onAdvance}
           onSkip={onSkip}
           showNext={MANUAL_ADVANCE_STEPS.includes(step)}
+          advanceLabel={advanceLabel}
         />
       )}
     </AnimatePresence>
