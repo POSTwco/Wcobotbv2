@@ -15,7 +15,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
-  Dumbbell, RefreshCw, Loader2, AlertCircle,
+  Dumbbell, Settings2, RefreshCw, Loader2, AlertCircle,
   ChevronRight, Calendar, Crown, Lock,
 } from "lucide-react";
 import { useWallet } from "../wallet-context";
