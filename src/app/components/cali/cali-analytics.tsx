@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, BarChart3, Flame, Loader2, Trophy } from "lucide-react";
+import { ArrowLeft, BarChart3, Flame, Loader2, Shield, Trophy } from "lucide-react";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 import { CaliLoader } from "./cali-loader";
@@ -250,7 +250,7 @@ export function CaliAnalytics() {
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className={`grid gap-3 ${(summary.eliteSessions30d ?? 0) > 0 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
           <CaliGlassPanel accent="#F97316" glow className="p-4 flex items-center gap-3">
             <Flame className="w-5 h-5 text-[#F97316]" style={{ filter: "drop-shadow(0 0 8px #F9731666)" }} />
             <div>
@@ -269,6 +269,18 @@ export function CaliAnalytics() {
               </div>
             </CaliGlassPanel>
           </Link>
+          {(summary.eliteSessions30d ?? 0) > 0 && (
+            <CaliGlassPanel accent="#D4A843" glow className="p-4 flex items-center gap-3 col-span-2 sm:col-span-1">
+              <Shield className="w-5 h-5 text-[#D4A843]" style={{ filter: "drop-shadow(0 0 8px #D4A84366)" }} />
+              <div>
+                <p className="text-[0.6rem] text-[#8494A7] tracking-widest" style={orbitron}>ELITE VAULT</p>
+                <p className="text-xl font-bold text-white" style={orbitron}>{summary.eliteSessions30d}</p>
+                <p className="text-[0.65rem] text-[#8494A7]" style={dmSans}>
+                  {summary.eliteSets30d} sets · {summary.eliteSessions7d} this week
+                </p>
+              </div>
+            </CaliGlassPanel>
+          )}
         </div>
       )}
 

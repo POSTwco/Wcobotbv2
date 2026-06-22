@@ -24,7 +24,7 @@ import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 import { LevelPicker } from "./cali-level-picker";
 import { CaliAthleteTierCard } from "./cali-athlete-tier-card";
-import type { StatsSummary } from "../../lib/cali-analytics-types";
+import type { StatsSummary, WorkoutHistoryItem } from "../../lib/cali-analytics-types";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -34,14 +34,11 @@ interface Profile {
   equipment: string[];
   displayName: string;
 }
-interface HistoryItem {
-  workoutId: string;
-  dateKey: string;
-  completedAt: string | null;
-  totalSets: number;
-  uniqueExercises: number;
-  topVolumeSet: { exerciseId: string; metric: "reps" | "time_sec"; value: number } | null;
-  updatedAt: number;
+function historyWorkoutPath(item: WorkoutHistoryItem): string {
+  const id = encodeURIComponent(item.workoutId);
+  return item.source === "elite"
+    ? `/calisthenics/elite/workout/${id}`
+    : `/calisthenics/workout/${id}`;
 }
 
 export function CaliDashboard() {
@@ -51,7 +48,7 @@ export function CaliDashboard() {
   const [eliteAllowed, setEliteAllowed] = useState<boolean | null>(null);
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<WorkoutHistoryItem[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -94,6 +91,9 @@ export function CaliDashboard() {
         streakLongest: 0,
         prCount: 0,
         lastComputedAt: 0,
+        eliteSessions7d: 0,
+        eliteSessions30d: 0,
+        eliteSets30d: 0,
       });
     }
     if (!p.success) {
@@ -253,14 +253,23 @@ export function CaliDashboard() {
         ) : (
           <ul className="space-y-2">
             {history.map((it) => (
-              <li key={`${it.dateKey}-${it.workoutId}`}>
+              <li key={`${it.source}-${it.dateKey}-${it.workoutId}`}>
                 <Link
-                  to={`/calisthenics/workout/${encodeURIComponent(it.workoutId)}`}
-                  className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[#4274B9]/12 bg-white/[0.02] hover:border-[#4274B9]/30 hover:bg-white/[0.04] transition-colors"
+                  to={historyWorkoutPath(it)}
+                  className={`flex items-center justify-between gap-3 p-3 rounded-xl border bg-white/[0.02] hover:bg-white/[0.04] transition-colors ${
+                    it.source === "elite"
+                      ? "border-[#D4A843]/25 hover:border-[#D4A843]/45"
+                      : "border-[#4274B9]/12 hover:border-[#4274B9]/30"
+                  }`}
                 >
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-bold text-white" style={dmSans}>{it.dateKey}</span>
+                      {it.source === "elite" && (
+                        <span className="px-1.5 py-0.5 text-[0.55rem] rounded bg-[#D4A843]/15 text-[#D4A843] font-bold" style={orbitron}>
+                          ELITE VAULT
+                        </span>
+                      )}
                       {it.completedAt && (
                         <span className="px-1.5 py-0.5 text-[0.55rem] rounded bg-[#10b981]/12 text-[#10b981] font-bold" style={orbitron}>
                           COMPLETED

@@ -1377,27 +1377,33 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
     const beforeRaw = c.req.query("before") || "";
     const before = /^\d{4}-\d{2}-\d{2}$/.test(beforeRaw) ? beforeRaw : "";
 
-    let rows: any[];
+    let caliRows: any[] = [];
+    let eliteRows: any[] = [];
     try {
-      rows = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
+      caliRows = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
+      eliteRows = (await kv.getByPrefix(`elite:user:${accountId}:log:`)) ?? [];
     } catch (err) {
       console.log(`[CALI-HIST] getByPrefix failed for ${accountId}: ${err}`);
       return c.json({ success: false, error: "History unavailable" }, 503);
     }
 
-    // Defensive: every row should already belong to this wallet (prefix is
-    // scoped), but verify accountId on the value too in case of legacy drift.
-    const logs: WorkoutLog[] = rows
-      .filter((r) => r && r.accountId === accountId && typeof r.dateKey === "string")
-      .sort((a, b) => {
-        if (a.dateKey !== b.dateKey) return b.dateKey.localeCompare(a.dateKey);
-        return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
-      });
+    type HistRow = WorkoutLog & { _source: "cali" | "elite"; _level: 1 | 2 | 3 | 4 };
+    const logs: HistRow[] = [
+      ...caliRows
+        .filter((r) => r && r.accountId === accountId && typeof r.dateKey === "string")
+        .map((r) => ({ ...r, _source: "cali" as const, _level: 1 as const })),
+      ...eliteRows
+        .filter((r) => r && r.accountId === accountId && typeof r.dateKey === "string")
+        .map((r) => ({ ...r, _source: "elite" as const, _level: 4 as const })),
+    ].sort((a, b) => {
+      if (a.dateKey !== b.dateKey) return b.dateKey.localeCompare(a.dateKey);
+      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+    });
 
     const filtered = before ? logs.filter((l) => l.dateKey < before) : logs;
     const page = filtered.slice(0, limit);
 
-    const items = page.map((l) => projectHistoryItem(l));
+    const items = page.map((l) => projectHistoryItem(l, l._source, l._level));
     const nextCursor =
       page.length === limit && page.length > 0 ? page[page.length - 1].dateKey : null;
 
@@ -2081,9 +2087,15 @@ interface HistoryItem {
   uniqueExercises: number;
   topVolumeSet: { exerciseId: string; metric: "reps" | "time_sec"; value: number } | null;
   updatedAt: number;
+  source: "cali" | "elite";
+  level: 1 | 2 | 3 | 4;
 }
 
-function projectHistoryItem(l: WorkoutLog): HistoryItem {
+function projectHistoryItem(
+  l: WorkoutLog,
+  source: "cali" | "elite" = "cali",
+  level: 1 | 2 | 3 | 4 = 1,
+): HistoryItem {
   const exSet = new Set<string>();
   let top: HistoryItem["topVolumeSet"] = null;
   for (const s of l.sets) {
@@ -2100,6 +2112,8 @@ function projectHistoryItem(l: WorkoutLog): HistoryItem {
     uniqueExercises: exSet.size,
     topVolumeSet: top,
     updatedAt: l.updatedAt,
+    source,
+    level,
   };
 }
 
@@ -2345,7 +2359,7 @@ interface StreakRecord {
  * Future-dated completions are clamped to today to prevent streak inflation
  * via a client-supplied completedAt.
  */
-async function updateStreak(accountId: string, dateKey: string): Promise<StreakRecord> {
+export async function updateStreak(accountId: string, dateKey: string): Promise<StreakRecord> {
   const todayUTC = new Date().toISOString().slice(0, 10);
   if (dateKey > todayUTC) dateKey = todayUTC;
 

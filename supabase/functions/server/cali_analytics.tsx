@@ -50,12 +50,19 @@ export interface DailyStats {
   hypertrophySignalSum: number;
   /** Sets scored against plan targets + RPE. */
   hypertrophyScoredSets: number;
+  /** Completed elite vault workouts on this day. */
+  eliteWorkoutsCompleted: number;
+  /** Sets logged in elite vault workouts. */
+  eliteSetsLogged: number;
+  /** Hypertrophy signal from elite sets only (with L4 multiplier applied). */
+  eliteHypertrophySignalSum: number;
   categories: Record<string, CategoryVolume>;
   updatedAt: number;
 }
 
 interface WorkoutDayContrib {
   workoutId: string;
+  source: "cali" | "elite";
   setsLogged: number;
   plannedSets: number;
   completed: boolean;
@@ -126,6 +133,9 @@ export interface StatsSummary {
   streakLongest: number;
   prCount: number;
   lastComputedAt: number;
+  eliteSessions7d: number;
+  eliteSessions30d: number;
+  eliteSets30d: number;
   analyticsSchemaVersion?: number;
 }
 
@@ -210,14 +220,21 @@ function prHistKey(accountId: string, exerciseId: string) {
 }
 
 function backfillFlagKey(accountId: string) {
-  return `cali:user:${accountId}:stats:backfill:v3`;
+  return `cali:user:${accountId}:stats:backfill:v4`;
 }
 
 /** Bump when rollup/summary formulas change — forces hypertrophy replay for existing wallets. */
-const ANALYTICS_SCHEMA_VERSION = 3;
+const ANALYTICS_SCHEMA_VERSION = 4;
 
 /** Baseline positive signal when a wallet sets its first PR (no prior record). */
 const FIRST_PR_DELTA_PCT = 5;
+
+/** Elite vault scoring multipliers — elite workouts rank higher than standard cali. */
+const ELITE_SET_HYPERTROPHY_MULT = 1.25;
+const ELITE_EFFORT_DAY_BONUS = 10;
+const ELITE_ATHLETE_SCORE_PER_SESSION = 4;
+const ELITE_ATHLETE_SCORE_MAX_BONUS = 12;
+const ELITE_PR_MOVEMENT_MULT = 1.5;
 
 function emptyDaily(dateKey: string): DailyStats {
   return {
@@ -240,6 +257,9 @@ function emptyDaily(dateKey: string): DailyStats {
     overTargetSets: 0,
     hypertrophySignalSum: 0,
     hypertrophyScoredSets: 0,
+    eliteWorkoutsCompleted: 0,
+    eliteSetsLogged: 0,
+    eliteHypertrophySignalSum: 0,
     categories: {},
     updatedAt: Date.now(),
   };
@@ -265,7 +285,7 @@ function getTargetForSet(plan: PlanLike, set: LogSet): SetTarget | null {
  * High scores require max RPE (10), failure signals, and/or reps well above prescription.
  * Sets without RPE log 0 — hypertrophy can't be inferred from volume alone.
  */
-function scoreSetHypertrophy(set: LogSet, target: SetTarget | null): number {
+function scoreSetHypertrophy(set: LogSet, target: SetTarget | null, isElite = false): number {
   if (typeof set.rpe !== "number" || set.rpe < 1 || set.rpe > 10) return 0;
 
   let score = 0;
@@ -287,6 +307,7 @@ function scoreSetHypertrophy(set: LogSet, target: SetTarget | null): number {
     }
   }
 
+  if (isElite) score = Math.round(score * ELITE_SET_HYPERTROPHY_MULT);
   return Math.min(100, score);
 }
 
@@ -302,6 +323,7 @@ function emptyHypertrophyContrib() {
 }
 
 function aggregateHypertrophyFromSets(plan: PlanLike, sets: LogSet[]) {
+  const isElite = plan.level >= 4;
   const out = emptyHypertrophyContrib();
   for (const set of sets) {
     if (set.value <= 0) continue;
@@ -316,8 +338,9 @@ function aggregateHypertrophyFromSets(plan: PlanLike, sets: LogSet[]) {
       out.overTargetSets += 1;
     }
     if (hasRpe) {
+      const setScore = scoreSetHypertrophy(set, target, isElite);
       out.hypertrophyScoredSets += 1;
-      out.hypertrophySignalSum += scoreSetHypertrophy(set, target);
+      out.hypertrophySignalSum += setScore;
     }
   }
   return out;
@@ -382,6 +405,7 @@ function buildContribFromLog(
   completed: boolean,
   prHits: number,
   lookup: ExerciseLookup,
+  source: "cali" | "elite" = "cali",
 ): WorkoutDayContrib {
   const categories = emptyCategories();
   let volumeReps = 0;
@@ -406,6 +430,7 @@ function buildContribFromLog(
   const hypo = aggregateHypertrophyFromSets(plan, sets);
   return {
     workoutId,
+    source,
     setsLogged: sets.length,
     plannedSets,
     completed,
@@ -445,6 +470,10 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
     daily.overTargetSets = Math.max(0, daily.overTargetSets - c.overTargetSets);
     daily.hypertrophySignalSum = Math.max(0, daily.hypertrophySignalSum - c.hypertrophySignalSum);
     daily.hypertrophyScoredSets = Math.max(0, daily.hypertrophyScoredSets - c.hypertrophyScoredSets);
+    if (c.source === "elite") {
+      daily.eliteSetsLogged = Math.max(0, daily.eliteSetsLogged - c.setsLogged);
+      daily.eliteHypertrophySignalSum = Math.max(0, daily.eliteHypertrophySignalSum - c.hypertrophySignalSum);
+    }
     mergeCategoryDelta(daily.categories, c.categories, -1);
   };
   const add = (c: WorkoutDayContrib) => {
@@ -459,6 +488,10 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
     daily.overTargetSets += c.overTargetSets;
     daily.hypertrophySignalSum += c.hypertrophySignalSum;
     daily.hypertrophyScoredSets += c.hypertrophyScoredSets;
+    if (c.source === "elite") {
+      daily.eliteSetsLogged += c.setsLogged;
+      daily.eliteHypertrophySignalSum += c.hypertrophySignalSum;
+    }
     mergeCategoryDelta(daily.categories, c.categories, 1);
     if (c.maxLevel > daily.maxLevel) daily.maxLevel = c.maxLevel;
   };
@@ -475,6 +508,13 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
   const isComplete = newC.completed;
   if (!wasComplete && isComplete) daily.workoutsCompleted += 1;
   if (wasComplete && !isComplete) daily.workoutsCompleted = Math.max(0, daily.workoutsCompleted - 1);
+
+  const wasEliteComplete = oldC?.source === "elite" && wasComplete;
+  const isEliteComplete = newC.source === "elite" && isComplete;
+  if (!wasEliteComplete && isEliteComplete) daily.eliteWorkoutsCompleted += 1;
+  if (wasEliteComplete && !isEliteComplete) {
+    daily.eliteWorkoutsCompleted = Math.max(0, daily.eliteWorkoutsCompleted - 1);
+  }
 
   daily.rpeSum = (daily.rpeSum ?? 0) - (oldC?.rpeSum ?? 0) + newC.rpeSum;
   daily.rpeCount = (daily.rpeCount ?? 0) - (oldC?.rpeCount ?? 0) + newC.rpeCount;
@@ -581,15 +621,26 @@ function computeScores(
   const avgLevel = activeDays.length > 0
     ? activeDays.reduce((s, d) => s + d.maxLevel, 0) / activeDays.length
     : profileLevel;
-  const levelScore = Math.min(100, Math.round((avgLevel / 3) * 100));
-  const effort = Math.min(100, Math.round(avgCompletion * 0.5 + rpeScore * 0.25 + levelScore * 0.25));
+  const levelScore = Math.min(100, Math.round((avgLevel / 4) * 100));
+
+  const eliteDays30 = last30.filter((d) => (d.eliteWorkoutsCompleted ?? 0) > 0);
+  let effort = Math.min(100, Math.round(avgCompletion * 0.5 + rpeScore * 0.25 + levelScore * 0.25));
+  if (eliteDays30.length > 0) effort = Math.min(100, effort + ELITE_EFFORT_DAY_BONUS);
 
   const hypertrophyPct = hypertrophyPctFromDailies(dailies);
 
   const movementIndex = Math.min(100, Math.max(0, Math.round(50 + movementDeltaAvg)));
 
+  const eliteSessions7d = last7.reduce((s, d) => s + (d.eliteWorkoutsCompleted ?? 0), 0);
+  const eliteSessions30d = last30.reduce((s, d) => s + (d.eliteWorkoutsCompleted ?? 0), 0);
+  const eliteSets30d = last30.reduce((s, d) => s + (d.eliteSetsLogged ?? 0), 0);
+  const eliteVaultBonus = Math.min(
+    ELITE_ATHLETE_SCORE_MAX_BONUS,
+    eliteSessions7d * ELITE_ATHLETE_SCORE_PER_SESSION,
+  );
+
   const athleteScore = Math.min(100, Math.round(
-    consistency * 0.35 + effort * 0.30 + movementIndex * 0.25 + streakBonus * 0.10,
+    consistency * 0.35 + effort * 0.30 + movementIndex * 0.25 + streakBonus * 0.10 + eliteVaultBonus,
   ));
 
   const athleteTier = resolveTier(athleteScore, completed30d, sessions7d, completionRate, profileLevel);
@@ -625,6 +676,9 @@ function computeScores(
     streakLongest: streak.longest,
     prCount: 0,
     lastComputedAt: Date.now(),
+    eliteSessions7d,
+    eliteSessions30d,
+    eliteSets30d,
     analyticsSchemaVersion: ANALYTICS_SCHEMA_VERSION,
   };
 }
@@ -677,7 +731,8 @@ function movementDeltaInWindow(
   for (const entry of entries) {
     if (entry.achievedAt < windowStart || entry.achievedAt > windowEnd) continue;
     if (typeof entry.deltaPct !== "number") continue;
-    deltas.push(Math.max(-20, Math.min(20, entry.deltaPct)));
+    const weight = entry.level >= 4 ? ELITE_PR_MOVEMENT_MULT : 1;
+    deltas.push(Math.max(-20, Math.min(20, entry.deltaPct)) * weight);
   }
   if (deltas.length === 0) return 0;
   return deltas.reduce((a, b) => a + b, 0) / deltas.length;
@@ -690,11 +745,18 @@ async function avgMovementDelta(accountId: string, days: number): Promise<number
 }
 
 async function loadProfileLevel(accountId: string, fallback = 1): Promise<number> {
+  let caliLevel = fallback;
   try {
     const raw: any = await kv.get(`cali:user:${accountId}:profile`);
-    if (raw && typeof raw.level === "number") return raw.level;
+    if (raw && typeof raw.level === "number") caliLevel = raw.level;
   } catch { /* ignore */ }
-  return fallback;
+
+  try {
+    const eliteRaw: any = await kv.get(`elite:user:${accountId}:profile`);
+    if (eliteRaw) return Math.max(caliLevel, 4);
+  } catch { /* ignore */ }
+
+  return caliLevel;
 }
 
 function endOfDayMs(dateKey: string): number {
@@ -714,19 +776,20 @@ export async function processLogAnalytics(args: {
   completed: boolean;
   prHits: number;
   lookup: ExerciseLookup;
+  source?: "cali" | "elite";
 }): Promise<{ ok: boolean }> {
-  const { accountId, dateKey, workoutId, plan, sets, completed, prHits, lookup } = args;
+  const { accountId, dateKey, workoutId, plan, sets, completed, prHits, lookup, source = "cali" } = args;
   try {
     const wKey = wcontribKey(accountId, dateKey, workoutId);
     let oldContrib: WorkoutDayContrib | null = null;
     try {
       const raw: any = await kv.get(wKey);
       if (raw && raw.workoutId === workoutId) {
-        oldContrib = { ...emptyHypertrophyContrib(), prHits: 0, ...(raw as WorkoutDayContrib) };
+        oldContrib = { source: "cali", ...emptyHypertrophyContrib(), prHits: 0, ...(raw as WorkoutDayContrib) };
       }
     } catch { /* ignore */ }
 
-    const newContrib = buildContribFromLog(workoutId, plan, sets, completed, prHits, lookup);
+    const newContrib = buildContribFromLog(workoutId, plan, sets, completed, prHits, lookup, source);
 
     const dKey = dailyKey(accountId, dateKey);
     let daily: DailyStats;
@@ -1024,6 +1087,7 @@ export async function backfillAnalyticsForWallet(
       completed: Boolean(entry.completedAt),
       prHits: prChanges.length,
       lookup,
+      source: entry.source,
     });
 
     for (const change of prChanges) {
@@ -1056,10 +1120,22 @@ async function needsHypertrophyRebuild(accountId: string): Promise<boolean> {
 
   const withRpe = dailies.reduce((s, d) => s + (d.setsWithRpe ?? 0), 0);
   const hypoSum = dailies.reduce((s, d) => s + (d.hypertrophySignalSum ?? 0), 0);
+  const hasEliteFields = dailies.some((d) =>
+    (d.eliteWorkoutsCompleted ?? 0) > 0 || (d.eliteSetsLogged ?? 0) > 0,
+  );
 
-  if (withRpe > 0 || hypoSum > 0) return true;
+  if (withRpe > 0 || hypoSum > 0) {
+    // v4 adds elite rollup fields — rebuild if elite logs exist but fields are empty.
+    let eliteLogs: any[] = [];
+    try {
+      eliteLogs = (await kv.getByPrefix(`elite:user:${accountId}:log:`)) ?? [];
+    } catch { /* ignore */ }
+    const hasEliteLogs = eliteLogs.some((l) => l?.accountId === accountId && Array.isArray(l.sets) && l.sets.length > 0);
+    if (hasEliteLogs && !hasEliteFields) return true;
+    return false;
+  }
 
-  // Rollups missing hypertrophy data — rebuild if logs exist (replay once at v3).
+  // Rollups missing hypertrophy data — rebuild if logs exist.
   return true;
 }
 

@@ -8,24 +8,22 @@ import { Link } from "react-router";
 import { ArrowLeft, Calendar, ChevronRight, Anchor as AnchorIcon } from "lucide-react";
 import { CaliLoader } from "./cali-loader";
 import { api } from "../../lib/api";
+import type { WorkoutHistoryItem } from "../../lib/cali-analytics-types";
 import { useCaliSession } from "./cali-context";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 
-interface HistoryItem {
-  workoutId: string;
-  dateKey: string;
-  completedAt: string | null;
-  totalSets: number;
-  uniqueExercises: number;
-  topVolumeSet: { exerciseId: string; metric: "reps" | "time_sec"; value: number } | null;
-  updatedAt: number;
+function historyWorkoutPath(item: WorkoutHistoryItem): string {
+  const id = encodeURIComponent(item.workoutId);
+  return item.source === "elite"
+    ? `/calisthenics/elite/workout/${id}`
+    : `/calisthenics/workout/${id}`;
 }
 
 export function CaliHistory() {
   const cali = useCaliSession();
-  const [items, setItems] = useState<HistoryItem[]>([]);
+  const [items, setItems] = useState<WorkoutHistoryItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -95,14 +93,23 @@ export function CaliHistory() {
       ) : (
         <ul className="space-y-2">
           {items.map((it) => (
-            <li key={`${it.dateKey}-${it.workoutId}`}>
+            <li key={`${it.source}-${it.dateKey}-${it.workoutId}`}>
               <Link
-                to={`/calisthenics/workout/${encodeURIComponent(it.workoutId)}`}
-                className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-[#4274B9]/12 bg-white/[0.02] hover:border-[#4274B9]/30 hover:bg-white/[0.04] transition-colors"
+                to={historyWorkoutPath(it)}
+                className={`flex items-center justify-between gap-3 p-3.5 rounded-xl border bg-white/[0.02] hover:bg-white/[0.04] transition-colors ${
+                  it.source === "elite"
+                    ? "border-[#D4A843]/25 hover:border-[#D4A843]/45"
+                    : "border-[#4274B9]/12 hover:border-[#4274B9]/30"
+                }`}
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-white" style={dmSans}>{it.dateKey}</span>
+                    {it.source === "elite" && (
+                      <span className="px-1.5 py-0.5 text-[0.55rem] rounded bg-[#D4A843]/15 text-[#D4A843] font-bold" style={orbitron}>
+                        ELITE VAULT
+                      </span>
+                    )}
                     {it.completedAt && (
                       <span className="px-1.5 py-0.5 text-[0.55rem] rounded bg-[#10b981]/12 text-[#10b981] font-bold" style={orbitron}>
                         COMPLETED

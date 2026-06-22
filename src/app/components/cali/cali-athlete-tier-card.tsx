@@ -92,6 +92,11 @@ export function CaliAthleteTierCard({ summary, loading }: CaliAthleteTierCardPro
             <p className="text-xs text-[#8494A7] mt-1.5 line-clamp-2" style={dmSans}>
               {summary.tierJudgment}
             </p>
+            {(summary.eliteSessions7d ?? 0) > 0 && (
+              <p className="text-[0.65rem] text-[#D4A843] mt-1 font-bold" style={orbitron}>
+                {summary.eliteSessions7d} elite vault session{summary.eliteSessions7d === 1 ? "" : "s"} this week
+              </p>
+            )}
           </div>
 
           <ChevronRight className="w-4 h-4 text-[#8494A7] shrink-0 mt-1" />

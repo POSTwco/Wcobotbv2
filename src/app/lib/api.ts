@@ -862,7 +862,7 @@ export const api = {
       if (params?.limit) qs.set("limit", String(params.limit));
       if (params?.before) qs.set("before", params.before);
       const suffix = qs.toString() ? `?${qs}` : "";
-      return request<{ items: any[]; nextCursor: string | null; total: number }>(
+      return request<{ items: import("./cali-analytics-types").WorkoutHistoryItem[]; nextCursor: string | null; total: number }>(
         `/cali/history${suffix}`, { caliSessionToken });
     },
 

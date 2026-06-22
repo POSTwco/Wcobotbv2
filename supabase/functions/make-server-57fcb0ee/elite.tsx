@@ -37,6 +37,7 @@ import {
   recordPRHistory,
   computePRChangesFromSets,
 } from "./cali_analytics.tsx";
+import { updateStreak } from "./cali.tsx";
 
 const ELITE_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const ELITE_ELIGIBILITY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -626,7 +627,15 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
       completed: Boolean(log.completedAt),
       prHits: prChanges.length,
       lookup: eliteExerciseLookup,
+      source: "elite",
     });
+    if (body?.completed === true && log.sets.length > 0) {
+      try {
+        await updateStreak(accountId, log.dateKey);
+      } catch (err) {
+        console.log(`[ELITE-LOG] streak update failed for ${accountId}/${workoutId}: ${err}`);
+      }
+    }
     for (const ch of prChanges) {
       await recordPRHistory({
         accountId,

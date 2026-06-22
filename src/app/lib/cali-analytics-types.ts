@@ -33,6 +33,21 @@ export interface StatsSummary {
   streakLongest: number;
   prCount: number;
   lastComputedAt: number;
+  eliteSessions7d: number;
+  eliteSessions30d: number;
+  eliteSets30d: number;
+}
+
+export interface WorkoutHistoryItem {
+  workoutId: string;
+  dateKey: string;
+  completedAt: string | null;
+  totalSets: number;
+  uniqueExercises: number;
+  topVolumeSet: { exerciseId: string; metric: "reps" | "time_sec"; value: number } | null;
+  updatedAt: number;
+  source: "cali" | "elite";
+  level: 1 | 2 | 3 | 4;
 }
 
 export interface StatsSparkPoint {
