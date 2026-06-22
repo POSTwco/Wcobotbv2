@@ -75,6 +75,7 @@ interface Plan {
 
 const MAX_SWAPS_PER_WORKOUT = 5;
 const MAX_SWAPS_PER_SLOT = 3;
+const BLOCK_COMPLETE_DELAY_MS = 5000;
 
 function swapLimitsFor(plan: Plan, blockIndex: number, itemIndex: number) {
   const meta = plan.swapMeta ?? { totalSwaps: 0, slotSwaps: {} };
@@ -105,6 +106,26 @@ function miniConfetti() {
   });
 }
 
+function blockCompleteConfetti() {
+  confetti({
+    particleCount: 90, spread: 80, startVelocity: 32,
+    origin: { x: 0.5, y: 0.6 }, colors: ["#4274B9", "#D4A843", "#6AA3E0", "#10b981"],
+    zIndex: 99999, ticks: 140,
+  });
+  setTimeout(() => {
+    confetti({
+      particleCount: 50, spread: 110, startVelocity: 22,
+      origin: { x: 0.25, y: 0.7 }, colors: ["#D4A843", "#4274B9"],
+      zIndex: 99999, ticks: 100,
+    });
+    confetti({
+      particleCount: 50, spread: 110, startVelocity: 22,
+      origin: { x: 0.75, y: 0.7 }, colors: ["#D4A843", "#4274B9"],
+      zIndex: 99999, ticks: 100,
+    });
+  }, 350);
+}
+
 export function CaliWorkout() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -125,6 +146,8 @@ export function CaliWorkout() {
 
   const [xp, setXp] = useState(0);
   const [coachMessage, setCoachMessage] = useState<string | null>(null);
+  const [blockCelebration, setBlockCelebration] = useState<{ blockIdx: number } | null>(null);
+  const blockAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [finalStreak, setFinalStreak] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -178,6 +201,14 @@ export function CaliWorkout() {
   const setsTotal = useMemo(() => (plan ? countTotalSets(plan) : 0), [plan]);
   const setsLogged = loggedSets.size;
 
+  const cancelBlockCelebration = useCallback(() => {
+    if (blockAdvanceTimerRef.current) {
+      clearTimeout(blockAdvanceTimerRef.current);
+      blockAdvanceTimerRef.current = null;
+    }
+    setBlockCelebration(null);
+  }, []);
+
   const checkBlockComplete = useCallback((blockIdx: number, newLogged: Set<string>) => {
     if (!plan || completedBlocks.has(blockIdx)) return;
     const block = plan.blocks[blockIdx];
@@ -189,12 +220,43 @@ export function CaliWorkout() {
       if (!allDone) break;
     }
     if (allDone) {
+      if (blockAdvanceTimerRef.current) {
+        clearTimeout(blockAdvanceTimerRef.current);
+        blockAdvanceTimerRef.current = null;
+      }
+
       setCompletedBlocks((prev) => new Set([...prev, blockIdx]));
       setXp((x) => x + xpForBlock());
       setCoachMessage(getCoachMessage("blockComplete"));
-      miniConfetti();
+      setBlockCelebration({ blockIdx });
+      blockCompleteConfetti();
+
+      const nextBlockIdx = blockIdx + 1;
+      const hasNextBlock = nextBlockIdx < plan.blocks.length;
+
+      blockAdvanceTimerRef.current = setTimeout(() => {
+        blockAdvanceTimerRef.current = null;
+        setBlockCelebration(null);
+        setCoachMessage(null);
+
+        if (hasNextBlock) {
+          setActiveBlock((current) => (current === blockIdx ? nextBlockIdx : current));
+          setFocusedItemIndex(0);
+          toast.message(`Next up: ${plan.blocks[nextBlockIdx].name}`, { duration: 3500 });
+        }
+      }, BLOCK_COMPLETE_DELAY_MS);
     }
   }, [plan, completedBlocks]);
+
+  const onBlockTabClick = useCallback((b: number) => {
+    cancelBlockCelebration();
+    setCoachMessage(null);
+    setActiveBlock(b);
+  }, [cancelBlockCelebration]);
+
+  useEffect(() => () => {
+    if (blockAdvanceTimerRef.current) clearTimeout(blockAdvanceTimerRef.current);
+  }, []);
 
   const applyLoggedSetsResponse = useCallback(
     (b: number, keys: string[], res: { prChanges?: Array<{ previous?: number; current: number }> }) => {
@@ -587,7 +649,7 @@ export function CaliWorkout() {
         {plan.blocks.map((block, b) => (
           <button
             key={b}
-            onClick={() => setActiveBlock(b)}
+            onClick={() => onBlockTabClick(b)}
             className="flex-shrink-0 px-3 py-1.5 rounded-lg text-[0.6rem] font-bold tracking-wider transition-all"
             style={{
               ...orbitron,
@@ -651,7 +713,14 @@ export function CaliWorkout() {
       </div>
 
       {/* Coach toast */}
-      <CaliCoachToast message={coachMessage} onDismiss={() => setCoachMessage(null)} />
+      <CaliCoachToast
+        message={coachMessage}
+        onDismiss={() => {
+          cancelBlockCelebration();
+          setCoachMessage(null);
+        }}
+        durationMs={blockCelebration ? BLOCK_COMPLETE_DELAY_MS : 2800}
+      />
 
       {tutorialActive && (plan.level === 1 || plan.level === 2) && (
         <CaliWorkoutTutorial
