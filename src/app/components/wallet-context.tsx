@@ -101,6 +101,9 @@ export interface WalletState {
   /** Server-side wallet session token (proof of WalletConnect ownership) */
   walletSessionToken: string | null;
 
+  /** Wait for async wallet session registration (used before gate verify). */
+  waitForWalletSession: (timeoutMs?: number) => Promise<string | null>;
+
   /** Sign an arbitrary message via WalletConnect (HIP-820). Returns base64 signature or null. */
   signMessage: (message: string) => Promise<string | null>;
   signTransaction: (transactionBytes: Uint8Array) => Promise<Uint8Array | null>;
@@ -129,6 +132,7 @@ const defaultState: WalletState = {
   nftCategories: null,
   rawNfts: [],
   walletSessionToken: null,
+  waitForWalletSession: async () => null,
   connect: async () => null,
   disconnect: () => {},
   clearError: () => {},
@@ -176,6 +180,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   /** Server-side wallet session token — proof of WalletConnect ownership */
   const [walletSessionToken, setWalletSessionToken] = useState<string | null>(null);
+  const walletSessionTokenRef = useRef<string | null>(null);
 
   const initRef = useRef(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -377,6 +382,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!accountId || !connected || !session) {
       setWalletSessionToken(null);
+      walletSessionTokenRef.current = null;
       return;
     }
 
@@ -393,22 +399,40 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
         if (res.success && res.data?.token) {
           setWalletSessionToken(res.data.token);
+          walletSessionTokenRef.current = res.data.token;
           console.log(`[BOTB Wallet Context] Wallet session registered ✓ (TTL: ${Math.round((res.data.ttlMs || 0) / 3600000)}h)`);
         } else {
           console.error(`[BOTB Wallet Context] Wallet session registration failed:`, res.error);
           // Don't block the user — they can still browse, just can't vote/chat
           setWalletSessionToken(null);
+          walletSessionTokenRef.current = null;
         }
       } catch (err) {
         if (cancelled) return;
         console.error("[BOTB Wallet Context] Wallet session registration error:", err);
         setWalletSessionToken(null);
+        walletSessionTokenRef.current = null;
       }
     }
 
     registerSession();
     return () => { cancelled = true; };
   }, [accountId, connected, session]);
+
+  useEffect(() => {
+    walletSessionTokenRef.current = walletSessionToken;
+  }, [walletSessionToken]);
+
+  const waitForWalletSession = useCallback(async (timeoutMs = 12_000): Promise<string | null> => {
+    const existing = walletSessionTokenRef.current;
+    if (existing) return existing;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 150));
+      if (walletSessionTokenRef.current) return walletSessionTokenRef.current;
+    }
+    return walletSessionTokenRef.current;
+  }, []);
 
   // ------------------------------------------------------------------
   // Connect — Official WalletConnect Modal
@@ -515,6 +539,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       console.error("[BOTB Wallet Context] Disconnect error:", err);
     }
     setWalletSessionToken(null);
+    walletSessionTokenRef.current = null;
     clearConnectedState();
     setError(null);
   }, [clearConnectedState, accountId, walletSessionToken]);
@@ -631,6 +656,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     nftCategories,
     rawNfts,
     walletSessionToken,
+    waitForWalletSession,
 
     connect,
     disconnect,

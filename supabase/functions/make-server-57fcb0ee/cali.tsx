@@ -54,7 +54,7 @@ import {
   verifyWalletOnMirrorNode,
   checkRateLimit,
   sanitizeString,
-  verifyVoteSignature,
+  verifyGateSignature,
   requireAdminSession,
   validateSession,
 } from "./admin-auth.tsx";
@@ -772,23 +772,31 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
     // came from a real wallet-key path (ED25519 or ECDSA), not from a key-
     // fetch outage where keyType is undefined. Otherwise an attacker could
     // ride a transient Mirror Node 5xx + any ≥16-char base64 to pass.
-    const sigResult = await verifyVoteSignature(accountId, challengeRec.challenge, signature);
+    const walletSession = (c.req.header("X-Wallet-Session") || "").trim() || null;
+    const sigResult = await verifyGateSignature(
+      accountId,
+      challengeRec.challenge,
+      signature,
+      walletSession,
+    );
     if (!sigResult.valid) {
       console.log(
         `[CALI-VERIFY] Signature verify failed for ${accountId}: ${sigResult.error}`,
       );
       await kv.del(`cali:nonce:${nonce}`).catch(() => {});
+      const code = sigResult.error?.includes("Wallet session") ? "SESSION_REQUIRED" : "SIGNATURE_INVALID";
       return c.json(
         {
           success: false,
-          error: "Signature verification failed. Please re-approve in your wallet.",
-          code: "SIGNATURE_INVALID",
+          error: sigResult.error || "Signature verification failed. Please re-approve in your wallet.",
+          code,
         },
         401,
       );
-    } else {
-      console.log(`[CALI-VERIFY] ✅ Signature verified for ${accountId} (${sigResult.keyType})`);
     }
+    console.log(
+      `[CALI-VERIFY] Signature verified for ${accountId} via ${sigResult.via ?? "crypto"} (${sigResult.keyType})`,
+    );
 
     // 5. Consume the nonce (single-use)
     await kv.del(`cali:nonce:${nonce}`).catch(() => {});

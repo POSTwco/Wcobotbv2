@@ -784,12 +784,12 @@ export const api = {
       request<{ challenge: string; nonce: string; expiresAt: number }>(
         "/cali/challenge", { method: "POST", body: { accountId } }),
 
-    verify: (accountId: string, nonce: string, signature: string) =>
+    verify: (accountId: string, nonce: string, signature: string, walletSessionToken?: string) =>
       request<{
         sessionToken: string;
         expiresAt: number;
         eligibility: { accountId: string; tinybars: number; checkedAt: number; expiresAt: number };
-      }>("/cali/verify", { method: "POST", body: { accountId, nonce, signature } }),
+      }>("/cali/verify", { method: "POST", body: { accountId, nonce, signature }, walletSessionToken }),
 
     me: (caliSessionToken: string) =>
       request<{
@@ -892,9 +892,9 @@ export const api = {
       request<{ challenge: string; nonce: string; expiresAt: number }>(
         "/elite/challenge", { method: "POST", body: { accountId } }),
 
-    verify: (accountId: string, nonce: string, signature: string) =>
+    verify: (accountId: string, nonce: string, signature: string, walletSessionToken?: string) =>
       request<{ sessionToken: string; expiresAt: number; eligibility: { accountId: string; accessVia: string } }>(
-        "/elite/verify", { method: "POST", body: { accountId, nonce, signature } }),
+        "/elite/verify", { method: "POST", body: { accountId, nonce, signature }, walletSessionToken }),
 
     me: (eliteSessionToken: string) =>
       request<{ accountId: string; eligibility: unknown }>("/elite/session/me", { eliteSessionToken }),

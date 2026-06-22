@@ -11,7 +11,7 @@ import {
   verifyWalletOnMirrorNode,
   checkRateLimit,
   sanitizeString,
-  verifyVoteSignature,
+  verifyGateSignature,
   hasGovernorNFT,
 } from "./admin-auth.tsx";
 import {
@@ -367,21 +367,31 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
       }, 403);
     }
 
-    const sigResult = await verifyVoteSignature(accountId, challengeRec.challenge, signature);
+    const walletSession = (c.req.header("X-Wallet-Session") || "").trim() || null;
+    const sigResult = await verifyGateSignature(
+      accountId,
+      challengeRec.challenge,
+      signature,
+      walletSession,
+    );
     if (!sigResult.valid) {
       console.log(
         `[ELITE-VERIFY] Signature verify failed for ${accountId}: ${sigResult.error}`,
       );
       await kv.del(`elite:nonce:${nonce}`).catch(() => {});
+      const code = sigResult.error?.includes("Wallet session") ? "SESSION_REQUIRED" : "SIGNATURE_INVALID";
       return c.json(
         {
           success: false,
-          error: "Signature verification failed. Please re-approve in your wallet.",
-          code: "SIGNATURE_INVALID",
+          error: sigResult.error || "Signature verification failed. Please re-approve in your wallet.",
+          code,
         },
         401,
       );
     }
+    console.log(
+      `[ELITE-VERIFY] Signature verified for ${accountId} via ${sigResult.via ?? "crypto"}`,
+    );
 
     await kv.del(`elite:nonce:${nonce}`).catch(() => {});
     const eligibility = await setEliteEligibility(accountId, access.via);

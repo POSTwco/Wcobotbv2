@@ -1389,3 +1389,109 @@ async function verifyED25519MultiStrategy(
 
   return false;
 }
+
+/**
+ * Validate X-Wallet-Session token matches the expected Hedera account.
+ */
+export async function validateWalletSessionToken(
+  sessionToken: string | undefined | null,
+  expectedWallet: string,
+): Promise<boolean> {
+  if (!sessionToken || typeof sessionToken !== "string" || sessionToken.length < 10) {
+    return false;
+  }
+  try {
+    const session: any = await kv.get(`wsession:${sessionToken}`);
+    if (!session) return false;
+    if (now() > session.expiresAt) {
+      await kv.del(`wsession:${sessionToken}`).catch(() => {});
+      if (session.wallet) await kv.del(`wsession-wallet:${session.wallet}`).catch(() => {});
+      return false;
+    }
+    return session.wallet === expectedWallet;
+  } catch {
+    return false;
+  }
+}
+
+export type GateSignatureVia = "crypto" | "wallet-approval";
+
+/**
+ * Gate challenge verification for cali/elite (HashPack-safe).
+ * Crypto multi-strategy first; wallet-approval fallback requires WC session.
+ */
+export async function verifyGateSignature(
+  wallet: string,
+  message: string,
+  signatureBase64: string,
+  walletSessionToken?: string | null,
+): Promise<SignatureVerificationResult & { via?: GateSignatureVia }> {
+  const keyInfo = await fetchWalletPublicKey(wallet);
+  if (!keyInfo) {
+    return {
+      valid: false,
+      error: `Unable to fetch public key for wallet ${wallet} from Hedera Mirror Node.`,
+    };
+  }
+
+  if (keyInfo.keyType === "ECDSA_SECP256K1") {
+    return {
+      valid: false,
+      error: "ECDSA_SECP256K1 wallets are not yet supported for gate auth. Use an ED25519 wallet.",
+      keyType: "ECDSA_SECP256K1",
+    };
+  }
+  if (keyInfo.keyType === "UNSUPPORTED") {
+    return {
+      valid: false,
+      error: "Complex key accounts cannot authenticate directly. Use a standard ED25519 wallet.",
+      keyType: "UNSUPPORTED",
+    };
+  }
+
+  const pubKeyBytes = hexToBytes(keyInfo.keyHex);
+  if (pubKeyBytes.length !== 32) {
+    return {
+      valid: false,
+      error: `Unexpected ED25519 public key length: ${pubKeyBytes.length} bytes.`,
+      keyType: "ED25519",
+    };
+  }
+
+  const sigBytes = extractED25519Signature(signatureBase64);
+  if (!sigBytes || sigBytes.length !== 64) {
+    return {
+      valid: false,
+      error: "Could not extract a valid 64-byte ED25519 signature. Approve the request in HashPack.",
+      keyType: "ED25519",
+    };
+  }
+
+  const cryptoOk = await verifyED25519MultiStrategy(message, sigBytes, pubKeyBytes, wallet);
+  if (cryptoOk) {
+    console.log(`[GATE-SIG] Crypto verification PASSED for ${wallet}`);
+    return { valid: true, keyType: "ED25519", via: "crypto" };
+  }
+
+  const sessionOk = await validateWalletSessionToken(walletSessionToken, wallet);
+  if (sessionOk && keyInfo.keyType === "ED25519") {
+    console.log(
+      `[GATE-SIG] Wallet-approval fallback for ${wallet} (HashPack — WC session + mirror + 64B sig)`,
+    );
+    return { valid: true, keyType: "ED25519", via: "wallet-approval" };
+  }
+
+  if (!sessionOk) {
+    return {
+      valid: false,
+      error: "Wallet session required. Reconnect your wallet and try again.",
+      keyType: "ED25519",
+    };
+  }
+
+  return {
+    valid: false,
+    error: "Signature verification failed. Please re-approve in your wallet.",
+    keyType: "ED25519",
+  };
+}

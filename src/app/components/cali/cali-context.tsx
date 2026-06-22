@@ -222,7 +222,13 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     }
 
     setPhase("verifying");
-    const verify = await api.cali.verify(accountId, ch.data.nonce, signature);
+    const wcSession = await wallet.waitForWalletSession();
+    if (!wcSession) {
+      setError("Wallet session not ready. Wait a moment after connecting, then try again.");
+      setPhase("error");
+      return;
+    }
+    const verify = await api.cali.verify(accountId, ch.data.nonce, signature, wcSession);
     if (!verify.success || !verify.data) {
       // INSUFFICIENT_HBAR is a deliberate, user-facing message — keep it.
       setError(verify.error || "Verification failed.");
@@ -242,7 +248,7 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     walletEverMatchedRef.current = true;
     setEligibility(verify.data.eligibility);
     setPhase("eligible");
-  }, [wallet.connected, wallet.accountId, wallet.connect, wallet.signMessage]);
+  }, [wallet.connected, wallet.accountId, wallet.connect, wallet.signMessage, wallet.waitForWalletSession]);
 
   // ── Refresh ─────────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {

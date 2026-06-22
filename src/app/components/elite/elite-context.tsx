@@ -106,7 +106,13 @@ export function EliteSessionProvider({ children }: { children: ReactNode }) {
     if (!signature) { setError("No signature returned"); setPhase("error"); return; }
 
     setPhase("verifying");
-    const verify = await api.elite.verify(accountId, ch.data.nonce, signature);
+    const wcSession = await wallet.waitForWalletSession();
+    if (!wcSession) {
+      setError("Wallet session not ready. Wait a moment after connecting, then try again.");
+      setPhase("error");
+      return;
+    }
+    const verify = await api.elite.verify(accountId, ch.data.nonce, signature, wcSession);
     if (!verify.success || !verify.data) {
       setError(verify.error || "Elite access denied");
       setPhase("error");
