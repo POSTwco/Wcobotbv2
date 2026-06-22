@@ -16,11 +16,21 @@ function absoluteUrl(routePath) {
   return `${base}${routePath}`;
 }
 
+function withVersion(url) {
+  const version = site.ogVersion;
+  if (!version) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}v=${version}`;
+}
+
 function absoluteOgImage(ogPath) {
   const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
-  const version = site.ogVersion;
-  if (!version) return base;
-  return `${base}${base.includes("?") ? "&" : "?"}v=${version}`;
+  return withVersion(base);
+}
+
+function absoluteTwitterImage(ogPath) {
+  if (ogPath.startsWith("http")) return withVersion(ogPath);
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
+  return withVersion(absoluteUrl(`/social/twitter/${file}.jpg`));
 }
 
 function buildJsonLd(routePath, page) {
@@ -96,8 +106,9 @@ function buildJsonLd(routePath, page) {
 function buildHeadTags(routePath, page) {
   const canonical = absoluteUrl(routePath);
   const ogImage = absoluteOgImage(page.ogImage);
+  const twitterImage = absoluteTwitterImage(page.ogImage);
   const jsonLd = buildJsonLd(routePath, page);
-  const social = buildSocialMetaTags({ site, page, canonical, ogImage });
+  const social = buildSocialMetaTags({ site, page, canonical, ogImage, twitterImage });
 
   return `${social}
     <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
@@ -113,7 +124,8 @@ function stripSeoTags(html) {
     .replace(/<meta name="robots"[^>]*>\s*/g, "")
     .replace(/<link rel="canonical"[^>]*>\s*/g, "")
     .replace(/<link rel="shortcut icon"[^>]*>\s*/g, "")
-    .replace(/<link rel="icon" href="\/favicon.ico"[^>]*>\s*/g, "")
+    .replace(/<link rel="icon"[^>]*>\s*/g, "")
+    .replace(/<link rel="apple-touch-icon"[^>]*>\s*/g, "")
     .replace(/<meta property="og:[^"]*"[^>]*>\s*/g, "")
     .replace(/<meta property="twitter:[^"]*"[^>]*>\s*/g, "")
     .replace(/<meta name="twitter:[^"]*"[^>]*>\s*/g, "")

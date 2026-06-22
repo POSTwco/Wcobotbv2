@@ -21,11 +21,22 @@ export function absoluteUrl(path = ""): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function withVersion(url: string): string {
+  const version = SITE.ogVersion;
+  if (!version) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}v=${version}`;
+}
+
 export function absoluteOgImage(ogPath: string): string {
   const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
-  const version = SITE.ogVersion;
-  if (!version) return base;
-  return `${base}${base.includes("?") ? "&" : "?"}v=${version}`;
+  return withVersion(base);
+}
+
+/** X/Twitter-optimized JPG (1200×600). Derived from /og/*.png path. */
+export function absoluteTwitterImage(ogPath: string): string {
+  if (ogPath.startsWith("http")) return withVersion(ogPath);
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
+  return withVersion(absoluteUrl(`/social/twitter/${file}.jpg`));
 }
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {

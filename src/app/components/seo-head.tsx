@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 import {
   SITE,
   absoluteOgImage,
+  absoluteTwitterImage,
   buildJsonLd,
   resolvePageSeo,
 } from "../lib/seo-config";
@@ -19,6 +20,7 @@ export function SeoHead() {
   const { pathname } = useLocation();
   const seo = resolvePageSeo(pathname);
   const ogImage = absoluteOgImage(seo.ogImage);
+  const twitterImage = absoluteTwitterImage(seo.ogImage);
   const jsonLd = buildJsonLd(pathname);
   const domain = twitterDomain(seo.canonical);
 
@@ -33,6 +35,10 @@ export function SeoHead() {
       <link rel="canonical" href={seo.canonical} />
       <link rel="shortcut icon" href="/favicon.ico" />
       <link rel="icon" href="/favicon.ico" sizes="any" />
+      <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+      <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content={SITE.name} />
@@ -60,9 +66,9 @@ export function SeoHead() {
       <meta name="twitter:url" content={seo.canonical} />
       <meta property="twitter:url" content={seo.canonical} />
       <meta property="twitter:domain" content={domain} />
-      <meta name="twitter:image" content={ogImage} />
-      <meta name="twitter:image:src" content={ogImage} />
-      <meta property="twitter:image" content={ogImage} />
+      <meta name="twitter:image" content={twitterImage} />
+      <meta name="twitter:image:src" content={twitterImage} />
+      <meta property="twitter:image" content={twitterImage} />
       <meta name="twitter:image:alt" content={`${seo.headline} — ${SITE.org}`} />
 
       {jsonLd && (
