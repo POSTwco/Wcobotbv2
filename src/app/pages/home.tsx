@@ -113,53 +113,54 @@ export function HomePage() {
                 <span className="text-[#4274B9] font-semibold"> No loss. Only Gains.</span>
               </p>
 
-              <div className="flex flex-col gap-3 sm:gap-4">
-                <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
-                  {!connected ? (
-                    <button
-                      onClick={connect}
-                      disabled={isConnecting}
-                      className={`flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl transition-all ${
-                        isConnecting
-                          ? "bg-[#4274B9]/50 text-white/70 cursor-wait"
-                          : "bg-[#4274B9] text-white hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25"
-                      }`}
-                      style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
-                    >
-                      <Zap className="w-4 h-4" /> {isConnecting ? "CONNECTING..." : "CONNECT & PLAY"}
-                    </button>
-                  ) : (
-                    <Link
-                      to="/battles"
-                      className="flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all"
-                      style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
-                    >
-                      <Swords className="w-4 h-4" /> ENTER BATTLES
-                    </Link>
-                  )}
-                  <Link
-                    to="/athletes"
-                    className="flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 border border-[#4274B9]/30 text-[#4274B9] rounded-xl hover:bg-[#4274B9]/10 transition-all"
-                    style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
+              <div className="flex flex-row gap-2 sm:gap-3 max-w-xl">
+                {!connected ? (
+                  <button
+                    onClick={connect}
+                    disabled={isConnecting}
+                    className={`relative flex flex-1 items-center justify-center gap-1.5 min-h-[44px] px-2 sm:px-4 py-2.5 rounded-xl transition-all ${
+                      isConnecting
+                        ? "bg-[#4274B9]/50 text-white/70 cursor-wait"
+                        : "bg-[#4274B9] text-white hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25"
+                    }`}
+                    style={{ fontFamily: "Orbitron, sans-serif", fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)" }}
                   >
-                    EXPLORE <ArrowRight className="w-4 h-4" />
+                    <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="truncate">{isConnecting ? "CONNECTING..." : "CONNECT & PLAY"}</span>
+                  </button>
+                ) : (
+                  <Link
+                    to="/battles"
+                    className="relative flex flex-1 items-center justify-center gap-1.5 min-h-[44px] px-2 sm:px-4 py-2.5 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all"
+                    style={{ fontFamily: "Orbitron, sans-serif", fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)" }}
+                  >
+                    <Swords className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="truncate">ENTER BATTLES</span>
                   </Link>
-                </div>
+                )}
+                <Link
+                  to="/athletes"
+                  className="relative flex flex-1 items-center justify-center gap-1.5 min-h-[44px] px-2 sm:px-4 py-2.5 border border-[#4274B9]/30 text-[#4274B9] rounded-xl hover:bg-[#4274B9]/10 transition-all"
+                  style={{ fontFamily: "Orbitron, sans-serif", fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)" }}
+                >
+                  <span className="truncate">EXPLORE</span>
+                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                </Link>
                 <Link
                   to="/calisthenics"
-                  className="relative self-start inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl transition-all hover:brightness-110 hover:shadow-lg hover:shadow-[#D4A843]/30"
+                  className="relative flex flex-1 items-center justify-center gap-1.5 min-h-[44px] px-2 sm:px-4 py-2.5 rounded-xl transition-all hover:brightness-110 hover:shadow-lg hover:shadow-[#D4A843]/30"
                   style={{
                     fontFamily: "Orbitron, sans-serif",
-                    fontSize: "0.8rem",
+                    fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)",
                     background: "linear-gradient(135deg, #E8C468, #D4A843 45%, #B8860B)",
                     color: "#1a1208",
                     boxShadow: "0 4px 20px rgba(212,168,67,0.35)",
                   }}
                 >
-                  <Dumbbell className="w-4 h-4" />
-                  WORKOUT
+                  <Dumbbell className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                  <span className="truncate">WORKOUT</span>
                   <span
-                    className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[0.5rem] font-bold tracking-wider text-white shadow-md"
+                    className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded-full text-[0.45rem] sm:text-[0.5rem] font-bold tracking-wider text-white shadow-md leading-none"
                     style={{
                       fontFamily: "Orbitron, sans-serif",
                       background: "linear-gradient(135deg, #4274B9, #3563A0)",
