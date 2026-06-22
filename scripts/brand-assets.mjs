@@ -37,7 +37,7 @@ export const SOCIAL_SPECS = {
   /** Facebook, LinkedIn, Discord, Google link previews */
   openGraph: { width: 1200, height: 630, dir: "og", ext: "png" },
   /** X/Twitter summary_large_image (2:1 safe area) */
-  twitter: { width: 1200, height: 600, dir: "social/twitter", ext: "jpg" },
+  twitter: { width: 1200, height: 600, dir: "social/twitter", ext: "png" },
   /** GitHub repo social preview */
   github: { width: 1280, height: 640, dir: "social/github", ext: "png" },
   /** Square fallback (some scrapers) */

@@ -6,14 +6,21 @@ export function escapeAttr(value) {
     .replace(/>/g, "&gt;");
 }
 
-export function buildSocialMetaTags({ site, page, canonical, ogImage, twitterImage }) {
+export function buildSocialMetaTags({
+  site,
+  page,
+  canonical,
+  ogImage,
+  twitterImage,
+  twitterImageWidth = 1200,
+  twitterImageHeight = 600,
+}) {
   const title = escapeAttr(page.title);
   const description = escapeAttr(page.description);
   const og = escapeAttr(ogImage);
   const twitter = escapeAttr(twitterImage ?? ogImage);
-  const imageAlt = escapeAttr(`${page.headline} — ${site.org}`);
+  const imageAlt = escapeAttr(`${page.headline} - ${site.org}`);
   const url = escapeAttr(canonical);
-  const domain = escapeAttr(new URL(canonical).hostname.replace(/^www\./, ""));
 
   return `
     <title>${title}</title>
@@ -41,20 +48,12 @@ export function buildSocialMetaTags({ site, page, canonical, ogImage, twitterIma
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${imageAlt}" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta property="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="${site.twitter}" />
     <meta name="twitter:creator" content="${site.twitter}" />
-    <meta property="twitter:site" content="${site.twitter}" />
-    <meta property="twitter:creator" content="${site.twitter}" />
     <meta name="twitter:title" content="${title}" />
-    <meta property="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${description}" />
-    <meta property="twitter:description" content="${description}" />
-    <meta name="twitter:url" content="${url}" />
-    <meta property="twitter:url" content="${url}" />
-    <meta property="twitter:domain" content="${domain}" />
     <meta name="twitter:image" content="${twitter}" />
-    <meta name="twitter:image:src" content="${twitter}" />
-    <meta property="twitter:image" content="${twitter}" />
+    <meta name="twitter:image:width" content="${twitterImageWidth}" />
+    <meta name="twitter:image:height" content="${twitterImageHeight}" />
     <meta name="twitter:image:alt" content="${imageAlt}" />`;
 }

@@ -43,7 +43,7 @@ async function writeShareSet(filename, headline) {
     width: SOCIAL_SPECS.twitter.width,
     height: SOCIAL_SPECS.twitter.height,
   });
-  await twitter.write(path.join(twDir, `${baseName}.jpg`));
+  await twitter.write(path.join(twDir, `${baseName}.png`));
 
   const github = await shareBanner({
     ...shared,
@@ -59,7 +59,7 @@ async function writeShareSet(filename, headline) {
   });
   await square.write(path.join(sqDir, `${baseName}.png`));
 
-  console.log(`  og/${baseName}.png + social/twitter/${baseName}.jpg — ${headline}`);
+  console.log(`  og/${baseName}.png + social/twitter/${baseName}.png - ${headline}`);
 }
 
 console.log("Generating share images from official WCO brand files...");

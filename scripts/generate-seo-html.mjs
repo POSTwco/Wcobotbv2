@@ -28,9 +28,9 @@ function absoluteOgImage(ogPath) {
 }
 
 function absoluteTwitterImage(ogPath) {
-  if (ogPath.startsWith("http")) return withVersion(ogPath);
+  if (ogPath.startsWith("http")) return ogPath.split("?")[0];
   const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
-  return withVersion(absoluteUrl(`/social/twitter/${file}.jpg`));
+  return absoluteUrl(`/social/twitter/${file}.png`);
 }
 
 function buildJsonLd(routePath, page) {
@@ -127,7 +127,6 @@ function stripSeoTags(html) {
     .replace(/<link rel="icon"[^>]*>\s*/g, "")
     .replace(/<link rel="apple-touch-icon"[^>]*>\s*/g, "")
     .replace(/<meta property="og:[^"]*"[^>]*>\s*/g, "")
-    .replace(/<meta property="twitter:[^"]*"[^>]*>\s*/g, "")
     .replace(/<meta name="twitter:[^"]*"[^>]*>\s*/g, "")
     .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*/g, "");
 }

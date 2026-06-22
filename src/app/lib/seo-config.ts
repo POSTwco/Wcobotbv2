@@ -32,11 +32,11 @@ export function absoluteOgImage(ogPath: string): string {
   return withVersion(base);
 }
 
-/** X/Twitter-optimized JPG (1200×600). Derived from /og/*.png path. */
+/** X/Twitter-optimized PNG (1200×600, 2:1). No query string — X crawler rejects ?v= on images. */
 export function absoluteTwitterImage(ogPath: string): string {
-  if (ogPath.startsWith("http")) return withVersion(ogPath);
+  if (ogPath.startsWith("http")) return ogPath.split("?")[0];
   const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
-  return withVersion(absoluteUrl(`/social/twitter/${file}.jpg`));
+  return absoluteUrl(`/social/twitter/${file}.png`);
 }
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {

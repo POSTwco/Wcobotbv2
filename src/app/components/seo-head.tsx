@@ -8,21 +8,13 @@ import {
   resolvePageSeo,
 } from "../lib/seo-config";
 
-function twitterDomain(canonical: string) {
-  try {
-    return new URL(canonical).hostname.replace(/^www\./, "");
-  } catch {
-    return "wcorg.io";
-  }
-}
-
 export function SeoHead() {
   const { pathname } = useLocation();
   const seo = resolvePageSeo(pathname);
   const ogImage = absoluteOgImage(seo.ogImage);
   const twitterImage = absoluteTwitterImage(seo.ogImage);
   const jsonLd = buildJsonLd(pathname);
-  const domain = twitterDomain(seo.canonical);
+  const imageAlt = `${seo.headline} - ${SITE.org}`;
 
   return (
     <Helmet>
@@ -51,25 +43,17 @@ export function SeoHead() {
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={`${seo.headline} — ${SITE.org}`} />
+      <meta property="og:image:alt" content={imageAlt} />
 
       <meta name="twitter:card" content="summary_large_image" />
-      <meta property="twitter:card" content="summary_large_image" />
       <meta name="twitter:site" content={SITE.twitter} />
       <meta name="twitter:creator" content={SITE.twitter} />
-      <meta property="twitter:site" content={SITE.twitter} />
-      <meta property="twitter:creator" content={SITE.twitter} />
       <meta name="twitter:title" content={seo.title} />
-      <meta property="twitter:title" content={seo.title} />
       <meta name="twitter:description" content={seo.description} />
-      <meta property="twitter:description" content={seo.description} />
-      <meta name="twitter:url" content={seo.canonical} />
-      <meta property="twitter:url" content={seo.canonical} />
-      <meta property="twitter:domain" content={domain} />
       <meta name="twitter:image" content={twitterImage} />
-      <meta name="twitter:image:src" content={twitterImage} />
-      <meta property="twitter:image" content={twitterImage} />
-      <meta name="twitter:image:alt" content={`${seo.headline} — ${SITE.org}`} />
+      <meta name="twitter:image:width" content="1200" />
+      <meta name="twitter:image:height" content="600" />
+      <meta name="twitter:image:alt" content={imageAlt} />
 
       {jsonLd && (
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
