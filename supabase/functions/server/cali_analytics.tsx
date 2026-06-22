@@ -52,7 +52,36 @@ interface WorkoutDayContrib {
   rpeSum: number;
   rpeCount: number;
   maxLevel: 1 | 2 | 3 | 4;
+  prHits: number;
   categories: Record<string, CategoryVolume>;
+}
+
+export interface DailyActivityPoint {
+  dateKey: string;
+  workoutsCompleted: number;
+  volume: number;
+}
+
+export interface MetricSparklines {
+  consistency: number[];
+  effort: number[];
+  movement: number[];
+  volume: number[];
+}
+
+interface PlanLike {
+  level: number;
+  blocks: WorkoutPlan["blocks"];
+}
+
+interface BackfillLogEntry {
+  workoutId: string;
+  accountId: string;
+  dateKey: string;
+  sets: LogSet[];
+  completedAt: string | null;
+  updatedAt: number;
+  source: "cali" | "elite";
 }
 
 export interface StatsDeltas {
@@ -85,6 +114,8 @@ export interface StatsSparkPoint {
   athleteScore: number;
   movementIndex: number;
   volume: number;
+  consistency: number;
+  effort: number;
 }
 
 export interface PRHistoryEntry {
@@ -147,6 +178,13 @@ function prHistKey(accountId: string, exerciseId: string) {
   return `cali:user:${accountId}:prhist:${exerciseId}`;
 }
 
+function backfillFlagKey(accountId: string) {
+  return `cali:user:${accountId}:stats:backfill:v1`;
+}
+
+/** Baseline positive signal when a wallet sets its first PR (no prior record). */
+const FIRST_PR_DELTA_PCT = 5;
+
 function emptyDaily(dateKey: string): DailyStats {
   return {
     dateKey,
@@ -185,9 +223,10 @@ export function countPlannedSets(plan: WorkoutPlan): number {
 
 function buildContribFromLog(
   workoutId: string,
-  plan: WorkoutPlan,
+  plan: PlanLike,
   sets: LogSet[],
   completed: boolean,
+  prHits: number,
   lookup: ExerciseLookup,
 ): WorkoutDayContrib {
   const categories = emptyCategories();
@@ -209,7 +248,7 @@ function buildContribFromLog(
     else categories[cat].timeSec += s.value;
   }
 
-  const plannedSets = countPlannedSets(plan);
+  const plannedSets = countPlannedSets(plan as WorkoutPlan);
   return {
     workoutId,
     setsLogged: sets.length,
@@ -219,7 +258,8 @@ function buildContribFromLog(
     volumeTimeSec,
     rpeSum,
     rpeCount,
-    maxLevel: plan.level as 1 | 2 | 3 | 4,
+    maxLevel: Math.min(4, Math.max(1, plan.level)) as 1 | 2 | 3 | 4,
+    prHits,
     categories,
   };
 }
@@ -242,6 +282,7 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
     daily.plannedSets -= c.plannedSets;
     daily.volumeReps -= c.volumeReps;
     daily.volumeTimeSec -= c.volumeTimeSec;
+    daily.prHits = Math.max(0, daily.prHits - c.prHits);
     mergeCategoryDelta(daily.categories, c.categories, -1);
   };
   const add = (c: WorkoutDayContrib) => {
@@ -249,6 +290,7 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
     daily.plannedSets += c.plannedSets;
     daily.volumeReps += c.volumeReps;
     daily.volumeTimeSec += c.volumeTimeSec;
+    daily.prHits += c.prHits;
     mergeCategoryDelta(daily.categories, c.categories, 1);
     if (c.maxLevel > daily.maxLevel) daily.maxLevel = c.maxLevel;
   };
@@ -394,7 +436,9 @@ function computeScores(
   const deltas: StatsDeltas = {
     consistency7d: prev ? Math.round((consistency - prev.consistency) * 10) / 10 : 0,
     effort7d: prev ? Math.round((effort - prev.effort) * 10) / 10 : 0,
-    hypertrophy7d: hypertrophyPct,
+    hypertrophy7d: prev
+      ? Math.round((hypertrophyPct - prev.hypertrophyPct) * 10) / 10
+      : 0,
     movement7d: prev ? Math.round((movementIndex - prev.movementIndex) * 10) / 10 : 0,
   };
 
@@ -440,25 +484,54 @@ async function loadDailyRecords(accountId: string, days: number): Promise<DailyS
   return out;
 }
 
-async function avgMovementDelta(accountId: string, days: number): Promise<number> {
+async function loadAllPRHistEntries(accountId: string): Promise<PRHistoryEntry[]> {
   let rows: any[];
   try {
     rows = (await kv.getByPrefix(`cali:user:${accountId}:prhist:`)) ?? [];
   } catch {
-    return 0;
+    return [];
   }
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  const deltas: number[] = [];
+  const out: PRHistoryEntry[] = [];
   for (const row of rows) {
     if (!Array.isArray(row)) continue;
     for (const entry of row) {
-      if (entry && typeof entry.deltaPct === "number" && entry.achievedAt >= cutoff) {
-        deltas.push(Math.max(-20, Math.min(20, entry.deltaPct)));
-      }
+      if (entry && typeof entry.achievedAt === "number") out.push(entry as PRHistoryEntry);
     }
+  }
+  return out.sort((a, b) => a.achievedAt - b.achievedAt);
+}
+
+function movementDeltaInWindow(
+  entries: PRHistoryEntry[],
+  windowStart: number,
+  windowEnd: number,
+): number {
+  const deltas: number[] = [];
+  for (const entry of entries) {
+    if (entry.achievedAt < windowStart || entry.achievedAt > windowEnd) continue;
+    if (typeof entry.deltaPct !== "number") continue;
+    deltas.push(Math.max(-20, Math.min(20, entry.deltaPct)));
   }
   if (deltas.length === 0) return 0;
   return deltas.reduce((a, b) => a + b, 0) / deltas.length;
+}
+
+async function avgMovementDelta(accountId: string, days: number): Promise<number> {
+  const entries = await loadAllPRHistEntries(accountId);
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return movementDeltaInWindow(entries, cutoff, Date.now());
+}
+
+async function loadProfileLevel(accountId: string, fallback = 1): Promise<number> {
+  try {
+    const raw: any = await kv.get(`cali:user:${accountId}:profile`);
+    if (raw && typeof raw.level === "number") return raw.level;
+  } catch { /* ignore */ }
+  return fallback;
+}
+
+function endOfDayMs(dateKey: string): number {
+  return Date.parse(`${dateKey}T23:59:59.999Z`);
 }
 
 // ---------------------------------------------------------------------------
@@ -469,22 +542,25 @@ export async function processLogAnalytics(args: {
   accountId: string;
   dateKey: string;
   workoutId: string;
-  plan: WorkoutPlan;
+  plan: PlanLike;
   sets: LogSet[];
   completed: boolean;
   prHits: number;
   lookup: ExerciseLookup;
-}): Promise<void> {
+}): Promise<{ ok: boolean }> {
   const { accountId, dateKey, workoutId, plan, sets, completed, prHits, lookup } = args;
   try {
     const wKey = wcontribKey(accountId, dateKey, workoutId);
     let oldContrib: WorkoutDayContrib | null = null;
     try {
       const raw: any = await kv.get(wKey);
-      if (raw && raw.workoutId === workoutId) oldContrib = raw as WorkoutDayContrib;
+      if (raw && raw.workoutId === workoutId) {
+        oldContrib = raw as WorkoutDayContrib;
+        if (typeof oldContrib.prHits !== "number") oldContrib.prHits = 0;
+      }
     } catch { /* ignore */ }
 
-    const newContrib = buildContribFromLog(workoutId, plan, sets, completed, lookup);
+    const newContrib = buildContribFromLog(workoutId, plan, sets, completed, prHits, lookup);
 
     const dKey = dailyKey(accountId, dateKey);
     let daily: DailyStats;
@@ -496,15 +572,16 @@ export async function processLogAnalytics(args: {
     }
 
     applyContribDelta(daily, oldContrib, newContrib);
-    if (prHits > 0) daily.prHits += prHits;
     daily.updatedAt = Date.now();
 
     await kv.set(wKey, newContrib);
     await kv.set(dKey, daily);
 
-    await recomputeSummary(accountId, plan.level);
+    await recomputeSummary(accountId);
+    return { ok: true };
   } catch (err) {
     console.log(`[CALI-ANALYTICS] processLogAnalytics failed for ${accountId}: ${err}`);
+    return { ok: false };
   }
 }
 
@@ -517,7 +594,7 @@ export async function recordPRHistory(args: {
   const { accountId, change, workoutId, level } = args;
   const deltaPct = change.previous != null && change.previous > 0
     ? Math.round(((change.current - change.previous) / change.previous) * 1000) / 10
-    : null;
+    : FIRST_PR_DELTA_PCT;
 
   const entry: PRHistoryEntry = {
     value: change.current,
@@ -545,7 +622,8 @@ export async function recordPRHistory(args: {
   }
 }
 
-async function recomputeSummary(accountId: string, profileLevel: number): Promise<StatsSummary> {
+async function recomputeSummary(accountId: string): Promise<StatsSummary> {
+  const profileLevel = await loadProfileLevel(accountId);
   const dailies = await loadDailyRecords(accountId, 90);
   let streak: StreakLike = { current: 0, longest: 0 };
   try {
@@ -583,26 +661,271 @@ async function recomputeSummary(accountId: string, profileLevel: number): Promis
 // Read path — API responses
 // ---------------------------------------------------------------------------
 
-function sparklineFromDailies(dailies: DailyStats[], streak: StreakLike, profileLevel: number): StatsSparkPoint[] {
+async function sparklineFromDailies(
+  accountId: string,
+  dailies: DailyStats[],
+  streak: StreakLike,
+  profileLevel: number,
+): Promise<StatsSparkPoint[]> {
+  const prEntries = await loadAllPRHistEntries(accountId);
   const points: StatsSparkPoint[] = [];
   for (let i = 0; i < dailies.length; i++) {
     const slice = dailies.slice(0, i + 1);
-    const partial = computeScores(slice, streak, profileLevel, 0, null);
+    const dayEnd = endOfDayMs(dailies[i].dateKey);
+    const windowStart = dayEnd - 30 * 24 * 60 * 60 * 1000;
+    const movementDelta = movementDeltaInWindow(prEntries, windowStart, dayEnd);
+    const partial = computeScores(slice, streak, profileLevel, movementDelta, null);
     points.push({
       dateKey: dailies[i].dateKey,
       athleteScore: partial.athleteScore,
       movementIndex: partial.movementIndex,
       volume: totalVolume(dailies[i]),
+      consistency: partial.consistency,
+      effort: partial.effort,
     });
   }
   return points;
+}
+
+function buildMetricSparklines(sparkline: StatsSparkPoint[]): MetricSparklines {
+  return {
+    consistency: sparkline.map((p) => p.consistency),
+    effort: sparkline.map((p) => p.effort),
+    movement: sparkline.map((p) => p.movementIndex),
+    volume: sparkline.map((p) => p.volume),
+  };
+}
+
+function buildDailyActivity(dailies: DailyStats[]): DailyActivityPoint[] {
+  return dailies.map((d) => ({
+    dateKey: d.dateKey,
+    workoutsCompleted: d.workoutsCompleted,
+    volume: totalVolume(d),
+  }));
+}
+
+export function computePRChangesFromSets(
+  sets: LogSet[],
+  prState: Map<string, number>,
+): PRChangeLike[] {
+  const bestByExercise = new Map<string, { metric: "reps" | "time_sec"; value: number }>();
+  for (const s of sets) {
+    const prior = bestByExercise.get(s.exerciseId);
+    if (!prior || s.value > prior.value) {
+      bestByExercise.set(s.exerciseId, { metric: s.metric, value: s.value });
+    }
+  }
+
+  const changes: PRChangeLike[] = [];
+  for (const [exerciseId, best] of bestByExercise) {
+    if (best.value <= 0) continue;
+    const previous = prState.get(exerciseId) ?? null;
+    if (previous != null && best.value <= previous) continue;
+    changes.push({
+      exerciseId,
+      metric: best.metric,
+      previous,
+      current: best.value,
+    });
+    prState.set(exerciseId, best.value);
+  }
+  return changes;
+}
+
+async function clearWalletRollups(accountId: string): Promise<void> {
+  const deleteKeys = new Set<string>();
+  for (const dateKey of dateKeysForRange(120)) {
+    deleteKeys.add(dailyKey(accountId, dateKey));
+  }
+
+  const logPrefixes = [
+    `cali:user:${accountId}:log:`,
+    `elite:user:${accountId}:log:`,
+  ];
+  for (const prefix of logPrefixes) {
+    try {
+      const logs: any[] = await kv.getByPrefix(prefix) ?? [];
+      for (const log of logs) {
+        if (!log?.dateKey || !log?.workoutId) continue;
+        deleteKeys.add(wcontribKey(accountId, log.dateKey, log.workoutId));
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (deleteKeys.size > 0) {
+    await kv.mdel(Array.from(deleteKeys));
+  }
+}
+
+async function loadPlanForBackfill(
+  accountId: string,
+  workoutId: string,
+  source: "cali" | "elite",
+): Promise<PlanLike | null> {
+  const key = source === "elite"
+    ? `elite:user:${accountId}:workout:${workoutId}`
+    : `cali:user:${accountId}:workout:${workoutId}`;
+  try {
+    const raw: any = await kv.get(key);
+    if (!raw || !Array.isArray(raw.blocks)) return null;
+    return {
+      level: source === "elite" ? 4 : (typeof raw.level === "number" ? raw.level : 1),
+      blocks: raw.blocks,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function backfillAnalyticsForWallet(
+  accountId: string,
+  lookup: ExerciseLookup,
+): Promise<void> {
+  const caliLogs: any[] = [];
+  const eliteLogs: any[] = [];
+  try {
+    caliLogs.push(...((await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? []));
+    eliteLogs.push(...((await kv.getByPrefix(`elite:user:${accountId}:log:`)) ?? []));
+  } catch (err) {
+    console.log(`[CALI-ANALYTICS] backfill log scan failed for ${accountId}: ${err}`);
+    return;
+  }
+
+  const entries: BackfillLogEntry[] = [];
+  for (const log of caliLogs) {
+    if (!log?.workoutId || log.accountId !== accountId) continue;
+    entries.push({
+      workoutId: log.workoutId,
+      accountId,
+      dateKey: log.dateKey,
+      sets: Array.isArray(log.sets) ? log.sets : [],
+      completedAt: log.completedAt ?? null,
+      updatedAt: log.updatedAt ?? 0,
+      source: "cali",
+    });
+  }
+  for (const log of eliteLogs) {
+    if (!log?.workoutId || log.accountId !== accountId) continue;
+    entries.push({
+      workoutId: log.workoutId,
+      accountId,
+      dateKey: log.dateKey,
+      sets: Array.isArray(log.sets) ? log.sets : [],
+      completedAt: log.completedAt ?? null,
+      updatedAt: log.updatedAt ?? 0,
+      source: "elite",
+    });
+  }
+
+  if (entries.length === 0) return;
+
+  await clearWalletRollups(accountId);
+
+  const deduped = new Map<string, BackfillLogEntry>();
+  for (const entry of entries) {
+    const key = `${entry.source}|${entry.dateKey}|${entry.workoutId}`;
+    const prev = deduped.get(key);
+    if (!prev || entry.updatedAt >= prev.updatedAt) deduped.set(key, entry);
+  }
+
+  const ordered = Array.from(deduped.values()).sort((a, b) => {
+    if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+    return a.updatedAt - b.updatedAt;
+  });
+
+  const prState = new Map<string, number>();
+  const planCache = new Map<string, PlanLike | null>();
+
+  for (const entry of ordered) {
+    if (entry.sets.length === 0) continue;
+    const cacheKey = `${entry.source}|${entry.workoutId}`;
+    let plan = planCache.get(cacheKey);
+    if (plan === undefined) {
+      plan = await loadPlanForBackfill(accountId, entry.workoutId, entry.source);
+      planCache.set(cacheKey, plan);
+    }
+    if (!plan) continue;
+
+    const prChanges = computePRChangesFromSets(entry.sets, prState);
+    await processLogAnalytics({
+      accountId,
+      dateKey: entry.dateKey,
+      workoutId: entry.workoutId,
+      plan,
+      sets: entry.sets,
+      completed: Boolean(entry.completedAt),
+      prHits: prChanges.length,
+      lookup,
+    });
+
+    for (const change of prChanges) {
+      await recordPRHistory({
+        accountId,
+        change,
+        workoutId: entry.workoutId,
+        level: plan.level,
+      });
+    }
+  }
+
+  await recomputeSummary(accountId);
+}
+
+async function needsAnalyticsBackfill(accountId: string): Promise<boolean> {
+  let caliLogs: any[] = [];
+  let eliteLogs: any[] = [];
+  try {
+    caliLogs = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
+    eliteLogs = (await kv.getByPrefix(`elite:user:${accountId}:log:`)) ?? [];
+  } catch {
+    return false;
+  }
+
+  const logs = [...caliLogs, ...eliteLogs].filter(
+    (l) => l && l.accountId === accountId && Array.isArray(l.sets) && l.sets.length > 0,
+  );
+  if (logs.length === 0) return false;
+
+  const totalLogSets = logs.reduce((s, l) => s + l.sets.length, 0);
+  const dailies = await loadDailyRecords(accountId, 90);
+  const totalDailySets = dailies.reduce((s, d) => s + d.setsLogged, 0);
+
+  return totalDailySets < totalLogSets * 0.75;
+}
+
+export async function maybeBackfillAnalytics(
+  accountId: string,
+  lookup: ExerciseLookup,
+): Promise<void> {
+  try {
+    const flag: any = await kv.get(backfillFlagKey(accountId));
+    if (flag?.done) return;
+    if (!(await needsAnalyticsBackfill(accountId))) {
+      await kv.set(backfillFlagKey(accountId), { done: true, skipped: true, at: Date.now() });
+      return;
+    }
+    const started = Date.now();
+    await backfillAnalyticsForWallet(accountId, lookup);
+    await kv.set(backfillFlagKey(accountId), { done: true, at: Date.now(), ms: Date.now() - started });
+    console.log(`[CALI-ANALYTICS] backfill complete for ${accountId} in ${Date.now() - started}ms`);
+  } catch (err) {
+    console.log(`[CALI-ANALYTICS] backfill failed for ${accountId}: ${err}`);
+  }
 }
 
 export async function buildStatsResponse(
   accountId: string,
   range: "7d" | "30d" | "90d",
   profileLevel: number,
-): Promise<{ summary: StatsSummary; sparkline: StatsSparkPoint[] }> {
+  lookup: ExerciseLookup,
+): Promise<{
+  summary: StatsSummary;
+  sparkline: StatsSparkPoint[];
+  dailyActivity: DailyActivityPoint[];
+  metricSparklines: MetricSparklines;
+}> {
+  await maybeBackfillAnalytics(accountId, lookup);
+
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
 
   let summary: StatsSummary | null = null;
@@ -612,14 +935,19 @@ export async function buildStatsResponse(
   } catch { /* ignore */ }
 
   if (!summary) {
-    summary = await recomputeSummary(accountId, profileLevel);
+    summary = await recomputeSummary(accountId);
   }
 
   const dailies = await loadDailyRecords(accountId, days);
-  let streak: StreakLike = { current: summary.streakCurrent, longest: summary.streakLongest };
-  const sparkline = sparklineFromDailies(dailies, streak, profileLevel);
+  const streak: StreakLike = { current: summary.streakCurrent, longest: summary.streakLongest };
+  const sparkline = await sparklineFromDailies(accountId, dailies, streak, profileLevel);
 
-  return { summary, sparkline };
+  return {
+    summary,
+    sparkline,
+    dailyActivity: buildDailyActivity(dailies),
+    metricSparklines: buildMetricSparklines(sparkline),
+  };
 }
 
 export async function buildMovementStats(

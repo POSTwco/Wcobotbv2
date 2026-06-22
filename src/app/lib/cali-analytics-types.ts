@@ -40,7 +40,35 @@ export interface StatsSparkPoint {
   athleteScore: number;
   movementIndex: number;
   volume: number;
+  consistency: number;
+  effort: number;
 }
+
+export interface DailyActivityPoint {
+  dateKey: string;
+  workoutsCompleted: number;
+  volume: number;
+}
+
+export interface MetricSparklines {
+  consistency: number[];
+  effort: number[];
+  movement: number[];
+  volume: number[];
+}
+
+export interface CandlePoint {
+  date: string;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  volume: number;
+  delta: number;
+}
+
+export const CHART_UP = "#10b981";
+export const CHART_DOWN = "#ef4444";
 
 export interface MovementStat {
   exerciseId: string;

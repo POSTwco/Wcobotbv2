@@ -32,6 +32,11 @@ import {
   mergeExercises,
   loadAddedExercises,
 } from "./cali_library.tsx";
+import {
+  processLogAnalytics,
+  recordPRHistory,
+  computePRChangesFromSets,
+} from "./cali_analytics.tsx";
 
 const ELITE_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const ELITE_ELIGIBILITY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -39,6 +44,53 @@ const ELITE_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_NOTE_LEN = 280;
 
 function now() { return Date.now(); }
+
+const eliteExerciseLookup = (() => {
+  const m = new Map<string, { name: string; category: string }>();
+  for (const e of EXERCISES) m.set(e.id, { name: e.name, category: e.category });
+  for (const e of getEliteExercises()) m.set(e.id, { name: e.name, category: e.category });
+  return (id: string) => m.get(id);
+})();
+
+async function computeElitePRChanges(
+  accountId: string,
+  sets: ValidatedSet[],
+): Promise<Array<{ exerciseId: string; metric: "reps" | "time_sec"; previous: number | null; current: number }>> {
+  const prState = new Map<string, number>();
+  try {
+    const prs: any[] = (await kv.getByPrefix(`cali:user:${accountId}:pr:`)) ?? [];
+    for (const pr of prs) {
+      if (pr && typeof pr.exerciseId === "string" && typeof pr.value === "number") {
+        prState.set(pr.exerciseId, pr.value);
+      }
+    }
+  } catch { /* ignore */ }
+
+  const logSets = sets.map((s) => ({
+    exerciseId: s.exerciseId,
+    metric: s.metric,
+    value: s.value,
+    rpe: s.rpe,
+  }));
+  return computePRChangesFromSets(logSets, prState);
+}
+
+async function updateElitePRs(
+  accountId: string,
+  workoutId: string,
+  changes: Array<{ exerciseId: string; metric: "reps" | "time_sec"; previous: number | null; current: number }>,
+): Promise<void> {
+  for (const ch of changes) {
+    const prKey = `cali:user:${accountId}:pr:${ch.exerciseId}`;
+    await kv.set(prKey, {
+      exerciseId: ch.exerciseId,
+      metric: ch.metric,
+      value: ch.current,
+      achievedAt: now(),
+      workoutId,
+    });
+  }
+}
 
 function generateNonce(): string {
   const a = new Uint8Array(32);
@@ -554,7 +606,33 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
     if (body?.completed === true) log.completedAt = completedAt;
     await kv.set(logKey, log);
 
-    return c.json({ success: true, data: { log } });
+    const prChanges = await computeElitePRChanges(accountId, log.sets);
+    if (prChanges.length > 0) await updateElitePRs(accountId, workoutId, prChanges);
+
+    const elitePlan = {
+      level: 4,
+      blocks: plan.blocks,
+    };
+    await processLogAnalytics({
+      accountId,
+      dateKey: log.dateKey,
+      workoutId,
+      plan: elitePlan,
+      sets: log.sets,
+      completed: Boolean(log.completedAt),
+      prHits: prChanges.length,
+      lookup: eliteExerciseLookup,
+    });
+    for (const ch of prChanges) {
+      await recordPRHistory({
+        accountId,
+        change: ch,
+        workoutId,
+        level: 4,
+      });
+    }
+
+    return c.json({ success: true, data: { log, prChanges } });
   });
 
   // GET /elite/featured-athlete — weekly/monthly spotlight (public read for elite zone UI)

@@ -75,7 +75,27 @@ export function CaliDashboard() {
       setHistory(h.data.items);
       setHistoryTotal(h.data.total);
     }
-    if (st.success && st.data) setStatsSummary(st.data.summary);
+    if (st.success && st.data) {
+      setStatsSummary(st.data.summary);
+    } else if (p.success) {
+      setStatsSummary({
+        athleteScore: 0,
+        athleteTier: "UNRANKED",
+        tierJudgment: "Complete workouts to unlock your athlete profile.",
+        consistency: 0,
+        effort: 0,
+        hypertrophyPct: 0,
+        movementIndex: 50,
+        deltas: { consistency7d: 0, effort7d: 0, hypertrophy7d: 0, movement7d: 0 },
+        completedWorkouts30d: 0,
+        sessions7d: 0,
+        dataConfidence: "none",
+        streakCurrent: 0,
+        streakLongest: 0,
+        prCount: 0,
+        lastComputedAt: 0,
+      });
+    }
     if (!p.success) {
       cali.handleAuthError(p.code);
       setError(p.error || "Failed to load profile.");

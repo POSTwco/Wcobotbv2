@@ -877,6 +877,8 @@ export const api = {
       request<{
         summary: import("./cali-analytics-types").StatsSummary;
         sparkline: import("./cali-analytics-types").StatsSparkPoint[];
+        dailyActivity: import("./cali-analytics-types").DailyActivityPoint[];
+        metricSparklines: import("./cali-analytics-types").MetricSparklines;
         range: import("./cali-analytics-types").StatsRange;
       }>(`/cali/stats?range=${encodeURIComponent(range)}`, { caliSessionToken }),
 

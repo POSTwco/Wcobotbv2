@@ -74,6 +74,7 @@ import {
   EXERCISES,
   getLiveExercises,
   getLiveExercise,
+  getEliteExercises,
   applyExerciseOverride,
   loadAddedExercises,
   mergeExercises,
@@ -95,11 +96,12 @@ import {
 const libExercises: Map<string, { name: string; category: string }> = (() => {
   const m = new Map<string, { name: string; category: string }>();
   for (const e of EXERCISES) m.set(e.id, { name: e.name, category: e.category });
+  for (const e of getEliteExercises()) m.set(e.id, { name: e.name, category: e.category });
   return m;
 })();
 
 /**
- * Safe library lookup.
+ * Safe library lookup (L1–L3 + Elite L4 exercises).
  */
 function getExerciseSafe(id: string) {
   return libExercises.get(id);
@@ -1498,8 +1500,13 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
     }
     const range = parseStatsRange(c.req.query("range"));
     const profile = await loadOrInitProfile(accountId);
-    const { summary, sparkline } = await buildStatsResponse(accountId, range, profile.level);
-    return c.json({ success: true, data: { summary, sparkline, range } });
+    const { summary, sparkline, dailyActivity, metricSparklines } = await buildStatsResponse(
+      accountId, range, profile.level, getExerciseSafe,
+    );
+    return c.json({
+      success: true,
+      data: { summary, sparkline, dailyActivity, metricSparklines, range },
+    });
   });
 
   app.get(`${PREFIX}/cali/stats/movements`, requireCaliSession, async (c) => {
@@ -2474,7 +2481,6 @@ async function findWorkoutLog(
     console.log(`[CALI-LOG-FIND] logref read failed for ${accountId}/${workoutId}: ${err}`);
   }
 
-  // Legacy fallback — scan prefix only when logref is missing (older records).
   try {
     const rows = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
     const matches = rows
@@ -2562,7 +2568,7 @@ function validateCheckpoint(raw: any, plan: WorkoutPlan): WorkoutCheckpoint | un
 }
 
 type PersistLogResult =
-  | { log: WorkoutLog; prChanges: PRChange[]; streak: StreakRecord | null }
+  | { log: WorkoutLog; prChanges: PRChange[]; streak: StreakRecord | null; analyticsOk?: boolean }
   | { error: string; status: number };
 
 async function persistWorkoutLog(args: {
@@ -2641,8 +2647,9 @@ async function persistWorkoutLog(args: {
       }
     }
 
+    let analyticsOk = true;
     try {
-      await processLogAnalytics({
+      const analyticsResult = await processLogAnalytics({
         accountId,
         dateKey: log.dateKey,
         workoutId,
@@ -2652,6 +2659,7 @@ async function persistWorkoutLog(args: {
         prHits: prChanges.length,
         lookup: getExerciseSafe,
       });
+      analyticsOk = analyticsResult.ok;
       for (const ch of prChanges) {
         await recordPRHistory({
           accountId,
@@ -2661,10 +2669,11 @@ async function persistWorkoutLog(args: {
         });
       }
     } catch (err) {
+      analyticsOk = false;
       console.log(`[CALI-LOG] analytics update failed for ${accountId}/${workoutId}: ${err}`);
     }
 
-    return { log, prChanges, streak };
+    return { log, prChanges, streak, analyticsOk };
   } catch (err) {
     console.log(`[CALI-LOG] persist failed for ${args.accountId}/${args.workoutId}: ${err}`);
     return { error: "Log storage unavailable", status: 503 };

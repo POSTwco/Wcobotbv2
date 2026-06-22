@@ -4,7 +4,7 @@
 
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Trophy, Flame, Zap, ArrowRight, TrendingUp } from "lucide-react";
+import { Trophy, Flame, Zap, ArrowRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Link } from "react-router";
 import confetti from "canvas-confetti";
 import { ATHLETE_TIER_CONFIG, deltaColor, formatDelta, type AthleteTier } from "../../lib/cali-analytics-types";
@@ -105,8 +105,12 @@ export function CaliWorkoutCelebration({
                     className="flex items-center gap-1 text-xs font-bold"
                     style={{ color: deltaColor(movementDelta), fontFamily: "Orbitron, sans-serif" }}
                   >
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    Movement {formatDelta(movementDelta)}
+                    {movementDelta >= 0 ? (
+                      <TrendingUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <TrendingDown className="w-3.5 h-3.5" />
+                    )}
+                    Movement {formatDelta(movementDelta, "")}
                   </span>
                 )}
               </div>
