@@ -52,7 +52,7 @@ export function SeoHead() {
       <meta name="twitter:description" content={seo.description} />
       <meta name="twitter:image" content={twitterImage} />
       <meta name="twitter:image:width" content="1200" />
-      <meta name="twitter:image:height" content="600" />
+      <meta name="twitter:image:height" content="630" />
       <meta name="twitter:image:alt" content={imageAlt} />
 
       {jsonLd && (

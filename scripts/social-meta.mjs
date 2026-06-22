@@ -1,5 +1,9 @@
+export function normalizeText(value) {
+  return String(value).replace(/\u2014/g, " - ").replace(/\u2013/g, "-");
+}
+
 export function escapeAttr(value) {
-  return String(value)
+  return normalizeText(value)
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
@@ -13,8 +17,9 @@ export function buildSocialMetaTags({
   ogImage,
   twitterImage,
   twitterImageWidth = 1200,
-  twitterImageHeight = 600,
+  twitterImageHeight = 630,
 }) {
+  const base = site.url.replace(/\/$/, "");
   const title = escapeAttr(page.title);
   const description = escapeAttr(page.description);
   const og = escapeAttr(ogImage);
@@ -29,12 +34,13 @@ export function buildSocialMetaTags({
     <meta name="author" content="${escapeAttr(site.org)}" />
     <meta name="theme-color" content="${site.themeColor}" />
     <link rel="canonical" href="${url}" />
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="${base}/favicon.ico" />
+    <link rel="icon" href="${base}/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="48x48" href="${base}/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="${base}/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="${base}/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="${base}/apple-touch-icon.png" />
+    <link rel="image_src" href="${og}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="${escapeAttr(site.name)}" />
     <meta property="og:locale" content="${site.locale}" />

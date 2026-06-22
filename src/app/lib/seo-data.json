@@ -24,7 +24,7 @@
   ],
   "pages": {
     "/": {
-      "title": "Battle of the Bars | WCO — Only Gains",
+      "title": "Battle of the Bars | WCO Only Gains",
       "description": "Vote on live calisthenics battles, stake WCO tokens, earn rewards, and train with the Cali Engine. The official Web3 platform of the World Calisthenics Organization.",
       "ogImage": "/og/home.png",
       "headline": "Battle of the Bars",
@@ -33,7 +33,7 @@
     },
     "/battles": {
       "title": "Live Battles | Battle of the Bars",
-      "description": "Watch IRL calisthenics battles and vote with WCO tokens. Token-weighted voting on Battle of the Bars events — no loss, only gains.",
+      "description": "Watch IRL calisthenics battles and vote with WCO tokens. Token-weighted voting on Battle of the Bars events no loss, only gains.",
       "ogImage": "/og/battles.png",
       "headline": "Live Battles",
       "index": true,
@@ -121,7 +121,7 @@
     },
     "/whitepaper": {
       "title": "Whitepaper | Battle of the Bars",
-      "description": "Technical whitepaper for Battle of the Bars — token-weighted voting, Hedera HTS, calisthenics engine, and WCO ecosystem architecture.",
+      "description": "Technical whitepaper for Battle of the Bars token-weighted voting, Hedera HTS, calisthenics engine, and WCO ecosystem architecture.",
       "ogImage": "/og/default.png",
       "headline": "Whitepaper",
       "index": true,

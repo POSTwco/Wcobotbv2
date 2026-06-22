@@ -21,22 +21,18 @@ export function absoluteUrl(path = ""): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function withVersion(url: string): string {
-  const version = SITE.ogVersion;
-  if (!version) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}v=${version}`;
+function cleanImageUrl(url: string): string {
+  return url.split("?")[0];
 }
 
 export function absoluteOgImage(ogPath: string): string {
   const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
-  return withVersion(base);
+  return cleanImageUrl(base);
 }
 
-/** X/Twitter-optimized PNG (1200×600, 2:1). No query string — X crawler rejects ?v= on images. */
+/** Same image as og:image (1200×630 PNG). X crawler needs clean URLs, no query strings. */
 export function absoluteTwitterImage(ogPath: string): string {
-  if (ogPath.startsWith("http")) return ogPath.split("?")[0];
-  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
-  return absoluteUrl(`/social/twitter/${file}.png`);
+  return absoluteOgImage(ogPath);
 }
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {

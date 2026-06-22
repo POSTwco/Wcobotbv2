@@ -16,21 +16,18 @@ function absoluteUrl(routePath) {
   return `${base}${routePath}`;
 }
 
-function withVersion(url) {
-  const version = site.ogVersion;
-  if (!version) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}v=${version}`;
+function cleanImageUrl(url) {
+  return url.split("?")[0];
 }
 
 function absoluteOgImage(ogPath) {
   const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
-  return withVersion(base);
+  return cleanImageUrl(base);
 }
 
+/** Same PNG as og:image — proven on Facebook; no query strings for X crawler. */
 function absoluteTwitterImage(ogPath) {
-  if (ogPath.startsWith("http")) return ogPath.split("?")[0];
-  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
-  return absoluteUrl(`/social/twitter/${file}.png`);
+  return absoluteOgImage(ogPath);
 }
 
 function buildJsonLd(routePath, page) {
@@ -126,6 +123,7 @@ function stripSeoTags(html) {
     .replace(/<link rel="shortcut icon"[^>]*>\s*/g, "")
     .replace(/<link rel="icon"[^>]*>\s*/g, "")
     .replace(/<link rel="apple-touch-icon"[^>]*>\s*/g, "")
+    .replace(/<link rel="image_src"[^>]*>\s*/g, "")
     .replace(/<meta property="og:[^"]*"[^>]*>\s*/g, "")
     .replace(/<meta name="twitter:[^"]*"[^>]*>\s*/g, "")
     .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*/g, "");
@@ -134,7 +132,11 @@ function stripSeoTags(html) {
 function injectMeta(html, routePath, page) {
   const cleaned = stripSeoTags(html);
   const headTags = buildHeadTags(routePath, page);
-  return cleaned.replace("</head>", `${headTags}\n  </head>`);
+  // Crawlers (especially X) must see meta before any <script> tags.
+  if (/<meta name="viewport"[^>]*>/i.test(cleaned)) {
+    return cleaned.replace(/(<meta name="viewport"[^>]*>)/i, `$1\n${headTags}`);
+  }
+  return cleaned.replace(/<head>/i, `<head>\n${headTags}`);
 }
 
 const templatePath = path.join(distDir, "index.html");
@@ -156,7 +158,7 @@ for (const [routePath, page] of Object.entries(pages)) {
       : path.join(distDir, routePath.slice(1), "index.html");
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, html);
+  fs.writeFileSync(outPath, html, "utf8");
   console.log(`  ${routePath}`);
 }
 
