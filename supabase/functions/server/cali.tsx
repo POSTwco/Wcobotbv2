@@ -1248,94 +1248,94 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   // shape allows a partial array of sets — not the whole workout.
   // ─────────────────────────────────────────────────────────────────────────
   app.post(`${PREFIX}/cali/workout/:id/log`, requireCaliSession, async (c) => {
-    const accountId = c.get("caliAccountId") as string;
-    const workoutId = sanitizeString(c.req.param("id"), 128);
-
-    if (!workoutId || workoutId.length < 16) {
-      return c.json({ success: false, error: "Invalid workoutId" }, 400);
-    }
-
-    const rl = await checkRateLimit(`cali-log:${accountId}`, 60, 60_000);
-    if (rl.limited) {
-      return c.json(
-        {
-          success: false,
-          error: "Too many log writes. Slow down.",
-          code: "RATE_LIMITED",
-          retryAfter: rl.retryAfter,
-        },
-        { status: 429, headers: { "Retry-After": String(rl.retryAfter || 5) } },
-      );
-    }
-
-    let body: any;
     try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ success: false, error: "Invalid JSON body" }, 400);
-    }
+      const accountId = c.get("caliAccountId") as string;
+      const workoutId = sanitizeString(c.req.param("id"), 128);
 
-    const plan = await loadWorkoutForOwner(accountId, workoutId);
-    if (!plan) return c.json({ success: false, error: "Workout not found" }, 404);
+      if (!workoutId || workoutId.length < 16) {
+        return c.json({ success: false, error: "Invalid workoutId" }, 400);
+      }
 
-    // Validate + clean every submitted set against the plan structure.
-    // Anything that doesn't index into a real (block, item, set) is rejected.
-    const cleanedSets: ValidatedSet[] = [];
-    if (!Array.isArray(body?.sets)) {
-      return c.json({ success: false, error: "Body.sets must be an array" }, 400);
-    }
-    if (body.sets.length > 100) {
-      return c.json({ success: false, error: "Too many sets in one request (max 100)" }, 400);
-    }
-    for (let i = 0; i < body.sets.length; i++) {
-      const result = validateLoggedSet(body.sets[i], plan);
-      if ("error" in result) {
+      const rl = await checkRateLimit(`cali-log:${accountId}`, 60, 60_000);
+      if (rl.limited) {
         return c.json(
-          { success: false, error: `sets[${i}]: ${result.error}`, field: result.field },
-          400,
+          {
+            success: false,
+            error: "Too many log writes. Slow down.",
+            code: "RATE_LIMITED",
+            retryAfter: rl.retryAfter,
+          },
+          { status: 429, headers: { "Retry-After": String(rl.retryAfter || 5) } },
         );
       }
-      cleanedSets.push(result.value);
-    }
 
-    // markedComplete is set by the frontend when the user taps "Complete".
-    // It triggers streak math but does not lock the log — additional sets can
-    // still be appended after completion (e.g. corrections).
-    const markedComplete = body?.completed === true;
-
-    const nowIso = new Date().toISOString();
-    let completedAt = nowIso;
-    if (typeof body?.completedAt === "string") {
-      const parsed = Date.parse(body.completedAt);
-      if (Number.isFinite(parsed)) {
-        completedAt = parsed > Date.now() ? nowIso : new Date(parsed).toISOString();
+      let body: any;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ success: false, error: "Invalid JSON body" }, 400);
       }
+
+      const plan = await loadWorkoutForOwner(accountId, workoutId);
+      if (!plan) return c.json({ success: false, error: "Workout not found" }, 404);
+
+      const cleanedSets: ValidatedSet[] = [];
+      if (!Array.isArray(body?.sets)) {
+        return c.json({ success: false, error: "Body.sets must be an array" }, 400);
+      }
+      if (body.sets.length > 100) {
+        return c.json({ success: false, error: "Too many sets in one request (max 100)" }, 400);
+      }
+      for (let i = 0; i < body.sets.length; i++) {
+        const result = validateLoggedSet(body.sets[i], plan);
+        if ("error" in result) {
+          return c.json(
+            { success: false, error: `sets[${i}]: ${result.error}`, field: result.field },
+            400,
+          );
+        }
+        cleanedSets.push(result.value);
+      }
+
+      const markedComplete = body?.completed === true;
+
+      const nowIso = new Date().toISOString();
+      let completedAt = nowIso;
+      if (typeof body?.completedAt === "string") {
+        const parsed = Date.parse(body.completedAt);
+        if (Number.isFinite(parsed)) {
+          completedAt = parsed > Date.now() ? nowIso : new Date(parsed).toISOString();
+        }
+      }
+
+      const result = await persistWorkoutLog({
+        accountId,
+        workoutId,
+        plan,
+        cleanedSets,
+        markedComplete,
+        completedAt,
+        updatePrs: true,
+        updateStreak: markedComplete,
+      });
+      if ("error" in result) {
+        return c.json({ success: false, error: result.error }, result.status);
+      }
+
+      const { log, prChanges, streak } = result;
+      console.log(
+        `[CALI-LOG] ${accountId}/${workoutId} → +${cleanedSets.length} sets ` +
+          `(total=${log.sets.length}, complete=${markedComplete}, prs=${prChanges.length})`,
+      );
+
+      return c.json({
+        success: true,
+        data: { log, prChanges, streak },
+      });
+    } catch (err) {
+      console.log(`[CALI-LOG] unhandled error: ${err}`);
+      return c.json({ success: false, error: "Log storage unavailable" }, 500);
     }
-
-    const result = await persistWorkoutLog({
-      accountId,
-      workoutId,
-      plan,
-      cleanedSets,
-      markedComplete,
-      completedAt,
-      updatePrs: true,
-      updateStreak: markedComplete,
-    });
-    if ("error" in result) {
-      return c.json({ success: false, error: result.error }, result.status);
-    }
-
-    const { log, prChanges, streak } = result;
-    console.log(
-      `[CALI-LOG] ${accountId}/${workoutId} → +${cleanedSets.length} sets ` +
-        `(total=${log.sets.length}, complete=${markedComplete}, prs=${prChanges.length})`,
-    );
-
-    return c.json({
-      success: true,
-      data: { log, prChanges, streak },
-    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2138,8 +2138,8 @@ function validateLoggedSet(raw: any, plan: WorkoutPlan): SetValidationResult {
 function mergeSets(existing: ValidatedSet[], incoming: ValidatedSet[]): ValidatedSet[] {
   const map = new Map<string, ValidatedSet>();
   const keyOf = (s: ValidatedSet) => `${s.blockIndex}|${s.itemIndex}|${s.setIndex}`;
-  for (const s of existing) map.set(keyOf(s), s);
-  for (const s of incoming) map.set(keyOf(s), s);
+  for (const s of existing ?? []) map.set(keyOf(s), s);
+  for (const s of incoming ?? []) map.set(keyOf(s), s);
   return Array.from(map.values()).sort((a, b) => {
     if (a.blockIndex !== b.blockIndex) return a.blockIndex - b.blockIndex;
     if (a.itemIndex !== b.itemIndex) return a.itemIndex - b.itemIndex;
@@ -2324,40 +2324,86 @@ function pickEquipmentOverride(
   return cleaned.length > 0 ? cleaned : fallback;
 }
 
+function workoutLogKey(accountId: string, dateKey: string, workoutId: string): string {
+  return `cali:user:${accountId}:log:${dateKey}:${workoutId}`;
+}
+
+function workoutLogRefKey(accountId: string, workoutId: string): string {
+  return `cali:user:${accountId}:logref:${workoutId}`;
+}
+
+function normalizeWorkoutLog(raw: any, accountId: string, workoutId: string): WorkoutLog | null {
+  if (!raw || raw.accountId !== accountId || raw.workoutId !== workoutId) return null;
+  return {
+    workoutId,
+    accountId,
+    dateKey: typeof raw.dateKey === "string" ? raw.dateKey : new Date().toISOString().slice(0, 10),
+    sets: Array.isArray(raw.sets) ? raw.sets : [],
+    completedAt: raw.completedAt ?? null,
+    updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : now(),
+    checkpoint: raw.checkpoint,
+  };
+}
+
+async function writeWorkoutLogRef(
+  accountId: string,
+  workoutId: string,
+  dateKey: string,
+  updatedAt: number,
+): Promise<void> {
+  try {
+    await kv.set(workoutLogRefKey(accountId, workoutId), { dateKey, updatedAt });
+  } catch (err) {
+    console.log(`[CALI-LOG-REF] write failed for ${accountId}/${workoutId}: ${err}`);
+  }
+}
+
 async function findWorkoutLog(
   accountId: string,
   workoutId: string,
 ): Promise<{ log: WorkoutLog; logKey: string } | null> {
-  let rows: any[];
   try {
-    rows = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
+    const ref: any = await kv.get(workoutLogRefKey(accountId, workoutId));
+    if (ref?.dateKey && typeof ref.dateKey === "string") {
+      const logKey = workoutLogKey(accountId, ref.dateKey, workoutId);
+      const stored = await kv.get(logKey);
+      const normalized = normalizeWorkoutLog(stored, accountId, workoutId);
+      if (normalized) return { log: normalized, logKey };
+    }
+  } catch (err) {
+    console.log(`[CALI-LOG-FIND] logref read failed for ${accountId}/${workoutId}: ${err}`);
+  }
+
+  // Legacy fallback — scan prefix only when logref is missing (older records).
+  try {
+    const rows = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
+    const matches = rows
+      .map((r) => normalizeWorkoutLog(r, accountId, workoutId))
+      .filter((r): r is WorkoutLog => r !== null);
+    if (matches.length === 0) return null;
+
+    matches.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    const primary = matches[0];
+
+    let mergedSets = primary.sets;
+    for (let i = 1; i < matches.length; i++) {
+      mergedSets = mergeSets(mergedSets, matches[i].sets);
+    }
+
+    const withCheckpoint = matches.find((m) => m.checkpoint);
+    const log: WorkoutLog = {
+      ...primary,
+      sets: mergedSets,
+      checkpoint: withCheckpoint?.checkpoint ?? primary.checkpoint,
+    };
+
+    const logKey = workoutLogKey(accountId, primary.dateKey, workoutId);
+    await writeWorkoutLogRef(accountId, workoutId, primary.dateKey, log.updatedAt);
+    return { log, logKey };
   } catch (err) {
     console.log(`[CALI-LOG-FIND] getByPrefix failed for ${accountId}: ${err}`);
     return null;
   }
-
-  const matches = rows.filter(
-    (r) => r && r.accountId === accountId && r.workoutId === workoutId && Array.isArray(r.sets),
-  );
-  if (matches.length === 0) return null;
-
-  matches.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-  const primary = matches[0] as WorkoutLog;
-
-  let mergedSets = primary.sets;
-  for (let i = 1; i < matches.length; i++) {
-    mergedSets = mergeSets(mergedSets, (matches[i] as WorkoutLog).sets);
-  }
-
-  const withCheckpoint = matches.find((m) => m.checkpoint) as WorkoutLog | undefined;
-  const log: WorkoutLog = {
-    ...primary,
-    sets: mergedSets,
-    checkpoint: withCheckpoint?.checkpoint ?? primary.checkpoint,
-  };
-
-  const logKey = `cali:user:${accountId}:log:${primary.dateKey}:${workoutId}`;
-  return { log, logKey };
 }
 
 async function resolveLogWriteTarget(
@@ -2369,7 +2415,7 @@ async function resolveLogWriteTarget(
   if (found) return { logKey: found.logKey, log: found.log };
 
   const dateKey = preferredDateKey ?? new Date().toISOString().slice(0, 10);
-  const logKey = `cali:user:${accountId}:log:${dateKey}:${workoutId}`;
+  const logKey = workoutLogKey(accountId, dateKey, workoutId);
   return {
     logKey,
     log: { workoutId, accountId, dateKey, sets: [], completedAt: null, updatedAt: now() },
@@ -2405,52 +2451,74 @@ async function persistWorkoutLog(args: {
   updatePrs?: boolean;
   updateStreak?: boolean;
 }): Promise<PersistLogResult> {
-  const {
-    accountId,
-    workoutId,
-    plan,
-    cleanedSets,
-    markedComplete = false,
-    completedAt,
-    checkpoint,
-    updatePrs = true,
-    updateStreak = false,
-  } = args;
-
-  const dateKey = (completedAt ?? new Date().toISOString()).slice(0, 10);
-  let target: { logKey: string; log: WorkoutLog };
   try {
-    target = await resolveLogWriteTarget(accountId, workoutId, dateKey);
+    const {
+      accountId,
+      workoutId,
+      plan,
+      cleanedSets,
+      markedComplete = false,
+      completedAt,
+      checkpoint,
+      updatePrs = true,
+      updateStreak = false,
+    } = args;
+
+    const completionDateKey = (completedAt ?? new Date().toISOString()).slice(0, 10);
+    let target: { logKey: string; log: WorkoutLog };
+    try {
+      target = await resolveLogWriteTarget(accountId, workoutId, completionDateKey);
+    } catch (err) {
+      console.log(`[CALI-LOG] resolve target failed for ${accountId}/${workoutId}: ${err}`);
+      return { error: "Log storage unavailable", status: 503 };
+    }
+
+    const previousLogKey = target.logKey;
+    const log: WorkoutLog = {
+      ...target.log,
+      sets: Array.isArray(target.log.sets) ? target.log.sets : [],
+    };
+
+    if (cleanedSets.length > 0) {
+      log.sets = mergeSets(log.sets, cleanedSets);
+    }
+    log.updatedAt = now();
+    if (markedComplete && completedAt) {
+      log.completedAt = completedAt;
+      log.dateKey = completionDateKey;
+    }
+    if (checkpoint) log.checkpoint = checkpoint;
+
+    const prChanges: PRChange[] = updatePrs && cleanedSets.length > 0
+      ? await updatePRsForLog(accountId, log, plan)
+      : [];
+
+    let streak: StreakRecord | null = null;
+    if (updateStreak && markedComplete && log.sets.length > 0) {
+      streak = await updateStreak(accountId, completionDateKey);
+    }
+
+    const nextLogKey = workoutLogKey(accountId, log.dateKey, workoutId);
+    try {
+      await kv.set(nextLogKey, log);
+      await writeWorkoutLogRef(accountId, workoutId, log.dateKey, log.updatedAt);
+      if (previousLogKey !== nextLogKey) {
+        try {
+          await kv.del(previousLogKey);
+        } catch (err) {
+          console.log(`[CALI-LOG] stale key delete failed for ${previousLogKey}: ${err}`);
+        }
+      }
+    } catch (err) {
+      console.log(`[CALI-LOG] KV write failed for ${nextLogKey}: ${err}`);
+      return { error: "Log storage unavailable", status: 503 };
+    }
+
+    return { log, prChanges, streak };
   } catch (err) {
-    console.log(`[CALI-LOG] resolve target failed for ${accountId}/${workoutId}: ${err}`);
+    console.log(`[CALI-LOG] persist failed for ${args.accountId}/${args.workoutId}: ${err}`);
     return { error: "Log storage unavailable", status: 503 };
   }
-
-  const log = { ...target.log };
-  if (cleanedSets.length > 0) {
-    log.sets = mergeSets(log.sets, cleanedSets);
-  }
-  log.updatedAt = now();
-  if (markedComplete && completedAt) log.completedAt = completedAt;
-  if (checkpoint) log.checkpoint = checkpoint;
-
-  const prChanges: PRChange[] = updatePrs && cleanedSets.length > 0
-    ? await updatePRsForLog(accountId, log, plan)
-    : [];
-
-  let streak: StreakRecord | null = null;
-  if (updateStreak && markedComplete && log.sets.length > 0) {
-    streak = await updateStreak(accountId, log.dateKey);
-  }
-
-  try {
-    await kv.set(target.logKey, log);
-  } catch (err) {
-    console.log(`[CALI-LOG] KV write failed for ${target.logKey}: ${err}`);
-    return { error: "Log storage unavailable", status: 503 };
-  }
-
-  return { log, prChanges, streak };
 }
 
 async function loadWorkoutForOwner(
