@@ -2135,11 +2135,54 @@ function validateLoggedSet(raw: any, plan: WorkoutPlan): SetValidationResult {
  * Last-write-wins per set — autosave on the frontend means we expect many
  * partial requests for the same workout.
  */
+function isValidStoredSet(s: any): s is ValidatedSet {
+  return Boolean(
+    s
+    && Number.isInteger(s.blockIndex)
+    && Number.isInteger(s.itemIndex)
+    && Number.isInteger(s.setIndex)
+    && typeof s.exerciseId === "string"
+    && (s.metric === "reps" || s.metric === "time_sec")
+    && Number.isFinite(s.value),
+  );
+}
+
+function serializeWorkoutLog(log: WorkoutLog): WorkoutLog {
+  const sets = (log.sets ?? [])
+    .filter(isValidStoredSet)
+    .map((s) => ({
+      blockIndex: s.blockIndex,
+      itemIndex: s.itemIndex,
+      setIndex: s.setIndex,
+      exerciseId: s.exerciseId,
+      metric: s.metric,
+      value: s.value,
+      loggedAt: typeof s.loggedAt === "number" ? s.loggedAt : now(),
+      ...(s.rpe != null && Number.isFinite(s.rpe) ? { rpe: s.rpe } : {}),
+      ...(s.note ? { note: s.note } : {}),
+    }));
+
+  const out: WorkoutLog = {
+    workoutId: log.workoutId,
+    accountId: log.accountId,
+    dateKey: log.dateKey,
+    sets,
+    completedAt: log.completedAt ?? null,
+    updatedAt: log.updatedAt,
+  };
+  if (log.checkpoint) out.checkpoint = log.checkpoint;
+  return out;
+}
+
 function mergeSets(existing: ValidatedSet[], incoming: ValidatedSet[]): ValidatedSet[] {
   const map = new Map<string, ValidatedSet>();
   const keyOf = (s: ValidatedSet) => `${s.blockIndex}|${s.itemIndex}|${s.setIndex}`;
-  for (const s of existing ?? []) map.set(keyOf(s), s);
-  for (const s of incoming ?? []) map.set(keyOf(s), s);
+  for (const s of existing ?? []) {
+    if (isValidStoredSet(s)) map.set(keyOf(s), s);
+  }
+  for (const s of incoming ?? []) {
+    if (isValidStoredSet(s)) map.set(keyOf(s), s);
+  }
   return Array.from(map.values()).sort((a, b) => {
     if (a.blockIndex !== b.blockIndex) return a.blockIndex - b.blockIndex;
     if (a.itemIndex !== b.itemIndex) return a.itemIndex - b.itemIndex;
@@ -2333,16 +2376,17 @@ function workoutLogRefKey(accountId: string, workoutId: string): string {
 }
 
 function normalizeWorkoutLog(raw: any, accountId: string, workoutId: string): WorkoutLog | null {
-  if (!raw || raw.accountId !== accountId || raw.workoutId !== workoutId) return null;
-  return {
+  if (!raw || raw.workoutId !== workoutId) return null;
+  if (raw.accountId && raw.accountId !== accountId) return null;
+  return serializeWorkoutLog({
     workoutId,
-    accountId,
+    accountId: typeof raw.accountId === "string" ? raw.accountId : accountId,
     dateKey: typeof raw.dateKey === "string" ? raw.dateKey : new Date().toISOString().slice(0, 10),
-    sets: Array.isArray(raw.sets) ? raw.sets : [],
+    sets: Array.isArray(raw.sets) ? raw.sets.filter(isValidStoredSet) : [],
     completedAt: raw.completedAt ?? null,
     updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : now(),
     checkpoint: raw.checkpoint,
-  };
+  });
 }
 
 async function writeWorkoutLogRef(
@@ -2410,10 +2454,35 @@ async function resolveLogWriteTarget(
   workoutId: string,
   preferredDateKey?: string,
 ): Promise<{ logKey: string; log: WorkoutLog }> {
-  const found = await findWorkoutLog(accountId, workoutId);
-  if (found) return { logKey: found.logKey, log: found.log };
+  try {
+    const ref: any = await kv.get(workoutLogRefKey(accountId, workoutId));
+    if (ref?.dateKey && typeof ref.dateKey === "string") {
+      const logKey = workoutLogKey(accountId, ref.dateKey, workoutId);
+      const stored = await kv.get(logKey);
+      const normalized = normalizeWorkoutLog(stored, accountId, workoutId);
+      if (normalized) return { logKey, log: normalized };
+    }
+  } catch (err) {
+    console.log(`[CALI-LOG] logref read failed for ${accountId}/${workoutId}: ${err}`);
+  }
 
-  const dateKey = preferredDateKey ?? new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const tryDateKeys = [...new Set([preferredDateKey, today].filter((d): d is string => Boolean(d)))];
+  for (const dateKey of tryDateKeys) {
+    try {
+      const logKey = workoutLogKey(accountId, dateKey, workoutId);
+      const stored = await kv.get(logKey);
+      const normalized = normalizeWorkoutLog(stored, accountId, workoutId);
+      if (normalized) {
+        await writeWorkoutLogRef(accountId, workoutId, dateKey, normalized.updatedAt);
+        return { logKey, log: normalized };
+      }
+    } catch (err) {
+      console.log(`[CALI-LOG] direct read failed for ${accountId}/${workoutId}@${tryDateKeys}: ${err}`);
+    }
+  }
+
+  const dateKey = preferredDateKey ?? today;
   const logKey = workoutLogKey(accountId, dateKey, workoutId);
   return {
     logKey,
@@ -2472,45 +2541,47 @@ async function persistWorkoutLog(args: {
       return { error: "Log storage unavailable", status: 503 };
     }
 
-    const previousLogKey = target.logKey;
-    const log: WorkoutLog = {
-      ...target.log,
-      sets: Array.isArray(target.log.sets) ? target.log.sets : [],
-    };
-
+    let mergedSets = target.log.sets ?? [];
     if (cleanedSets.length > 0) {
-      log.sets = mergeSets(log.sets, cleanedSets);
+      mergedSets = mergeSets(mergedSets, cleanedSets);
     }
-    log.updatedAt = now();
-    if (markedComplete && completedAt) {
-      log.completedAt = completedAt;
-      log.dateKey = completionDateKey;
-    }
-    if (checkpoint) log.checkpoint = checkpoint;
 
-    const prChanges: PRChange[] = updatePrs && cleanedSets.length > 0
-      ? await updatePRsForLog(accountId, log, plan)
-      : [];
+    const log = serializeWorkoutLog({
+      ...target.log,
+      sets: mergedSets,
+      updatedAt: now(),
+      completedAt: markedComplete && completedAt ? completedAt : target.log.completedAt,
+      checkpoint: checkpoint ?? target.log.checkpoint,
+    });
+
+    if (markedComplete && log.sets.length === 0) {
+      return { error: "Log at least one set before completing.", status: 400 };
+    }
+
+    try {
+      await kv.set(target.logKey, log);
+      await writeWorkoutLogRef(accountId, workoutId, log.dateKey, log.updatedAt);
+    } catch (err) {
+      console.log(`[CALI-LOG] KV write failed for ${target.logKey}: ${err}`);
+      return { error: "Log storage unavailable", status: 503 };
+    }
+
+    let prChanges: PRChange[] = [];
+    if (updatePrs && cleanedSets.length > 0) {
+      try {
+        prChanges = await updatePRsForLog(accountId, log, plan);
+      } catch (err) {
+        console.log(`[CALI-LOG] PR update failed for ${accountId}/${workoutId}: ${err}`);
+      }
+    }
 
     let streak: StreakRecord | null = null;
     if (updateStreak && markedComplete && log.sets.length > 0) {
-      streak = await updateStreak(accountId, completionDateKey);
-    }
-
-    const nextLogKey = workoutLogKey(accountId, log.dateKey, workoutId);
-    try {
-      await kv.set(nextLogKey, log);
-      await writeWorkoutLogRef(accountId, workoutId, log.dateKey, log.updatedAt);
-      if (previousLogKey !== nextLogKey) {
-        try {
-          await kv.del(previousLogKey);
-        } catch (err) {
-          console.log(`[CALI-LOG] stale key delete failed for ${previousLogKey}: ${err}`);
-        }
+      try {
+        streak = await updateStreak(accountId, completionDateKey);
+      } catch (err) {
+        console.log(`[CALI-LOG] streak update failed for ${accountId}/${workoutId}: ${err}`);
       }
-    } catch (err) {
-      console.log(`[CALI-LOG] KV write failed for ${nextLogKey}: ${err}`);
-      return { error: "Log storage unavailable", status: 503 };
     }
 
     return { log, prChanges, streak };

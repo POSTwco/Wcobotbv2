@@ -526,6 +526,10 @@ export function CaliWorkout() {
 
   const executeComplete = useCallback(async () => {
     if (!cali.sessionToken || !plan) return;
+    if (setsLogged === 0) {
+      toast.error("Log at least one set before completing.");
+      return;
+    }
     setCompleting(true);
     const completedAt = new Date().toISOString();
     const bulk: LoggedSet[] = [];
@@ -558,7 +562,7 @@ export function CaliWorkout() {
     setXp((x) => x + xpForWorkoutComplete());
     completeTutorial();
     setShowCelebration(true);
-  }, [actuals, plan, cali, completeTutorial]);
+  }, [actuals, plan, cali, completeTutorial, setsLogged]);
 
   const onComplete = useCallback(() => {
     if (!plan) return;
