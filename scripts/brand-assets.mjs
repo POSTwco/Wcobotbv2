@@ -4,15 +4,17 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const root = path.join(__dirname, "..");
 
-/** Official WCO brand files (only these two). */
+/** Official WCO brand files. */
 export const BRAND = {
   fist: path.join(root, "src/assets/brand/fist-wco.jpg"),
   wordmark: path.join(root, "src/assets/brand/wco-clear.png"),
+  botb: path.join(root, "src/assets/brand/botb-color.png"),
 };
 
 export const BRAND_URLS = {
   fist: "https://www.wcorg.io/android-chrome-512x512.png",
   wordmark: "https://www.wcorg.io/og/home.png",
+  botb: "https://www.wcorg.io/og/home.jpg",
 };
 
 export const ROUTE_ACCENT = {
@@ -36,8 +38,8 @@ export function accentForOg(filename) {
 export const SOCIAL_SPECS = {
   /** Facebook, LinkedIn, Discord, Google link previews */
   openGraph: { width: 1200, height: 630, dir: "og", ext: "png" },
-  /** X/Twitter summary_large_image (2:1 safe area) */
-  twitter: { width: 1200, height: 600, dir: "social/twitter", ext: "png" },
+  /** X/Twitter summary_large_image — JPEG is more reliable than PNG in X crawler */
+  twitter: { width: 1200, height: 630, dir: "og", ext: "jpg" },
   /** GitHub repo social preview */
   github: { width: 1280, height: 640, dir: "social/github", ext: "png" },
   /** Square fallback (some scrapers) */

@@ -29,6 +29,16 @@ export function compositeCentered(base, overlay, xAlign = 0.5, yAlign = 0.5) {
   base.composite(overlay, x, y);
 }
 
+function accentBar(base, accent, height = 6) {
+  const barColor = colorInt(accent);
+  const barY = base.height - 4;
+  for (let x = 0; x < base.width; x++) {
+    for (let dy = 0; dy < height; dy++) {
+      base.setPixelColor(barColor, x, barY - dy);
+    }
+  }
+}
+
 /** Browser tab + PWA icons — official FIST_WCO.jpg */
 export async function iconFromFist(fistPath, size, { bg = "#FFFFFF", pad = 0.06 } = {}) {
   const base = await canvas(size, size, bg);
@@ -38,10 +48,10 @@ export async function iconFromFist(fistPath, size, { bg = "#FFFFFF", pad = 0.06 
   return base;
 }
 
-/** Facebook / LinkedIn / Discord / Google — 1200×630 PNG */
-export async function shareBanner({
+/** Share card — centered BOTB logo on white (OG / Facebook / Google). */
+export async function botbShareBanner({
+  botbPath,
   fistPath,
-  wordmarkPath,
   width,
   height,
   accent = "#D4A843",
@@ -49,37 +59,29 @@ export async function shareBanner({
 }) {
   const base = await canvas(width, height, bg);
 
-  const wordMaxW = Math.round(width * 0.82);
-  const wordMaxH = Math.round(height * 0.48);
-  const { img: wordmark } = await fitContain(wordmarkPath, wordMaxW, wordMaxH);
-  compositeCentered(base, wordmark, 0.5, 0.5);
+  const logoMaxW = Math.round(width * 0.86);
+  const logoMaxH = Math.round(height * 0.72);
+  const { img: botb } = await fitContain(botbPath, logoMaxW, logoMaxH);
+  compositeCentered(base, botb, 0.5, 0.5);
 
-  const badgeSize = Math.round(Math.min(width, height) * 0.2);
-  const { img: badge } = await fitContain(fistPath, badgeSize, badgeSize);
-  base.composite(badge, Math.round(width * 0.05), Math.round(height * 0.06));
-
-  const barColor = colorInt(accent);
-  const barY = height - 8;
-  for (let x = 0; x < width; x++) {
-    for (let dy = 0; dy < 6; dy++) {
-      base.setPixelColor(barColor, x, barY - dy);
-    }
+  if (fistPath) {
+    const badgeSize = Math.round(Math.min(width, height) * 0.14);
+    const { img: badge } = await fitContain(fistPath, badgeSize, badgeSize);
+    base.composite(badge, Math.round(width * 0.04), Math.round(height * 0.05));
   }
 
+  accentBar(base, accent);
   return base;
 }
 
-/** X/Twitter — 1200×600 JPG on white */
-export async function twitterBanner(opts) {
-  return shareBanner({ ...opts, height: opts.height ?? 600 });
-}
-
 /** Square — Instagram / YouTube link fallback */
-export async function squareShare({ fistPath, wordmarkPath, size, bg = "#FFFFFF" }) {
+export async function squareShare({ botbPath, fistPath, size, bg = "#FFFFFF" }) {
   const base = await canvas(size, size, bg);
-  const { img: fist } = await fitContain(fistPath, Math.round(size * 0.42), Math.round(size * 0.42));
-  compositeCentered(base, fist, 0.5, 0.38);
-  const { img: word } = await fitContain(wordmarkPath, Math.round(size * 0.78), Math.round(size * 0.22));
-  compositeCentered(base, word, 0.5, 0.78);
+  const { img: botb } = await fitContain(botbPath, Math.round(size * 0.82), Math.round(size * 0.62));
+  compositeCentered(base, botb, 0.5, 0.52);
+  if (fistPath) {
+    const { img: fist } = await fitContain(fistPath, Math.round(size * 0.18), Math.round(size * 0.18));
+    base.composite(fist, Math.round(size * 0.06), Math.round(size * 0.06));
+  }
   return base;
 }

@@ -30,9 +30,11 @@ export function absoluteOgImage(ogPath: string): string {
   return cleanImageUrl(base);
 }
 
-/** Same image as og:image (1200×630 PNG). X crawler needs clean URLs, no query strings. */
+/** X/Twitter JPEG (1200×630) — same banner as og:image, JPG format for reliable X rendering. */
 export function absoluteTwitterImage(ogPath: string): string {
-  return absoluteOgImage(ogPath);
+  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
+  return absoluteUrl(`/og/${file}.jpg`);
 }
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {

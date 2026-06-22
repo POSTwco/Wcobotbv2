@@ -25,9 +25,11 @@ function absoluteOgImage(ogPath) {
   return cleanImageUrl(base);
 }
 
-/** Same PNG as og:image — proven on Facebook; no query strings for X crawler. */
+/** JPEG variant of og:image — X renders JPG more reliably than PNG. */
 function absoluteTwitterImage(ogPath) {
-  return absoluteOgImage(ogPath);
+  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
+  return absoluteUrl(`/og/${file}.jpg`);
 }
 
 function buildJsonLd(routePath, page) {

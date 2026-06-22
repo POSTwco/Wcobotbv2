@@ -50,6 +50,7 @@ export function buildSocialMetaTags({
     <meta property="og:image" content="${og}" />
     <meta property="og:image:secure_url" content="${og}" />
     <meta property="og:image:type" content="image/png" />
+    <meta name="twitter:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${imageAlt}" />
