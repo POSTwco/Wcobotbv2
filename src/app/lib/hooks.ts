@@ -108,9 +108,14 @@ export function useEvents(): HookResult<BattleEvent[]> {
 // useProposals — all governance proposals
 // ---------------------------------------------------------------------------
 
-export function useProposals(): HookResult<Proposal[]> {
-  const fetcher = useCallback(() => api.getProposals(), []);
-  return useFetch<Proposal[]>(fetcher, []);
+export function useProposals(
+  walletSessionToken?: string | null,
+): HookResult<Proposal[]> {
+  const fetcher = useCallback(
+    () => api.getProposals({ walletSessionToken: walletSessionToken ?? undefined }),
+    [walletSessionToken],
+  );
+  return useFetch<Proposal[]>(fetcher, [walletSessionToken]);
 }
 
 // ---------------------------------------------------------------------------

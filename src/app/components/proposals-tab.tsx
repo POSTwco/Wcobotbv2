@@ -68,12 +68,12 @@ export function ProposalsTab({ wallet, sessionToken }: ProposalsTabProps) {
 
   const loadProposals = useCallback(async () => {
     setLoading(true);
-    const res = await api.getProposals();
+    const res = await api.getProposals({ adminSessionToken: sessionToken });
     if (res.success && res.data) {
       setProposals(res.data);
     }
     setLoading(false);
-  }, []);
+  }, [sessionToken]);
 
   useEffect(() => { loadProposals(); }, [loadProposals]);
 

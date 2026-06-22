@@ -218,12 +218,20 @@ export const api = {
   },
   getBattle: (id: string) => request<Battle>(`/battles/${id}`),
 
-  // Proposals
-  getProposals: () => request<Proposal[]>("/proposals"),
-  getProposal: (id: string) => request<Proposal>(`/proposals/${id}`),
+  // Proposals (Governors Hub — requires wallet or admin session + Governor NFT on server)
+  getProposals: (opts?: { walletSessionToken?: string; adminSessionToken?: string }) =>
+    request<Proposal[]>("/proposals", {
+      walletSessionToken: opts?.walletSessionToken,
+      sessionToken: opts?.adminSessionToken,
+    }),
+  getProposal: (id: string, opts?: { walletSessionToken?: string; adminSessionToken?: string }) =>
+    request<Proposal>(`/proposals/${id}`, {
+      walletSessionToken: opts?.walletSessionToken,
+      sessionToken: opts?.adminSessionToken,
+    }),
 
-  getMyProposalVotes: (wallet: string) =>
-    request<ProposalVote[]>(`/votes/proposals/${wallet}`),
+  getMyProposalVotes: (wallet: string, walletSessionToken?: string) =>
+    request<ProposalVote[]>(`/votes/proposals/${wallet}`, { walletSessionToken }),
 
   // Leaderboards
   getAthleteLeaderboard: () => request<any[]>("/leaderboard/athletes"),

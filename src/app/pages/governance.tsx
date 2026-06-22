@@ -96,7 +96,7 @@ export function GovernancePage() {
   const [signingStep, setSigningStep] = useState<"idle" | "building" | "signing" | "submitting">("idle");
   const [changingVoteId, setChangingVoteId] = useState<string | null>(null);
 
-  const { data: proposals, loading: proposalsLoading, refresh: refreshProposals } = useProposals();
+  const { data: proposals, loading: proposalsLoading, refresh: refreshProposals } = useProposals(walletSessionToken);
 
   // Load existing votes when wallet connects
   const loadMyVotes = useCallback(async () => {
@@ -106,7 +106,7 @@ export function GovernancePage() {
     }
     setLoadingVotes(true);
     try {
-      const res = await api.getMyProposalVotes(accountId);
+      const res = await api.getMyProposalVotes(accountId, walletSessionToken ?? undefined);
       if (res.success && res.data) {
         const map = new Map<string, ProposalVote>();
         res.data.forEach((v) => map.set(v.proposalId, v));
@@ -117,7 +117,7 @@ export function GovernancePage() {
     } finally {
       setLoadingVotes(false);
     }
-  }, [accountId]);
+  }, [accountId, walletSessionToken]);
 
   useEffect(() => { loadMyVotes(); }, [loadMyVotes]);
 

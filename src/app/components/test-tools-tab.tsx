@@ -384,7 +384,7 @@ export function TestToolsTab({ wallet, sessionToken }: TestToolsTabProps) {
       const [inv, btl, prop, ath, evt, flags] = await Promise.all([
         api.testTools.getDataInventory(wallet, sessionToken),
         api.getBattles(),
-        api.getProposals(),
+        api.getProposals({ adminSessionToken: sessionToken }),
         api.getAthletes(),
         api.getEvents(),
         api.testTools.getIpFlags(wallet, sessionToken),

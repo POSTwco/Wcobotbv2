@@ -465,6 +465,38 @@ export async function requireCaliSession(c: Context, next: Next) {
     );
   }
 
+  // Live mirror HBAR re-check (cached via getAccountBalanceTinybars — 60s KV / 10s mem)
+  let tinybars: number;
+  try {
+    tinybars = await getAccountBalanceTinybars(payload.accountId);
+  } catch (err) {
+    console.log(`[CALI-SESSION] Balance fetch failed for ${payload.accountId}: ${err}`);
+    return c.json(
+      {
+        success: false,
+        error: "Unable to verify HBAR balance right now. Please retry shortly.",
+        code: "MIRROR_NODE_UNAVAILABLE",
+      },
+      502,
+    );
+  }
+  if (tinybars < MIN_HBAR_TINYBARS) {
+    await kv.del(`cali:eligible:${payload.accountId}`).catch(() => {});
+    console.log(
+      `[CALI-SESSION] Balance below gate (${tinybars} < ${MIN_HBAR_TINYBARS}) for ${payload.accountId} — revoking`,
+    );
+    return c.json(
+      {
+        success: false,
+        error: `HBAR balance fell below 1 HBAR. Re-verify after topping up.`,
+        code: "INSUFFICIENT_HBAR",
+        tinybars,
+        requiredTinybars: MIN_HBAR_TINYBARS,
+      },
+      403,
+    );
+  }
+
   c.set("caliAccountId", payload.accountId);
   c.set("caliEligibility", eligibility);
   await next();
@@ -742,41 +774,18 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
     // ride a transient Mirror Node 5xx + any ≥16-char base64 to pass.
     const sigResult = await verifyVoteSignature(accountId, challengeRec.challenge, signature);
     if (!sigResult.valid) {
-      const keyKnown = sigResult.keyType === "ED25519" || sigResult.keyType === "ECDSA_SECP256K1";
-      if (HEADCOUNT_MODE && keyKnown) {
-        console.log(
-          `[CALI-VERIFY] ⚠️ HEADCOUNT MODE: signature verify did not pass for ${accountId} ` +
-            `(keyType=${sigResult.keyType}) — ` +
-            `other layers OK (mirror-node + balance + nonce + non-empty sig). Allowing.`,
-        );
-      } else if (HEADCOUNT_MODE && !keyKnown) {
-        console.log(
-          `[CALI-VERIFY] ❌ Bypass refused for ${accountId}: keyType missing ` +
-            `(likely Mirror Node key-fetch failure). Rejecting.`,
-        );
-        await kv.del(`cali:nonce:${nonce}`).catch(() => {});
-        return c.json(
-          {
-            success: false,
-            error: "Unable to verify your wallet key right now. Please retry shortly.",
-            code: "WALLET_KEY_UNAVAILABLE",
-          },
-          502,
-        );
-      } else {
-        console.log(
-          `[CALI-VERIFY] ❌ Signature verify failed strict-mode for ${accountId}: ${sigResult.error}`,
-        );
-        await kv.del(`cali:nonce:${nonce}`).catch(() => {});
-        return c.json(
-          {
-            success: false,
-            error: "Signature verification failed. Please re-approve in your wallet.",
-            code: "SIG_INVALID",
-          },
-          401,
-        );
-      }
+      console.log(
+        `[CALI-VERIFY] Signature verify failed for ${accountId}: ${sigResult.error}`,
+      );
+      await kv.del(`cali:nonce:${nonce}`).catch(() => {});
+      return c.json(
+        {
+          success: false,
+          error: "Signature verification failed. Please re-approve in your wallet.",
+          code: "SIGNATURE_INVALID",
+        },
+        401,
+      );
     } else {
       console.log(`[CALI-VERIFY] ✅ Signature verified for ${accountId} (${sigResult.keyType})`);
     }
@@ -1697,33 +1706,21 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   // ADMIN OPERATIONS ENDPOINTS — full control of workouts + photos (ops console)
   // ==========================================================================
 
-  // GET /admin/cali/library — return base + (if authed) added + overrides merged.
-  // IMPORTANT: Always returns at least the full base list (111+) so the admin editor
-  // scroll selector can always show and let the operator pick every exercise.
-  // Private operator data (overrides, added, photoMap) only included when a valid
-  // X-Admin-Session is provided. No auth required for the base names/ids/cues.
-  registerAdmin("get", `/admin/cali/library`, async (c) => {
-    let adminWallet = "public";
+  // GET /admin/cali/library — full exercise library (incl. L4 elite). Admin session required.
+  registerAdmin("get", `/admin/cali/library`, requireAdminSession, async (c) => {
+    const adminWallet = (c.get("adminWallet") as string) ?? "admin";
+    const rl = await checkRateLimit(`cali-admin-lib:${adminWallet}`, 30, 60_000);
+    if (rl.limited) return c.json({ success: false, error: "Rate limited" }, 429);
+
     let overridesRaw: any = {};
     let photoMap: any = {};
     let added: any[] = [];
-
-    const sessionToken = c.req.header("X-Admin-Session");
-    if (sessionToken) {
-      try {
-        const wallet = await validateSession(sessionToken);
-        if (wallet) {
-          adminWallet = wallet;
-          const rl = await checkRateLimit(`cali-admin-lib:${adminWallet}`, 30, 60_000);
-          if (rl.limited) return c.json({ success: false, error: "Rate limited" }, 429);
-
-          overridesRaw = (await kv.get("cali:overrides")) || {};
-          photoMap = (await kv.get("cali:photoMap")) || {};
-          added = await loadAddedExercises(kv);
-        }
-      } catch (e) {
-        // invalid/expired token — fall back to public base list only
-      }
+    try {
+      overridesRaw = (await kv.get("cali:overrides")) || {};
+      photoMap = (await kv.get("cali:photoMap")) || {};
+      added = await loadAddedExercises(kv);
+    } catch (e) {
+      console.log("[ADMIN-CALI] library KV read error", e);
     }
 
     try {

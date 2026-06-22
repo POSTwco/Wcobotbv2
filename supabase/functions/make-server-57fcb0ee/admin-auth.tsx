@@ -115,8 +115,14 @@ const SESSION_TTL_MS = 20 * 60 * 1000;
 /** Mirror node base URL for wallet verification */
 const MIRROR_NODE_URL = "https://mainnet.mirrornode.hedera.com";
 
+/** WCO Governors NFT — governance + elite vault gate */
+export const GOVERNOR_NFT_TOKEN_ID = "0.0.9338241";
+
 /** Cache wallet verification for 10 minutes */
 const WALLET_VERIFY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** Cache Governor NFT checks for 5 minutes */
+const GOVERNOR_NFT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -237,6 +243,41 @@ export async function verifyWalletOnMirrorNode(wallet: string): Promise<boolean>
     console.log(`[ANTI-SPOOF] Mirror node verification failed for ${wallet}: ${err}`);
     // On network error, fail open for existing cached results, fail closed otherwise
     if (cached) return cached.valid;
+    return false;
+  }
+}
+
+/** In-memory cache for Governor NFT holdings */
+const governorNftCache = new Map<string, { hasNFT: boolean; expiresAt: number }>();
+
+/**
+ * Check whether a wallet holds a WCO Governors NFT via mirror node.
+ * Uses token-filtered query (limit=1) — no full-wallet NFT pagination.
+ */
+export async function hasGovernorNFT(wallet: string): Promise<boolean> {
+  if (!isValidHederaAccountId(wallet)) return false;
+
+  const cached = governorNftCache.get(wallet);
+  if (cached && now() < cached.expiresAt) return cached.hasNFT;
+
+  try {
+    const url =
+      `${MIRROR_NODE_URL}/api/v1/accounts/${wallet}/nfts?token.id=${GOVERNOR_NFT_TOKEN_ID}&limit=1`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      console.log(`[GOVERNOR-NFT] Mirror returned ${res.status} for ${wallet}`);
+      governorNftCache.set(wallet, { hasNFT: false, expiresAt: now() + 60_000 });
+      return false;
+    }
+    const data = await res.json();
+    const hasNFT = Array.isArray(data?.nfts) && data.nfts.length > 0;
+    governorNftCache.set(wallet, { hasNFT, expiresAt: now() + GOVERNOR_NFT_CACHE_TTL_MS });
+    return hasNFT;
+  } catch (err) {
+    console.log(`[GOVERNOR-NFT] Check failed for ${wallet}: ${err}`);
     return false;
   }
 }

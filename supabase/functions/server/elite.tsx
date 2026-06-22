@@ -12,6 +12,7 @@ import {
   checkRateLimit,
   sanitizeString,
   verifyVoteSignature,
+  hasGovernorNFT,
 } from "./admin-auth.tsx";
 import {
   buildEliteWorkoutPlan,
@@ -32,12 +33,9 @@ import {
   loadAddedExercises,
 } from "./cali_library.tsx";
 
-const GOVERNOR_NFT = "0.0.9338241";
-const MIRROR_NODE_URL = "https://mainnet.mirrornode.hedera.com";
 const ELITE_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const ELITE_ELIGIBILITY_TTL_MS = 24 * 60 * 60 * 1000;
 const ELITE_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-const HEADCOUNT_MODE = !Deno.env.get("BOTB_TOKEN_ID");
 const MAX_NOTE_LEN = 280;
 
 function now() { return Date.now(); }
@@ -115,23 +113,7 @@ async function verifyEliteSessionToken(token: string): Promise<{ accountId: stri
 }
 
 async function fetchHasGovernorNFT(wallet: string): Promise<boolean> {
-  try {
-    let nextUrl: string | null = `${MIRROR_NODE_URL}/api/v1/accounts/${wallet}/nfts?limit=100`;
-    let pages = 0;
-    while (nextUrl && pages < 10) {
-      const res = await fetch(nextUrl, { signal: AbortSignal.timeout(4000) });
-      if (!res.ok) break;
-      const data = await res.json();
-      for (const nft of data.nfts || []) {
-        if (nft.token_id === GOVERNOR_NFT) return true;
-      }
-      nextUrl = data.links?.next ? `${MIRROR_NODE_URL}${data.links.next}` : null;
-      pages++;
-    }
-  } catch (e) {
-    console.log(`[ELITE-NFT] check failed for ${wallet}: ${e}`);
-  }
-  return false;
+  return hasGovernorNFT(wallet);
 }
 
 async function isEliteWhitelisted(wallet: string): Promise<boolean> {
@@ -387,10 +369,18 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
 
     const sigResult = await verifyVoteSignature(accountId, challengeRec.challenge, signature);
     if (!sigResult.valid) {
-      const keyKnown = sigResult.keyType === "ED25519" || sigResult.keyType === "ECDSA_SECP256K1";
-      if (!(HEADCOUNT_MODE && keyKnown)) {
-        return c.json({ success: false, error: "Signature verification failed" }, 400);
-      }
+      console.log(
+        `[ELITE-VERIFY] Signature verify failed for ${accountId}: ${sigResult.error}`,
+      );
+      await kv.del(`elite:nonce:${nonce}`).catch(() => {});
+      return c.json(
+        {
+          success: false,
+          error: "Signature verification failed. Please re-approve in your wallet.",
+          code: "SIGNATURE_INVALID",
+        },
+        401,
+      );
     }
 
     await kv.del(`elite:nonce:${nonce}`).catch(() => {});
@@ -557,6 +547,7 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
     return c.json({ success: true, data: { log } });
   });
 
+  // GET /elite/featured-athlete — weekly/monthly spotlight (public read for elite zone UI)
   app.get(`${PREFIX}/elite/featured-athlete`, async (c) => {
     try {
       const raw: any = await kv.get("elite:featured-athlete");

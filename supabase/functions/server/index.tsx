@@ -136,9 +136,11 @@ import {
   createChallenge,
   verifyAndCreateSession,
   destroySession,
+  validateSession,
   getSessionTimeRemaining,
   isValidHederaAccountId,
   verifyWalletOnMirrorNode,
+  hasGovernorNFT,
   rateLimit,
   checkRateLimit,
   sanitizeString,
@@ -340,7 +342,7 @@ function safeErrorMsg(operation: string): string {
 // ---------------------------------------------------------------------------
 const PREFIX = "/make-server-57fcb0ee";
 
-app.use(`${PREFIX}/*`, rateLimit({
+app.use(`/*`, rateLimit({
   keyFn: (c) => {
     const forwarded = c.req.header("x-forwarded-for");
     return `global:${forwarded || c.req.header("x-real-ip") || "unknown"}`;
@@ -354,8 +356,10 @@ app.use(`${PREFIX}/*`, rateLimit({
 // Calisthenics tab — HBAR-gated workout routes (mounted under PREFIX/cali/*)
 // Sits behind the global CORS + rate-limit middleware above.
 // ---------------------------------------------------------------------------
-mountCaliRoutes(app, PREFIX);
-mountEliteRoutes(app, PREFIX);
+// Note: mountCaliRoutes moved to the very end (after all other routes) so that
+// a bug in the cali module does not prevent core admin auth routes (challenge,
+// verify, check, etc.) from being registered. This keeps the Admin Command Center
+// sign-in working even during cali editor maintenance.
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -575,25 +579,121 @@ function generateWalletSessionToken(): string {
  * the given wallet address. Returns true if valid, false otherwise.
  * Automatically cleans up expired sessions.
  */
-async function validateWalletSession(c: any, wallet: string): Promise<boolean> {
+async function getWalletFromSessionHeader(c: any): Promise<string | null> {
   const token = c.req.header("X-Wallet-Session");
   if (!token || typeof token !== "string" || token.length < 10) {
-    return false;
+    return null;
   }
 
   const session = await kv.get(`wsession:${token}`);
-  if (!session) return false;
+  if (!session) return null;
 
-  // Check expiry
   if (Date.now() > (session as any).expiresAt) {
-    // Cleanup expired session
     kv.del(`wsession:${token}`).catch(() => {});
     kv.del(`wsession-wallet:${(session as any).wallet}`).catch(() => {});
-    return false;
+    return null;
   }
 
-  // Token must match the wallet in the request
-  return (session as any).wallet === wallet;
+  return (session as any).wallet || null;
+}
+
+async function validateWalletSession(c: any, wallet: string): Promise<boolean> {
+  const sessionWallet = await getWalletFromSessionHeader(c);
+  return sessionWallet === wallet;
+}
+
+/**
+ * Governors Hub read gate — wallet session + mirror Governor NFT, or admin session.
+ * No extra signatures; uses existing WC session + mirror node.
+ */
+async function requireGovernorAccess(c: any, next: () => Promise<void>) {
+  const adminToken = c.req.header("X-Admin-Session");
+  if (adminToken) {
+    const adminWallet = await validateSession(adminToken);
+    if (adminWallet && isAdmin(adminWallet)) {
+      c.set("governorWallet", adminWallet);
+      await next();
+      return;
+    }
+  }
+
+  const wallet = await getWalletFromSessionHeader(c);
+  if (!wallet) {
+    return c.json({
+      success: false,
+      error: "Wallet session required. Connect your wallet to access Governors Hub.",
+      code: "SESSION_REQUIRED",
+    }, 401);
+  }
+
+  if (isAdmin(wallet)) {
+    c.set("governorWallet", wallet);
+    await next();
+    return;
+  }
+
+  const hasGov = await hasGovernorNFT(wallet);
+  if (!hasGov) {
+    return c.json({
+      success: false,
+      error: "Governors Hub requires a WCO Governors NFT.",
+      code: "GOVERNOR_NFT_REQUIRED",
+    }, 403);
+  }
+
+  c.set("governorWallet", wallet);
+  await next();
+}
+
+/**
+ * Proposal vote history — session wallet must match :wallet param, or admin.
+ */
+async function requireGovernorVoteHistoryAccess(c: any, next: () => Promise<void>) {
+  const paramWallet = c.req.param("wallet");
+  if (!paramWallet || !isValidHederaAccountId(paramWallet)) {
+    return c.json({ success: false, error: "Invalid wallet parameter" }, 400);
+  }
+
+  const adminToken = c.req.header("X-Admin-Session");
+  if (adminToken) {
+    const adminWallet = await validateSession(adminToken);
+    if (adminWallet && isAdmin(adminWallet)) {
+      c.set("governorWallet", adminWallet);
+      await next();
+      return;
+    }
+  }
+
+  const sessionWallet = await getWalletFromSessionHeader(c);
+  if (!sessionWallet) {
+    return c.json({
+      success: false,
+      error: "Wallet session required.",
+      code: "SESSION_REQUIRED",
+    }, 401);
+  }
+
+  if (sessionWallet !== paramWallet && !isAdmin(sessionWallet)) {
+    return c.json({
+      success: false,
+      error: "You may only view your own proposal votes.",
+      code: "WALLET_MISMATCH",
+    }, 403);
+  }
+
+  if (!isAdmin(sessionWallet)) {
+    const hasGov = await hasGovernorNFT(sessionWallet);
+    if (!hasGov) {
+      return c.json({
+        success: false,
+        error: "Governors Hub requires a WCO Governors NFT.",
+        code: "GOVERNOR_NFT_REQUIRED",
+      }, 403);
+    }
+  }
+
+  c.set("governorWallet", sessionWallet);
+  await next();
 }
 
 // ---------------------------------------------------------------------------
@@ -987,9 +1087,11 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
     const total = Number(await kv.get(`vcount:total`)) || 0;
     const last7d = dailyVals.slice(0, 7).reduce((s: number, v: number) => s + v, 0);
     const last30d = dailyVals.reduce((s: number, v: number) => s + v, 0);
-    const [walletsConnected, walletsVoted] = await kv.mget([
+    const [walletsConnected, walletsVoted, workoutsGenerated, userWallets] = await kv.mget([
       `wconn:total`,
       `wvoted:total`,
+      `cali:gen:total`,
+      `caliuser:total`,
     ]);
     return c.json({
       success: true,
@@ -1001,6 +1103,8 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
         total,
         walletsConnected: Number(walletsConnected) || 0,
         walletsVoted: Number(walletsVoted) || 0,
+        workoutsGenerated: Number(workoutsGenerated) || 0,
+        userWallets: Number(userWallets) || 0,
         breakdown: days.map((d, i) => ({ date: d, count: dailyVals[i] || 0 })),
         retentionDays: VISIT_HASH_RETENTION_DAYS,
         privacyNote: "IPs and wallet IDs are HMAC-hashed; raw values are never returned by this endpoint.",
@@ -1210,7 +1314,7 @@ app.get(`${PREFIX}/battles/:id`, async (c) => {
 // ---------------------------------------------------------------------------
 // GET /proposals — List all proposals
 // ---------------------------------------------------------------------------
-app.get(`${PREFIX}/proposals`, async (c) => {
+app.get(`${PREFIX}/proposals`, requireGovernorAccess, async (c) => {
   try {
     const proposals = await kv.getByPrefix("proposal:");
     // Active first, then passed, then rejected
@@ -1226,7 +1330,7 @@ app.get(`${PREFIX}/proposals`, async (c) => {
 // ---------------------------------------------------------------------------
 // GET /proposals/:id — Get single proposal
 // ---------------------------------------------------------------------------
-app.get(`${PREFIX}/proposals/:id`, async (c) => {
+app.get(`${PREFIX}/proposals/:id`, requireGovernorAccess, async (c) => {
   try {
     const id = c.req.param("id");
     const proposal = await kv.get(`proposal:${id}`);
@@ -1243,7 +1347,7 @@ app.get(`${PREFIX}/proposals/:id`, async (c) => {
 // ---------------------------------------------------------------------------
 // GET /votes/proposals/:wallet — Get all proposal votes for a wallet
 // ---------------------------------------------------------------------------
-app.get(`${PREFIX}/votes/proposals/:wallet`, async (c) => {
+app.get(`${PREFIX}/votes/proposals/:wallet`, requireGovernorVoteHistoryAccess, async (c) => {
   try {
     const wallet = c.req.param("wallet");
     if (!wallet) {
@@ -2919,6 +3023,17 @@ app.get(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
   }
 });
 
+const ALLOWED_SPONSOR_TIERS = ["title", "premium", "standard", "routine"] as const;
+
+function normalizeSponsorTiers(body: any, existing: any): string[] {
+  if (Array.isArray(body.tiers)) {
+    const filtered = body.tiers.filter((t: string) => ALLOWED_SPONSOR_TIERS.includes(t as typeof ALLOWED_SPONSOR_TIERS[number]));
+    return filtered.length > 0 ? filtered : ["standard"];
+  }
+  const fallback = existing?.tiers?.length ? existing.tiers : [existing?.tier || "standard"];
+  return fallback.filter((t: string) => ALLOWED_SPONSOR_TIERS.includes(t as typeof ALLOWED_SPONSOR_TIERS[number]));
+}
+
 app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
   try {
     const body = await c.req.json();
@@ -2929,6 +3044,14 @@ app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
       existing = await kv.get(`sponsor:${id}`);
       if (!existing) return c.json({ success: false, error: `Sponsor ${id} not found` }, 404);
     }
+    const requestedTiers: string[] = Array.isArray(body.tiers) ? body.tiers : [];
+    const normalizedTiers = normalizeSponsorTiers(body, existing);
+    const tierWarning = requestedTiers.includes("routine") && !normalizedTiers.includes("routine")
+      ? "Routine tier was not saved — redeploy the make-server-57fcb0ee edge function."
+      : undefined;
+    if (tierWarning) {
+      console.log(`[SPONSORS] ${tierWarning} Sponsor: ${body.name || existing?.name || id}`);
+    }
     const sponsor = {
       id,
       name: sanitizeString(body.name || existing?.name || "", 200),
@@ -2938,8 +3061,8 @@ app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
       productImageUrl: sanitizeString(body.productImageUrl || existing?.productImageUrl || "", 500),
       secondaryLogoUrl: sanitizeString(body.secondaryLogoUrl || existing?.secondaryLogoUrl || "", 500),
       websiteUrl: sanitizeString(body.websiteUrl || existing?.websiteUrl || "", 500),
-      tier: ["title", "premium", "standard", "routine"].includes(body.tier) ? body.tier : (existing?.tier || "standard"),
-      tiers: Array.isArray(body.tiers) ? body.tiers.filter((t: string) => ["title", "premium", "standard", "routine"].includes(t)) : (existing?.tiers || [existing?.tier || "standard"]),
+      tier: ALLOWED_SPONSOR_TIERS.includes(body.tier) ? body.tier : (normalizedTiers[0] || existing?.tier || "standard"),
+      tiers: normalizedTiers,
       active: typeof body.active === "boolean" ? body.active : (existing?.active ?? true),
       displayOrder: typeof body.displayOrder === "number" ? body.displayOrder : (existing?.displayOrder ?? 0),
       customText: sanitizeString(body.customText || existing?.customText || "", 300),
@@ -2957,7 +3080,7 @@ app.post(`${PREFIX}/admin/sponsors`, requireAdminSession, async (c) => {
     };
     await kv.set(`sponsor:${id}`, sponsor);
     console.log(`[ADMIN] ${isUpdate ? "Updated" : "Created"} sponsor: ${sponsor.name} (${id}, tiers: ${(sponsor.tiers || [sponsor.tier]).join(",")}). Admin: ${c.get("adminWallet")}`);
-    return c.json({ success: true, data: sponsor });
+    return c.json({ success: true, data: sponsor, ...(tierWarning ? { warning: tierWarning } : {}) });
   } catch (error) {
     console.log(`[ADMIN] Error saving sponsor: ${error}`);
     return c.json({ success: false, error: safeErrorMsg("Failed to save sponsor") }, 500);
@@ -3490,39 +3613,18 @@ async function fetchBotbBalance(wallet: string): Promise<number> {
 }
 
 async function fetchNFTHoldings(wallet: string): Promise<{ hasGovernor: boolean; hasSigma: boolean }> {
-  const GOV_NFT = "0.0.9338241";
   const SIG_NFT: string | null = null; // TODO: Replace with real Sigma Series token ID
   try {
-    let hasGovernor = false, hasSigma = false;
-    let nextUrl: string | null = `${MIRROR_BASE}/api/v1/accounts/${wallet}/nfts?limit=100`;
-    let pages = 0;
-    const MAX_PAGES = 10; // Safety cap: 10 pages × 100 = 1,000 NFTs max
+    const hasGovernor = await hasGovernorNFT(wallet);
+    let hasSigma = false;
 
-    while (nextUrl && pages < MAX_PAGES) {
-      const res = await fetch(nextUrl, {
-        signal: AbortSignal.timeout(MIRROR_NODE_TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        console.log(`[VOTE] NFT pagination page ${pages + 1} returned ${res.status} for ${wallet}`);
-        break;
+    if (SIG_NFT) {
+      const url = `${MIRROR_BASE}/api/v1/accounts/${wallet}/nfts?token.id=${SIG_NFT}&limit=1`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(MIRROR_NODE_TIMEOUT_MS) });
+      if (res.ok) {
+        const data = await res.json();
+        hasSigma = Array.isArray(data?.nfts) && data.nfts.length > 0;
       }
-      const data = await res.json();
-      pages++;
-
-      for (const nft of (data?.nfts || [])) {
-        if (nft.token_id === GOV_NFT) hasGovernor = true;
-        if (SIG_NFT && nft.token_id === SIG_NFT) hasSigma = true;
-      }
-
-      // Early exit: found everything we need, no reason to keep paging
-      if (hasGovernor && (hasSigma || !SIG_NFT)) break;
-
-      // Follow mirror node pagination link
-      nextUrl = data?.links?.next ? `${MIRROR_BASE}${data.links.next}` : null;
-    }
-
-    if (pages >= MAX_PAGES) {
-      console.log(`[VOTE] NFT pagination hit MAX_PAGES (${MAX_PAGES}) for ${wallet}. Results may be incomplete.`);
     }
 
     return { hasGovernor, hasSigma };
@@ -5939,6 +6041,11 @@ app.post(`${PREFIX}/admin/test/clear-ip-flags`, requireAdminSession, async (c) =
 // ===========================================================================
 // END PHASE 2 TEST TOOLS — Delete entire block above when going fully live
 // ===========================================================================
+
+// Mount cali routes LAST so core functionality (admin auth, etc.) is not affected
+// if cali code has a startup error.
+mountCaliRoutes(app, PREFIX);
+mountEliteRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);
