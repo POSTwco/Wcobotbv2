@@ -821,7 +821,7 @@ export const api = {
       }),
 
     getWorkout: (caliSessionToken: string, workoutId: string) =>
-      request<{ workout: any }>(`/cali/workout/${encodeURIComponent(workoutId)}`, { caliSessionToken }),
+      request<{ workout: any; log: any | null }>(`/cali/workout/${encodeURIComponent(workoutId)}`, { caliSessionToken }),
 
     swapExercise: (
       caliSessionToken: string,
@@ -873,10 +873,30 @@ export const api = {
       request<{ streak: { current: number; longest: number; lastDate: string; updatedAt: number } }>(
         "/cali/streak", { caliSessionToken }),
 
-    anchor: (caliSessionToken: string, workoutId: string) =>
-      request<{ txId: string; sequenceNumber: number; consensusTs: string }>(
+    anchor: (
+      caliSessionToken: string,
+      workoutId: string,
+      payload?: {
+        sets?: Array<{
+          blockIndex: number;
+          itemIndex: number;
+          setIndex: number;
+          value: number;
+          rpe?: number;
+          note?: string;
+        }>;
+        checkpoint?: { activeBlock: number; focusedItemIndex: number };
+      },
+    ) =>
+      request<{
+        saved: boolean;
+        setsSaved: number;
+        log: any;
+        prChanges: any[];
+        anchor: { status: string; code: string; message: string };
+      }>(
         `/cali/workout/${encodeURIComponent(workoutId)}/anchor`,
-        { method: "POST", caliSessionToken },
+        { method: "POST", body: payload ?? {}, caliSessionToken },
       ),
 
     verifyAnchor: (caliSessionToken: string, workoutId: string) =>

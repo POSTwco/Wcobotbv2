@@ -1145,7 +1145,8 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       // Generic 404 — never reveal whether the workout exists under another wallet
       return c.json({ success: false, error: "Workout not found" }, 404);
     }
-    return c.json({ success: true, data: { workout: plan } });
+    const found = await findWorkoutLog(accountId, workoutId);
+    return c.json({ success: true, data: { workout: plan, log: found?.log ?? null } });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1302,10 +1303,6 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
     // still be appended after completion (e.g. corrections).
     const markedComplete = body?.completed === true;
 
-    // Merge into the stored log record (key per ISO date so history is paginatable).
-    // HARDENING (audit MEDIUM): clamp completedAt to "now" — never let a
-    // client-supplied future date land in storage, history sort, or streak math.
-    // Reject anything that isn't a parseable ISO-ish string.
     const nowIso = new Date().toISOString();
     let completedAt = nowIso;
     if (typeof body?.completedAt === "string") {
@@ -1314,40 +1311,22 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
         completedAt = parsed > Date.now() ? nowIso : new Date(parsed).toISOString();
       }
     }
-    const dateKey = completedAt.slice(0, 10); // YYYY-MM-DD UTC
 
-    const logKey = `cali:user:${accountId}:log:${dateKey}:${workoutId}`;
-    let log: WorkoutLog;
-    try {
-      const existing: any = await kv.get(logKey);
-      log = existing && existing.workoutId === workoutId
-        ? (existing as WorkoutLog)
-        : { workoutId, accountId, dateKey, sets: [], completedAt: null, updatedAt: now() };
-    } catch (err) {
-      console.log(`[CALI-LOG] KV read failed for ${logKey}: ${err}`);
-      return c.json({ success: false, error: "Log storage unavailable" }, 503);
+    const result = await persistWorkoutLog({
+      accountId,
+      workoutId,
+      plan,
+      cleanedSets,
+      markedComplete,
+      completedAt,
+      updatePrs: true,
+      updateStreak: markedComplete,
+    });
+    if ("error" in result) {
+      return c.json({ success: false, error: result.error }, result.status);
     }
 
-    log.sets = mergeSets(log.sets, cleanedSets);
-    log.updatedAt = now();
-    if (markedComplete) log.completedAt = completedAt;
-
-    // PR detection — runs over the post-merge log so re-logs don't double-count.
-    const prChanges: PRChange[] = await updatePRsForLog(accountId, log, plan);
-
-    // Streak — only when the user marks the workout complete with >=1 logged set.
-    let streak: StreakRecord | null = null;
-    if (markedComplete && log.sets.length > 0) {
-      streak = await updateStreak(accountId, dateKey);
-    }
-
-    try {
-      await kv.set(logKey, log);
-    } catch (err) {
-      console.log(`[CALI-LOG] KV write failed for ${logKey}: ${err}`);
-      return c.json({ success: false, error: "Log storage unavailable" }, 503);
-    }
-
+    const { log, prChanges, streak } = result;
     console.log(
       `[CALI-LOG] ${accountId}/${workoutId} → +${cleanedSets.length} sets ` +
         `(total=${log.sets.length}, complete=${markedComplete}, prs=${prChanges.length})`,
@@ -1528,38 +1507,75 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       );
     }
 
-    // Confirm ownership before responding "service unavailable" — same 404
-    // shape as other workout routes so the existence of an unrelated wallet's
-    // workout never leaks.
     const plan = await loadWorkoutForOwner(accountId, workoutId);
     if (!plan) return c.json({ success: false, error: "Workout not found" }, 404);
+
+    let body: any = {};
+    try { body = await c.req.json(); } catch {}
+
+    const cleanedSets: ValidatedSet[] = [];
+    if (Array.isArray(body?.sets)) {
+      if (body.sets.length > 100) {
+        return c.json({ success: false, error: "Too many sets in one request (max 100)" }, 400);
+      }
+      for (let i = 0; i < body.sets.length; i++) {
+        const result = validateLoggedSet(body.sets[i], plan);
+        if ("error" in result) {
+          return c.json(
+            { success: false, error: `sets[${i}]: ${result.error}`, field: result.field },
+            400,
+          );
+        }
+        cleanedSets.push(result.value);
+      }
+    }
+
+    const checkpoint = validateCheckpoint(body?.checkpoint, plan);
+
+    const saveResult = await persistWorkoutLog({
+      accountId,
+      workoutId,
+      plan,
+      cleanedSets,
+      checkpoint,
+      updatePrs: cleanedSets.length > 0,
+      updateStreak: false,
+    });
+    if ("error" in saveResult) {
+      return c.json({ success: false, error: saveResult.error }, saveResult.status);
+    }
 
     const operatorReady =
       Boolean(Deno.env.get("HEDERA_OPERATOR_ID")) &&
       Boolean(Deno.env.get("HEDERA_OPERATOR_KEY"));
-    if (!operatorReady) {
-      return c.json(
-        {
-          success: false,
-          code: "ANCHOR_UNAVAILABLE",
-          error:
-            "On-graph anchoring isn't live yet. Your workout is saved — you'll be able to anchor it once Hedera Consensus Service is wired.",
-        },
-        503,
-      );
-    }
 
-    // Operator keys exist but HCS submit code is the final slice — keep the
-    // safe stub response until then so a deploy with the keys set doesn't
-    // half-implement anchoring.
-    return c.json(
-      {
-        success: false,
-        code: "ANCHOR_NOT_IMPLEMENTED",
-        error: "HCS submit is implemented in the final deploy slice. Keys are detected — endpoint will go live shortly.",
-      },
-      503,
+    const anchorStatus = operatorReady
+      ? {
+          status: "not_implemented" as const,
+          code: "ANCHOR_NOT_IMPLEMENTED",
+          message: "Hedera on-chain anchoring is coming soon.",
+        }
+      : {
+          status: "unavailable" as const,
+          code: "ANCHOR_UNAVAILABLE",
+          message: "Hedera on-chain anchoring is coming soon.",
+        };
+
+    console.log(
+      `[CALI-ANCHOR] ${accountId}/${workoutId} spot saved (+${cleanedSets.length} sets, ` +
+        `checkpoint=${checkpoint ? "yes" : "no"}, hedera=${anchorStatus.code})`,
     );
+
+    return c.json({
+      success: true,
+      data: {
+        saved: true,
+        setsSaved: cleanedSets.length,
+        log: saveResult.log,
+        prChanges: saveResult.prChanges,
+        anchor: anchorStatus,
+      },
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2042,6 +2058,12 @@ interface ValidatedSet {
   loggedAt: number;
 }
 
+interface WorkoutCheckpoint {
+  activeBlock: number;
+  focusedItemIndex: number;
+  savedAt: number;
+}
+
 interface WorkoutLog {
   workoutId: string;
   accountId: string;
@@ -2049,6 +2071,7 @@ interface WorkoutLog {
   sets: ValidatedSet[];
   completedAt: string | null;
   updatedAt: number;
+  checkpoint?: WorkoutCheckpoint;
 }
 
 const MAX_NOTE_LEN = 280;
@@ -2299,6 +2322,135 @@ function pickEquipmentOverride(
     }
   }
   return cleaned.length > 0 ? cleaned : fallback;
+}
+
+async function findWorkoutLog(
+  accountId: string,
+  workoutId: string,
+): Promise<{ log: WorkoutLog; logKey: string } | null> {
+  let rows: any[];
+  try {
+    rows = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
+  } catch (err) {
+    console.log(`[CALI-LOG-FIND] getByPrefix failed for ${accountId}: ${err}`);
+    return null;
+  }
+
+  const matches = rows.filter(
+    (r) => r && r.accountId === accountId && r.workoutId === workoutId && Array.isArray(r.sets),
+  );
+  if (matches.length === 0) return null;
+
+  matches.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  const primary = matches[0] as WorkoutLog;
+
+  let mergedSets = primary.sets;
+  for (let i = 1; i < matches.length; i++) {
+    mergedSets = mergeSets(mergedSets, (matches[i] as WorkoutLog).sets);
+  }
+
+  const withCheckpoint = matches.find((m) => m.checkpoint) as WorkoutLog | undefined;
+  const log: WorkoutLog = {
+    ...primary,
+    sets: mergedSets,
+    checkpoint: withCheckpoint?.checkpoint ?? primary.checkpoint,
+  };
+
+  const logKey = `cali:user:${accountId}:log:${primary.dateKey}:${workoutId}`;
+  return { log, logKey };
+}
+
+async function resolveLogWriteTarget(
+  accountId: string,
+  workoutId: string,
+  preferredDateKey?: string,
+): Promise<{ logKey: string; log: WorkoutLog }> {
+  const found = await findWorkoutLog(accountId, workoutId);
+  if (found) return { logKey: found.logKey, log: found.log };
+
+  const dateKey = preferredDateKey ?? new Date().toISOString().slice(0, 10);
+  const logKey = `cali:user:${accountId}:log:${dateKey}:${workoutId}`;
+  return {
+    logKey,
+    log: { workoutId, accountId, dateKey, sets: [], completedAt: null, updatedAt: now() },
+  };
+}
+
+function validateCheckpoint(raw: any, plan: WorkoutPlan): WorkoutCheckpoint | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const activeBlock = Number(raw.activeBlock);
+  const focusedItemIndex = Number(raw.focusedItemIndex);
+  if (!Number.isInteger(activeBlock) || activeBlock < 0 || activeBlock >= plan.blocks.length) {
+    return undefined;
+  }
+  const block = plan.blocks[activeBlock];
+  if (!Number.isInteger(focusedItemIndex) || focusedItemIndex < 0 || focusedItemIndex >= block.items.length) {
+    return undefined;
+  }
+  return { activeBlock, focusedItemIndex, savedAt: now() };
+}
+
+type PersistLogResult =
+  | { log: WorkoutLog; prChanges: PRChange[]; streak: StreakRecord | null }
+  | { error: string; status: number };
+
+async function persistWorkoutLog(args: {
+  accountId: string;
+  workoutId: string;
+  plan: WorkoutPlan;
+  cleanedSets: ValidatedSet[];
+  markedComplete?: boolean;
+  completedAt?: string;
+  checkpoint?: WorkoutCheckpoint;
+  updatePrs?: boolean;
+  updateStreak?: boolean;
+}): Promise<PersistLogResult> {
+  const {
+    accountId,
+    workoutId,
+    plan,
+    cleanedSets,
+    markedComplete = false,
+    completedAt,
+    checkpoint,
+    updatePrs = true,
+    updateStreak = false,
+  } = args;
+
+  const dateKey = (completedAt ?? new Date().toISOString()).slice(0, 10);
+  let target: { logKey: string; log: WorkoutLog };
+  try {
+    target = await resolveLogWriteTarget(accountId, workoutId, dateKey);
+  } catch (err) {
+    console.log(`[CALI-LOG] resolve target failed for ${accountId}/${workoutId}: ${err}`);
+    return { error: "Log storage unavailable", status: 503 };
+  }
+
+  const log = { ...target.log };
+  if (cleanedSets.length > 0) {
+    log.sets = mergeSets(log.sets, cleanedSets);
+  }
+  log.updatedAt = now();
+  if (markedComplete && completedAt) log.completedAt = completedAt;
+  if (checkpoint) log.checkpoint = checkpoint;
+
+  const prChanges: PRChange[] = updatePrs && cleanedSets.length > 0
+    ? await updatePRsForLog(accountId, log, plan)
+    : [];
+
+  let streak: StreakRecord | null = null;
+  if (updateStreak && markedComplete && log.sets.length > 0) {
+    streak = await updateStreak(accountId, log.dateKey);
+  }
+
+  try {
+    await kv.set(target.logKey, log);
+  } catch (err) {
+    console.log(`[CALI-LOG] KV write failed for ${target.logKey}: ${err}`);
+    return { error: "Log storage unavailable", status: 503 };
+  }
+
+  return { log, prChanges, streak };
 }
 
 async function loadWorkoutForOwner(

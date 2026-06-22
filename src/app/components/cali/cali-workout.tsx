@@ -29,6 +29,8 @@ import { CaliWorkoutTutorial } from "./cali-workout-tutorial";
 import { useCaliWorkoutTutorial } from "../../hooks/use-cali-workout-tutorial";
 import { shouldRunTutorial } from "../../lib/cali-workout-tutorial";
 import type { CaliTutorialLevel } from "../../lib/cali-workout-tutorial";
+import { hydrateFromLog } from "../../lib/cali-workout-hydrate";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -148,7 +150,19 @@ export function CaliWorkout() {
       ]);
       if (cancelled) return;
       if (workoutRes.success && workoutRes.data) {
-        setPlan(workoutRes.data.workout);
+        const loadedPlan = workoutRes.data.workout as Plan;
+        setPlan(loadedPlan);
+        const hydrated = hydrateFromLog(workoutRes.data.log, loadedPlan.blocks);
+        if (hydrated) {
+          setActuals(hydrated.actuals);
+          setLoggedSets(hydrated.loggedSets);
+          setCompletedBlocks(hydrated.completedBlocks);
+          setActiveBlock(hydrated.activeBlock);
+          setFocusedItemIndex(hydrated.focusedItemIndex);
+          for (const [key, a] of Object.entries(hydrated.actuals)) {
+            lastSavedRef.current[key] = `${a.value}|${a.rpe}|${a.note}`;
+          }
+        }
       } else {
         cali.handleAuthError(workoutRes.code);
         setError(workoutRes.error || "Workout not found.");
@@ -301,18 +315,62 @@ export function CaliWorkout() {
     [plan, actuals, loggedSets, executeLogAllSets],
   );
 
+  const collectSetsForSave = useCallback((): LoggedSet[] => {
+    const bulk: LoggedSet[] = [];
+    for (const [key, a] of Object.entries(actuals)) {
+      const [b, i, s] = key.split("|").map(Number);
+      const v = Number(a.value);
+      if (!Number.isFinite(v) || v <= 0) continue;
+      const set: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: v };
+      const rpe = Number(a.rpe);
+      if (a.rpe && Number.isFinite(rpe) && rpe >= 1 && rpe <= 10) set.rpe = rpe;
+      if (a.note?.trim()) set.note = a.note.trim();
+      bulk.push(set);
+    }
+    return bulk;
+  }, [actuals]);
+
+  const applyHydratedLog = useCallback((log: Parameters<typeof hydrateFromLog>[0], blocks: Block[]) => {
+    const hydrated = hydrateFromLog(log, blocks);
+    if (!hydrated) return;
+    setActuals(hydrated.actuals);
+    setLoggedSets(hydrated.loggedSets);
+    setCompletedBlocks(hydrated.completedBlocks);
+    setActiveBlock(hydrated.activeBlock);
+    setFocusedItemIndex(hydrated.focusedItemIndex);
+    for (const [key, a] of Object.entries(hydrated.actuals)) {
+      lastSavedRef.current[key] = `${a.value}|${a.rpe}|${a.note}`;
+    }
+  }, []);
+
   const onAnchor = async () => {
     if (!cali.sessionToken || !plan) return;
     setAnchoring(true);
-    const res = await api.cali.anchor(cali.sessionToken, plan.workoutId);
+    const sets = collectSetsForSave();
+    const res = await api.cali.anchor(cali.sessionToken, plan.workoutId, {
+      sets,
+      checkpoint: { activeBlock, focusedItemIndex },
+    });
     setAnchoring(false);
-    if (res.success) {
-      toast.success("Anchored on Hedera!", { icon: <Anchor className="w-4 h-4" /> });
-    } else if (res.code === "ANCHOR_UNAVAILABLE" || res.code === "ANCHOR_NOT_IMPLEMENTED") {
-      toast.message("Anchoring coming soon — your workout is saved.", { icon: <Info className="w-4 h-4" /> });
+    if (res.success && res.data?.saved) {
+      applyHydratedLog(res.data.log, plan.blocks);
+      for (const change of res.data.prChanges ?? []) {
+        toast.success(
+          change.previous
+            ? `New PR! ${change.current} (was ${change.previous})`
+            : `First record: ${change.current}`,
+          { icon: <Trophy className="w-4 h-4" /> },
+        );
+      }
+      toast.success("Spot saved — come back anytime to pick up where you left off.", {
+        icon: <Anchor className="w-4 h-4" />,
+      });
+      toast.message(res.data.anchor?.message ?? "Hedera on-chain anchoring is coming soon.", {
+        icon: <Info className="w-4 h-4" />,
+      });
     } else {
       cali.handleAuthError(res.code);
-      toast.error(res.error || "Anchor failed.");
+      toast.error(res.error || "Couldn't save your spot.");
     }
   };
 
@@ -653,15 +711,29 @@ export function CaliWorkout() {
             {completing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Complete Workout
           </button>
-          <button
-            onClick={onAnchor}
-            disabled={anchoring}
-            className="flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] px-3 py-3 rounded-xl text-xs font-bold border border-[#D4A843]/25 text-[#D4A843] hover:bg-[#D4A843]/8 disabled:opacity-60"
-            style={dmSans}
-          >
-            {anchoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Anchor className="w-4 h-4" />}
-            <span className="hidden sm:inline">Anchor</span>
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onAnchor}
+                disabled={anchoring}
+                className="flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] px-3 py-3 rounded-xl text-xs font-bold border border-[#D4A843]/25 text-[#D4A843] hover:bg-[#D4A843]/8 disabled:opacity-60"
+                style={dmSans}
+              >
+                {anchoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Anchor className="w-4 h-4" />}
+                <span className="hidden sm:inline">Anchor</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              side="top"
+              sideOffset={8}
+              className="max-w-[240px] bg-[#162033] border border-[#D4A843]/35 text-[#C8D0DC] px-3 py-2 shadow-lg shadow-black/40"
+            >
+              <p className="text-[0.7rem] font-bold text-[#D4A843] mb-1" style={dmSans}>Save your spot</p>
+              <p className="text-[0.65rem] leading-relaxed" style={dmSans}>
+                Saves your workout and logged sets so you can return later. Hedera on-chain anchoring is coming soon.
+              </p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </div>
