@@ -25,16 +25,21 @@ function cleanImageUrl(url: string): string {
   return url.split("?")[0];
 }
 
-export function absoluteOgImage(ogPath: string): string {
-  const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
-  return cleanImageUrl(base);
+function ogJpgPath(ogPath: string): string {
+  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.(png|jpg)$/i, "");
+  if (file === "home") return absoluteUrl("/twitter-card.jpg");
+  return absoluteUrl(`/og/${file}.jpg`);
 }
 
-/** X/Twitter JPEG (1200×630) — same banner as og:image, JPG format for reliable X rendering. */
+/** 1200×600 JPEG (2:1) — X/Facebook/Google link previews. */
+export function absoluteOgImage(ogPath: string): string {
+  return ogJpgPath(ogPath);
+}
+
+/** Same 2:1 JPEG as og:image — X requires matching format and aspect ratio. */
 export function absoluteTwitterImage(ogPath: string): string {
-  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
-  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
-  return absoluteUrl(`/og/${file}.jpg`);
+  return ogJpgPath(ogPath);
 }
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {

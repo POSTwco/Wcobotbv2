@@ -13,7 +13,7 @@
     "keywords": "calisthenics, battle of the bars, WCO, World Calisthenics Organization, Hedera, Web3, token voting, bodyweight training, BOTB",
     "logo": "https://www.wcorg.io/android-chrome-512x512.png",
     "fist": "https://www.wcorg.io/android-chrome-512x512.png",
-    "wordmark": "https://www.wcorg.io/og/home.jpg"
+    "wordmark": "https://www.wcorg.io/twitter-card.jpg"
   },
   "socialLinks": [
     { "id": "discord", "label": "Discord", "href": "https://discord.com/invite/Zt52bf8Ve" },

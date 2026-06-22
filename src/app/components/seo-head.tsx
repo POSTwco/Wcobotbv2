@@ -40,9 +40,9 @@ export function SeoHead() {
       <meta property="og:url" content={seo.canonical} />
       <meta property="og:image" content={ogImage} />
       <meta property="og:image:secure_url" content={ogImage} />
-      <meta property="og:image:type" content="image/png" />
+      <meta property="og:image:type" content="image/jpeg" />
       <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
+      <meta property="og:image:height" content="600" />
       <meta property="og:image:alt" content={imageAlt} />
 
       <meta name="twitter:card" content="summary_large_image" />
@@ -53,7 +53,7 @@ export function SeoHead() {
       <meta name="twitter:image" content={twitterImage} />
       <meta name="twitter:image:type" content="image/jpeg" />
       <meta name="twitter:image:width" content="1200" />
-      <meta name="twitter:image:height" content="630" />
+      <meta name="twitter:image:height" content="600" />
       <meta name="twitter:image:alt" content={imageAlt} />
 
       {jsonLd && (

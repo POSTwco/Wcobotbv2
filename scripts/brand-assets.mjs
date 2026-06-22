@@ -14,7 +14,7 @@ export const BRAND = {
 export const BRAND_URLS = {
   fist: "https://www.wcorg.io/android-chrome-512x512.png",
   wordmark: "https://www.wcorg.io/og/home.png",
-  botb: "https://www.wcorg.io/og/home.jpg",
+  botb: "https://www.wcorg.io/twitter-card.jpg",
 };
 
 export const ROUTE_ACCENT = {

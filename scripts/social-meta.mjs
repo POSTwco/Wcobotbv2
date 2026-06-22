@@ -17,7 +17,7 @@ export function buildSocialMetaTags({
   ogImage,
   twitterImage,
   twitterImageWidth = 1200,
-  twitterImageHeight = 630,
+  twitterImageHeight = 600,
 }) {
   const base = site.url.replace(/\/$/, "");
   const title = escapeAttr(page.title);
@@ -49,10 +49,10 @@ export function buildSocialMetaTags({
     <meta property="og:url" content="${url}" />
     <meta property="og:image" content="${og}" />
     <meta property="og:image:secure_url" content="${og}" />
-    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta name="twitter:image:type" content="image/jpeg" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:width" content="${twitterImageWidth}" />
+    <meta property="og:image:height" content="${twitterImageHeight}" />
     <meta property="og:image:alt" content="${imageAlt}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="${site.twitter}" />

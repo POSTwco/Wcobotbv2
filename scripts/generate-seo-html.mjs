@@ -20,16 +20,19 @@ function cleanImageUrl(url) {
   return url.split("?")[0];
 }
 
-function absoluteOgImage(ogPath) {
-  const base = ogPath.startsWith("http") ? ogPath : absoluteUrl(ogPath);
-  return cleanImageUrl(base);
+function ogJpgPath(ogPath) {
+  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.(png|jpg)$/i, "");
+  if (file === "home") return absoluteUrl("/twitter-card.jpg");
+  return absoluteUrl(`/og/${file}.jpg`);
 }
 
-/** JPEG variant of og:image — X renders JPG more reliably than PNG. */
+function absoluteOgImage(ogPath) {
+  return ogJpgPath(ogPath);
+}
+
 function absoluteTwitterImage(ogPath) {
-  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
-  const file = ogPath.replace(/^\/og\//, "").replace(/\.png$/i, "");
-  return absoluteUrl(`/og/${file}.jpg`);
+  return ogJpgPath(ogPath);
 }
 
 function buildJsonLd(routePath, page) {

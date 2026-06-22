@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { accentForOg, BRAND, root, SOCIAL_SPECS } from "./brand-assets.mjs";
-import { botbShareBanner, squareShare } from "./image-utils.mjs";
+import { botbShareCard } from "./image-utils.mjs";
 
 const seoData = JSON.parse(
   fs.readFileSync(path.join(root, "src/app/lib/seo-data.json"), "utf8"),
@@ -13,6 +13,12 @@ for (const [, page] of Object.entries(seoData.pages)) {
   if (!uniqueImages.has(filename)) uniqueImages.set(filename, page.headline);
 }
 uniqueImages.set("github-social-preview.png", "WCO Platform");
+
+/** X requires 2:1 (1200x600). Facebook tolerates 1.91:1 (1200x630) — we ship both. */
+const TWITTER_W = 1200;
+const TWITTER_H = 600;
+const OG_W = 1200;
+const OG_H = 630;
 
 async function writeShareSet(filename, headline) {
   const accent = accentForOg(filename);
@@ -27,38 +33,54 @@ async function writeShareSet(filename, headline) {
     botbPath: BRAND.botb,
     fistPath: BRAND.fist,
     accent,
-    bg: "#FFFFFF",
   };
 
-  const banner = await botbShareBanner({
+  await botbShareCard({
     ...shared,
-    width: SOCIAL_SPECS.openGraph.width,
-    height: SOCIAL_SPECS.openGraph.height,
+    width: TWITTER_W,
+    height: TWITTER_H,
+    jpegPath: path.join(ogDir, `${baseName}.jpg`),
+    pngPath: null,
   });
 
-  const pngPath = path.join(ogDir, `${baseName}.png`);
-  const jpgPath = path.join(ogDir, `${baseName}.jpg`);
-  await banner.write(pngPath);
-  await banner.write(jpgPath, { quality: 92 });
+  await botbShareCard({
+    ...shared,
+    width: OG_W,
+    height: OG_H,
+    jpegPath: path.join(ogDir, `${baseName}-fb.jpg`),
+    pngPath: path.join(ogDir, `${baseName}.png`),
+  });
 
-  const github = await botbShareBanner({
+  await botbShareCard({
     ...shared,
     width: SOCIAL_SPECS.github.width,
     height: SOCIAL_SPECS.github.height,
+    jpegPath: path.join(ghDir, `${baseName}.jpg`),
+    pngPath: path.join(ghDir, `${baseName}.png`),
   });
-  await github.write(path.join(ghDir, `${baseName}.png`));
 
-  const square = await squareShare({
-    botbPath: BRAND.botb,
-    fistPath: BRAND.fist,
-    size: SOCIAL_SPECS.square.width,
+  await botbShareCard({
+    ...shared,
+    width: SOCIAL_SPECS.square.width,
+    height: SOCIAL_SPECS.square.width,
+    jpegPath: path.join(sqDir, `${baseName}.jpg`),
+    pngPath: path.join(sqDir, `${baseName}.png`),
   });
-  await square.write(path.join(sqDir, `${baseName}.png`));
 
-  console.log(`  og/${baseName}.png + og/${baseName}.jpg - ${headline}`);
+  if (baseName === "home") {
+    await botbShareCard({
+      ...shared,
+      width: TWITTER_W,
+      height: TWITTER_H,
+      jpegPath: path.join(root, "public", "twitter-card.jpg"),
+      pngPath: null,
+    });
+  }
+
+  console.log(`  og/${baseName}.jpg (1200x600) + twitter-card.jpg - ${headline}`);
 }
 
-console.log("Generating share images from BOTB + FIST brand files...");
+console.log("Generating share images (sharp JPEG, 2:1 for X)...");
 for (const [filename, headline] of uniqueImages) {
   await writeShareSet(filename, headline);
 }

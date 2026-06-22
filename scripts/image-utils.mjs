@@ -1,87 +1,124 @@
+import sharp from "sharp";
 import { Jimp } from "jimp";
 
-export function colorInt(hex) {
+function hexRgb(hex) {
   const h = hex.replace("#", "");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return ((r << 24) | (g << 16) | (b << 8) | 0xff) >>> 0;
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
 }
 
-export async function fitContain(source, maxW, maxH) {
-  const img = await Jimp.read(source);
-  const scale = Math.min(maxW / img.width, maxH / img.height);
-  const w = Math.max(1, Math.round(img.width * scale));
-  const h = Math.max(1, Math.round(img.height * scale));
-  if (w !== img.width || h !== img.height) {
-    img.resize({ w, h });
-  }
-  return { img, w, h };
+async function loadResized(input, maxW, maxH) {
+  const meta = await sharp(input).metadata();
+  const scale = Math.min(maxW / meta.width, maxH / meta.height);
+  const w = Math.max(1, Math.round(meta.width * scale));
+  const h = Math.max(1, Math.round(meta.height * scale));
+  const buf = await sharp(input).resize(w, h, { fit: "inside" }).png().toBuffer();
+  return { buf, w, h };
 }
 
-export async function canvas(width, height, hex = "#FFFFFF") {
-  return new Jimp({ width, height, color: colorInt(hex) });
-}
-
-export function compositeCentered(base, overlay, xAlign = 0.5, yAlign = 0.5) {
-  const x = Math.round((base.width - overlay.width) * xAlign);
-  const y = Math.round((base.height - overlay.height) * yAlign);
-  base.composite(overlay, x, y);
-}
-
-function accentBar(base, accent, height = 6) {
-  const barColor = colorInt(accent);
-  const barY = base.height - 4;
-  for (let x = 0; x < base.width; x++) {
-    for (let dy = 0; dy < height; dy++) {
-      base.setPixelColor(barColor, x, barY - dy);
-    }
-  }
-}
-
-/** Browser tab + PWA icons — official FIST_WCO.jpg */
-export async function iconFromFist(fistPath, size, { bg = "#FFFFFF", pad = 0.06 } = {}) {
-  const base = await canvas(size, size, bg);
-  const inner = Math.round(size * (1 - pad * 2));
-  const { img } = await fitContain(fistPath, inner, inner);
-  compositeCentered(base, img, 0.5, 0.5);
-  return base;
-}
-
-/** Share card — centered BOTB logo on white (OG / Facebook / Google). */
-export async function botbShareBanner({
+/** X/Twitter + OG share card — exact 2:1 JPEG via sharp (baseline mozjpeg). */
+export async function botbShareCard({
   botbPath,
   fistPath,
   width,
   height,
   accent = "#D4A843",
-  bg = "#FFFFFF",
+  jpegPath,
+  pngPath,
 }) {
-  const base = await canvas(width, height, bg);
-
   const logoMaxW = Math.round(width * 0.86);
   const logoMaxH = Math.round(height * 0.72);
-  const { img: botb } = await fitContain(botbPath, logoMaxW, logoMaxH);
-  compositeCentered(base, botb, 0.5, 0.5);
+  const { buf: botb, w: botbW, h: botbH } = await loadResized(botbPath, logoMaxW, logoMaxH);
+
+  const composites = [
+    {
+      input: botb,
+      left: Math.round((width - botbW) / 2),
+      top: Math.round((height - botbH) / 2),
+    },
+  ];
 
   if (fistPath) {
-    const badgeSize = Math.round(Math.min(width, height) * 0.14);
-    const { img: badge } = await fitContain(fistPath, badgeSize, badgeSize);
-    base.composite(badge, Math.round(width * 0.04), Math.round(height * 0.05));
+    const badge = Math.round(Math.min(width, height) * 0.14);
+    const { buf: fist, w: fistW, h: fistH } = await loadResized(fistPath, badge, badge);
+    composites.push({
+      input: fist,
+      left: Math.round(width * 0.04),
+      top: Math.round(height * 0.05),
+    });
+    void fistW;
+    void fistH;
   }
 
-  accentBar(base, accent);
+  const accentRgb = hexRgb(accent);
+  const barH = 6;
+  const bar = await sharp({
+    create: {
+      width,
+      height: barH,
+      channels: 3,
+      background: accentRgb,
+    },
+  })
+    .png()
+    .toBuffer();
+
+  composites.push({ input: bar, left: 0, top: height - barH });
+
+  const base = sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: { r: 255, g: 255, b: 255 },
+    },
+  }).composite(composites);
+
+  await base
+    .clone()
+    .jpeg({
+      quality: 90,
+      mozjpeg: true,
+      chromaSubsampling: "4:4:4",
+      force: true,
+    })
+    .toFile(jpegPath);
+
+  if (pngPath) {
+    await base.clone().png({ compressionLevel: 9 }).toFile(pngPath);
+  }
+}
+
+/** Browser tab + PWA icons — official FIST_WCO.jpg (Jimp is fine for small icons). */
+export async function iconFromFist(fistPath, size, { bg = "#FFFFFF", pad = 0.06 } = {}) {
+  const colorInt = (hex) => {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return ((r << 24) | (g << 16) | (b << 8) | 0xff) >>> 0;
+  };
+  const base = new Jimp({ width: size, height: size, color: colorInt(bg) });
+  const inner = Math.round(size * (1 - pad * 2));
+  const fist = await Jimp.read(fistPath);
+  const scale = Math.min(inner / fist.width, inner / fist.height);
+  fist.resize({ w: Math.max(1, Math.round(fist.width * scale)), h: Math.max(1, Math.round(fist.height * scale)) });
+  base.composite(fist, Math.round((size - fist.width) / 2), Math.round((size - fist.height) / 2));
   return base;
 }
 
-/** Square — Instagram / YouTube link fallback */
-export async function squareShare({ botbPath, fistPath, size, bg = "#FFFFFF" }) {
-  const base = await canvas(size, size, bg);
-  const { img: botb } = await fitContain(botbPath, Math.round(size * 0.82), Math.round(size * 0.62));
-  compositeCentered(base, botb, 0.5, 0.52);
-  if (fistPath) {
-    const { img: fist } = await fitContain(fistPath, Math.round(size * 0.18), Math.round(size * 0.18));
-    base.composite(fist, Math.round(size * 0.06), Math.round(size * 0.06));
-  }
-  return base;
+/** Square — Instagram / YouTube */
+export async function squareShare({ botbPath, fistPath, size, outputPath }) {
+  await botbShareCard({
+    botbPath,
+    fistPath,
+    width: size,
+    height: size,
+    accent: "#D4A843",
+    jpegPath: outputPath.replace(/\.png$/, ".jpg"),
+    pngPath: outputPath,
+  });
 }

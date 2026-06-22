@@ -24,7 +24,7 @@
       ]
     },
     {
-      "source": "/(favicon.*|apple-touch-icon.*|android-chrome.*)",
+      "source": "/(twitter-card\\.jpg|favicon.*|apple-touch-icon.*|android-chrome.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
