@@ -23,7 +23,6 @@ function cleanImageUrl(url) {
 function ogJpgPath(ogPath) {
   if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
   const file = ogPath.replace(/^\/og\//, "").replace(/\.(png|jpg)$/i, "");
-  if (file === "home") return absoluteUrl("/twitter-card.jpg");
   return absoluteUrl(`/og/${file}.jpg`);
 }
 
@@ -32,7 +31,10 @@ function absoluteOgImage(ogPath) {
 }
 
 function absoluteTwitterImage(ogPath) {
-  return ogJpgPath(ogPath);
+  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.(png|jpg)$/i, "");
+  if (file === "home") return absoluteUrl("/twitter-card.jpg");
+  return absoluteUrl(`/og/${file}.jpg`);
 }
 
 function buildJsonLd(routePath, page) {

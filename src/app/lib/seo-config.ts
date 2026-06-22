@@ -28,7 +28,6 @@ function cleanImageUrl(url: string): string {
 function ogJpgPath(ogPath: string): string {
   if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
   const file = ogPath.replace(/^\/og\//, "").replace(/\.(png|jpg)$/i, "");
-  if (file === "home") return absoluteUrl("/twitter-card.jpg");
   return absoluteUrl(`/og/${file}.jpg`);
 }
 
@@ -37,9 +36,12 @@ export function absoluteOgImage(ogPath: string): string {
   return ogJpgPath(ogPath);
 }
 
-/** Same 2:1 JPEG as og:image — X requires matching format and aspect ratio. */
+/** Twitter/X specific image (uses dedicated twitter-card for home to allow separate icon). */
 export function absoluteTwitterImage(ogPath: string): string {
-  return ogJpgPath(ogPath);
+  if (ogPath.startsWith("http")) return cleanImageUrl(ogPath).replace(/\.png$/i, ".jpg");
+  const file = ogPath.replace(/^\/og\//, "").replace(/\.(png|jpg)$/i, "");
+  if (file === "home") return absoluteUrl("/twitter-card.jpg");
+  return absoluteUrl(`/og/${file}.jpg`);
 }
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {

@@ -9,12 +9,14 @@ export const BRAND = {
   fist: path.join(root, "src/assets/brand/fist-wco.jpg"),
   wordmark: path.join(root, "src/assets/brand/wco-clear.png"),
   botb: path.join(root, "src/assets/brand/botb-color.png"),
+  botbTwitter: path.join(root, "src/assets/brand/botb-twitter.png"),
 };
 
 export const BRAND_URLS = {
   fist: "https://www.wcorg.io/android-chrome-512x512.png",
   wordmark: "https://www.wcorg.io/og/home.png",
   botb: "https://www.wcorg.io/twitter-card.jpg",
+  botbTwitter: "https://www.wcorg.io/twitter-card.jpg",
 };
 
 export const ROUTE_ACCENT = {

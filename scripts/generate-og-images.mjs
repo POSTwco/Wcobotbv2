@@ -69,7 +69,9 @@ async function writeShareSet(filename, headline) {
 
   if (baseName === "home") {
     await botbShareCard({
-      ...shared,
+      botbPath: BRAND.botbTwitter || BRAND.botb,
+      fistPath: BRAND.fist,
+      accent,
       width: TWITTER_W,
       height: TWITTER_H,
       jpegPath: path.join(root, "public", "twitter-card.jpg"),
