@@ -585,15 +585,50 @@ function resolveTier(
   return "ELITE";
 }
 
+function emptyStatsSummary(streak: StreakLike, prevSummary: StatsSummary | null): StatsSummary {
+  const prev = prevSummary;
+  return {
+    athleteScore: 0,
+    athleteTier: "UNRANKED",
+    tierJudgment: tierJudgment("UNRANKED"),
+    consistency: 0,
+    effort: 0,
+    hypertrophyPct: 0,
+    movementIndex: 0,
+    deltas: {
+      consistency7d: prev ? Math.round((0 - prev.consistency) * 10) / 10 : 0,
+      effort7d: prev ? Math.round((0 - prev.effort) * 10) / 10 : 0,
+      hypertrophy7d: prev ? Math.round((0 - prev.hypertrophyPct) * 10) / 10 : 0,
+      movement7d: prev ? Math.round((0 - prev.movementIndex) * 10) / 10 : 0,
+    },
+    completedWorkouts30d: 0,
+    sessions7d: 0,
+    dataConfidence: "none",
+    streakCurrent: streak.current,
+    streakLongest: streak.longest,
+    prCount: 0,
+    lastComputedAt: Date.now(),
+    eliteSessions7d: 0,
+    eliteSessions30d: 0,
+    eliteSets30d: 0,
+    analyticsSchemaVersion: ANALYTICS_SCHEMA_VERSION,
+  };
+}
+
 function computeScores(
   dailies: DailyStats[],
   streak: StreakLike,
   profileLevel: number,
-  movementDeltaAvg: number,
+  movementDelta: { avg: number; count: number },
   prevSummary: StatsSummary | null,
 ): StatsSummary {
   const last7 = dailies.slice(-7);
   const last30 = dailies.slice(-30);
+
+  const totalSets30d = last30.reduce((s, d) => s + d.setsLogged, 0);
+  if (totalSets30d === 0) {
+    return emptyStatsSummary(streak, prevSummary);
+  }
 
   const sessions7d = last7.reduce((s, d) => s + d.workoutsCompleted, 0);
   const started30d = last30.reduce((s, d) => s + d.workoutsStarted, 0);
@@ -614,14 +649,18 @@ function computeScores(
   const rpeDays = activeDays.filter((d) => d.avgRpe != null);
   const avgRpe = rpeDays.length > 0
     ? rpeDays.reduce((s, d) => s + (d.avgRpe ?? 0), 0) / rpeDays.length
-    : 7;
-  const rpeScore = avgRpe >= 6 && avgRpe <= 9
-    ? 100
-    : Math.max(30, 100 - Math.abs(avgRpe - 7.5) * 12);
+    : null;
+  const rpeScore = avgRpe == null
+    ? 0
+    : avgRpe >= 6 && avgRpe <= 9
+      ? 100
+      : Math.max(0, 100 - Math.abs(avgRpe - 7.5) * 12);
   const avgLevel = activeDays.length > 0
     ? activeDays.reduce((s, d) => s + d.maxLevel, 0) / activeDays.length
-    : profileLevel;
-  const levelScore = Math.min(100, Math.round((avgLevel / 4) * 100));
+    : 0;
+  const levelScore = avgLevel > 0
+    ? Math.min(100, Math.round((avgLevel / 4) * 100))
+    : 0;
 
   const eliteDays30 = last30.filter((d) => (d.eliteWorkoutsCompleted ?? 0) > 0);
   let effort = Math.min(100, Math.round(avgCompletion * 0.5 + rpeScore * 0.25 + levelScore * 0.25));
@@ -629,7 +668,9 @@ function computeScores(
 
   const hypertrophyPct = hypertrophyPctFromDailies(dailies);
 
-  const movementIndex = Math.min(100, Math.max(0, Math.round(50 + movementDeltaAvg)));
+  const movementIndex = movementDelta.count > 0
+    ? Math.min(100, Math.max(0, Math.round(50 + movementDelta.avg)))
+    : 0;
 
   const eliteSessions7d = last7.reduce((s, d) => s + (d.eliteWorkoutsCompleted ?? 0), 0);
   const eliteSessions30d = last30.reduce((s, d) => s + (d.eliteWorkoutsCompleted ?? 0), 0);
@@ -726,7 +767,7 @@ function movementDeltaInWindow(
   entries: PRHistoryEntry[],
   windowStart: number,
   windowEnd: number,
-): number {
+): { avg: number; count: number } {
   const deltas: number[] = [];
   for (const entry of entries) {
     if (entry.achievedAt < windowStart || entry.achievedAt > windowEnd) continue;
@@ -734,11 +775,11 @@ function movementDeltaInWindow(
     const weight = entry.level >= 4 ? ELITE_PR_MOVEMENT_MULT : 1;
     deltas.push(Math.max(-20, Math.min(20, entry.deltaPct)) * weight);
   }
-  if (deltas.length === 0) return 0;
-  return deltas.reduce((a, b) => a + b, 0) / deltas.length;
+  if (deltas.length === 0) return { avg: 0, count: 0 };
+  return { avg: deltas.reduce((a, b) => a + b, 0) / deltas.length, count: deltas.length };
 }
 
-async function avgMovementDelta(accountId: string, days: number): Promise<number> {
+async function avgMovementDelta(accountId: string, days: number): Promise<{ avg: number; count: number }> {
   const entries = await loadAllPRHistEntries(accountId);
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   return movementDeltaInWindow(entries, cutoff, Date.now());
