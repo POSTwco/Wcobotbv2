@@ -285,7 +285,7 @@ export function CaliAnalytics() {
       )}
 
       {heatmapDays.length > 0 && (
-        <CaliGlassPanel accent="#10b981" className="p-4 sm:p-5">
+        <CaliGlassPanel accent="#10b981" className="p-3 sm:p-4">
           <CaliProgressionHeatmap data={heatmapDays} />
         </CaliGlassPanel>
       )}
