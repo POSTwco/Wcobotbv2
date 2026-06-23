@@ -11,7 +11,7 @@ import {
   ATHLETE_TIER_CONFIG,
   deltaColor,
   formatDelta,
-  type DailyActivityPoint,
+  type HeatmapDayPoint,
   type MetricSparklines,
   type MovementStat,
   type StatsRange,
@@ -20,7 +20,7 @@ import {
 } from "../../lib/cali-analytics-types";
 import { CaliStatsSparkline } from "./cali-stats-sparkline";
 import { CaliGlassPanel } from "./cali-glass-panel";
-import { CaliConsistencyHeatmap } from "./cali-consistency-heatmap";
+import { CaliProgressionHeatmap } from "./cali-progression-heatmap";
 import { CaliLiveTicker } from "./cali-live-ticker";
 import { CaliPRHistoryModal } from "./cali-pr-history-modal";
 
@@ -51,7 +51,7 @@ export function CaliAnalytics() {
   const [range, setRange] = useState<StatsRange>("7d");
   const [summary, setSummary] = useState<StatsSummary | null>(null);
   const [sparkline, setSparkline] = useState<StatsSparkPoint[]>([]);
-  const [dailyActivity, setDailyActivity] = useState<DailyActivityPoint[]>([]);
+  const [heatmapDays, setHeatmapDays] = useState<HeatmapDayPoint[]>([]);
   const [metricSparklines, setMetricSparklines] = useState<MetricSparklines>(EMPTY_SPARKLINES);
   const [movements, setMovements] = useState<MovementStat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +72,7 @@ export function CaliAnalytics() {
     if (st.success && st.data) {
       setSummary(st.data.summary);
       setSparkline(st.data.sparkline);
-      setDailyActivity(st.data.dailyActivity ?? []);
+      setHeatmapDays(st.data.heatmapDays ?? []);
       setMetricSparklines(st.data.metricSparklines ?? EMPTY_SPARKLINES);
     } else {
       cali.handleAuthError(st.code);
@@ -284,9 +284,9 @@ export function CaliAnalytics() {
         </div>
       )}
 
-      {dailyActivity.length > 0 && (
+      {heatmapDays.length > 0 && (
         <CaliGlassPanel accent="#10b981" className="p-4 sm:p-5">
-          <CaliConsistencyHeatmap data={dailyActivity} />
+          <CaliProgressionHeatmap data={heatmapDays} />
         </CaliGlassPanel>
       )}
 

@@ -66,6 +66,26 @@ export interface DailyActivityPoint {
   volume: number;
 }
 
+export interface HeatmapDayPoint {
+  dateKey: string;
+  active: boolean;
+  workoutsCompleted: number;
+  volume: number;
+  greenScore: number;
+  redScore: number;
+  gapDays: number;
+  pushReps: number;
+  pullReps: number;
+  pushTimeSec: number;
+  pullTimeSec: number;
+  avgRpe: number | null;
+  hypertrophyScore: number;
+  maxLevel: 1 | 2 | 3 | 4;
+  prHits: number;
+  eliteSession: boolean;
+  recencyWeight: number;
+}
+
 export interface MetricSparklines {
   consistency: number[];
   effort: number[];

@@ -87,6 +87,26 @@ export interface DailyActivityPoint {
   volume: number;
 }
 
+export interface HeatmapDayPoint {
+  dateKey: string;
+  active: boolean;
+  workoutsCompleted: number;
+  volume: number;
+  greenScore: number;
+  redScore: number;
+  gapDays: number;
+  pushReps: number;
+  pullReps: number;
+  pushTimeSec: number;
+  pullTimeSec: number;
+  avgRpe: number | null;
+  hypertrophyScore: number;
+  maxLevel: 1 | 2 | 3 | 4;
+  prHits: number;
+  eliteSession: boolean;
+  recencyWeight: number;
+}
+
 export interface MetricSparklines {
   consistency: number[];
   effort: number[];
@@ -976,6 +996,83 @@ function buildDailyActivity(dailies: DailyStats[]): DailyActivityPoint[] {
   }));
 }
 
+function daysBetween(dateKeyA: string, dateKeyB: string): number {
+  const a = Date.parse(`${dateKeyA}T12:00:00Z`);
+  const b = Date.parse(`${dateKeyB}T12:00:00Z`);
+  return Math.max(0, Math.round(Math.abs(b - a) / 86_400_000));
+}
+
+function catVolume(categories: Record<string, CategoryVolume>, key: string): CategoryVolume {
+  return categories[key] ?? { reps: 0, timeSec: 0 };
+}
+
+function dayIntensityScore(d: DailyStats): number {
+  if (d.avgRpe != null) return Math.round((d.avgRpe / 10) * 100);
+  if (d.setsLogged > 0 && d.maxEffortSets > 0) {
+    return Math.round((d.maxEffortSets / d.setsLogged) * 100);
+  }
+  return 0;
+}
+
+function dayHypertrophyScore(d: DailyStats): number {
+  const scored = d.hypertrophyScoredSets ?? 0;
+  if (scored === 0) return 0;
+  return Math.round((d.hypertrophySignalSum ?? 0) / scored);
+}
+
+export function buildHeatmapDays(dailies: DailyStats[]): HeatmapDayPoint[] {
+  const totalSets = dailies.reduce((s, d) => s + d.setsLogged, 0);
+  const noData = totalSets === 0;
+
+  let lastActiveDateKey: string | null = null;
+  const points: HeatmapDayPoint[] = [];
+
+  for (let i = 0; i < dailies.length; i++) {
+    const d = dailies[i];
+    const active = d.workoutsCompleted > 0 || d.setsLogged > 0;
+    const push = catVolume(d.categories ?? {}, "push");
+    const pull = catVolume(d.categories ?? {}, "pull");
+    const hypertrophyScore = dayHypertrophyScore(d);
+
+    let gapDays = 0;
+    let redScore = 0;
+    let greenScore = 0;
+
+    if (!noData) {
+      if (active) {
+        const intensityScore = dayIntensityScore(d);
+        greenScore = Math.min(100, Math.round(hypertrophyScore * 0.55 + intensityScore * 0.45));
+        lastActiveDateKey = d.dateKey;
+      } else if (lastActiveDateKey) {
+        gapDays = daysBetween(lastActiveDateKey, d.dateKey);
+        redScore = Math.min(100, Math.round(gapDays * 18));
+      }
+    }
+
+    points.push({
+      dateKey: d.dateKey,
+      active,
+      workoutsCompleted: d.workoutsCompleted,
+      volume: totalVolume(d),
+      greenScore,
+      redScore,
+      gapDays,
+      pushReps: push.reps,
+      pullReps: pull.reps,
+      pushTimeSec: push.timeSec,
+      pullTimeSec: pull.timeSec,
+      avgRpe: d.avgRpe,
+      hypertrophyScore,
+      maxLevel: d.maxLevel,
+      prHits: d.prHits,
+      eliteSession: (d.eliteWorkoutsCompleted ?? 0) > 0,
+      recencyWeight: dailies.length - i,
+    });
+  }
+
+  return points;
+}
+
 export function computePRChangesFromSets(
   sets: LogSet[],
   prState: Map<string, number>,
@@ -1244,6 +1341,7 @@ export async function buildStatsResponse(
   summary: StatsSummary;
   sparkline: StatsSparkPoint[];
   dailyActivity: DailyActivityPoint[];
+  heatmapDays: HeatmapDayPoint[];
   metricSparklines: MetricSparklines;
 }> {
   await maybeBackfillAnalytics(accountId, lookup);
@@ -1261,6 +1359,7 @@ export async function buildStatsResponse(
     summary,
     sparkline,
     dailyActivity: buildDailyActivity(dailies),
+    heatmapDays: buildHeatmapDays(dailies),
     metricSparklines: buildMetricSparklines(sparkline),
   };
 }
