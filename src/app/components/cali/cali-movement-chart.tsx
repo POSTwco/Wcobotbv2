@@ -55,6 +55,8 @@ export function CaliMovementChart({
 
   const last = chartData[chartData.length - 1];
   const strokeColor = last.up ? CHART_UP : CHART_DOWN;
+  const isIndexMetric = metric === "athleteScore" || metric === "movementIndex";
+  const yDomain: [number, number] | undefined = isIndexMetric ? [0, 100] : undefined;
 
   return (
     <div>
@@ -79,7 +81,14 @@ export function CaliMovementChart({
       </div>
 
       {mode === "candle" ? (
-        <CaliCandleChart data={data} metric={metric} label={label} height={height + 20} />
+        <CaliCandleChart
+          data={data}
+          metric={metric}
+          label={label}
+          height={height + 20}
+          showVolume={metric === "volume"}
+          yDomain={yDomain}
+        />
       ) : (
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -91,7 +100,13 @@ export function CaliMovementChart({
             </defs>
             <CartesianGrid stroke="rgba(66,116,185,0.08)" vertical={false} />
             <XAxis dataKey="date" tick={{ fill: "#8494A7", fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#8494A7", fontSize: 10 }} axisLine={false} tickLine={false} width={32} />
+            <YAxis
+              domain={yDomain}
+              tick={{ fill: "#8494A7", fontSize: 10 }}
+              axisLine={false}
+              tickLine={false}
+              width={32}
+            />
             <Tooltip
               content={({ active, payload }) => {
                 if (!active || !payload?.[0]) return null;

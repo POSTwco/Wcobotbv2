@@ -547,15 +547,43 @@ function applyContribDelta(daily: DailyStats, oldC: WorkoutDayContrib | null, ne
     : (daily.setsLogged > 0 ? 100 : 0);
 }
 
-function dateKeysForRange(days: number): string[] {
+function getTodayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dateKeysForRange(days: number, endDateKey?: string): string[] {
+  const baseStr = endDateKey || getTodayKey();
+  const base = new Date(`${baseStr}T12:00:00Z`);
   const keys: string[] = [];
-  const d = new Date();
-  for (let i = 0; i < days; i++) {
-    const copy = new Date(d);
+  for (let i = days - 1; i >= 0; i--) {
+    const copy = new Date(base);
     copy.setUTCDate(copy.getUTCDate() - i);
     keys.push(copy.toISOString().slice(0, 10));
   }
-  return keys.reverse();
+  return keys;
+}
+
+async function getLatestRealDateKey(accountId: string): Promise<string> {
+  // Prefer streak.lastDate — only set on real marked-complete wallet-tracked workouts.
+  try {
+    const raw: any = await kv.get(`cali:user:${accountId}:streak`);
+    if (raw?.lastDate && typeof raw.lastDate === "string") return raw.lastDate;
+  } catch { /* ignore */ }
+
+  // Fallback: scan recent logs (cali + elite) for the max real recorded dateKey.
+  try {
+    const caliLogs: any[] = (await kv.getByPrefix(`cali:user:${accountId}:log:`)) ?? [];
+    const eliteLogs: any[] = (await kv.getByPrefix(`elite:user:${accountId}:log:`)) ?? [];
+    const logs = [...caliLogs, ...eliteLogs].filter(
+      (l: any) => l && l.accountId === accountId && typeof l.dateKey === "string" && (Array.isArray(l.sets) ? l.sets.length > 0 : true)
+    );
+    if (logs.length > 0) {
+      const real = logs.map((l: any) => l.dateKey as string).sort();
+      return real[real.length - 1];
+    }
+  } catch { /* ignore */ }
+
+  return getTodayKey();
 }
 
 function totalVolume(d: DailyStats): number {
@@ -688,9 +716,7 @@ function computeScores(
 
   const hypertrophyPct = hypertrophyPctFromDailies(dailies);
 
-  const movementIndex = movementDelta.count > 0
-    ? Math.min(100, Math.max(0, Math.round(50 + movementDelta.avg)))
-    : 0;
+  const movementIndex = movementIndexFromDelta(movementDelta);
 
   const eliteSessions7d = last7.reduce((s, d) => s + (d.eliteWorkoutsCompleted ?? 0), 0);
   const eliteSessions30d = last30.reduce((s, d) => s + (d.eliteWorkoutsCompleted ?? 0), 0);
@@ -744,26 +770,24 @@ function computeScores(
   };
 }
 
-async function loadDailyRecords(accountId: string, days: number): Promise<DailyStats[]> {
-  const keys = dateKeysForRange(days);
-  const out: DailyStats[] = [];
-  for (const dateKey of keys) {
-    try {
-      const raw: any = await kv.get(dailyKey(accountId, dateKey));
-      if (raw && raw.dateKey === dateKey) {
-        out.push({
-          ...emptyDaily(dateKey),
-          ...(raw as DailyStats),
-          dateKey,
-        });
-      } else {
-        out.push(emptyDaily(dateKey));
+async function loadDailyRecords(accountId: string, days: number, endDateKey?: string): Promise<DailyStats[]> {
+  const dateKeys = dateKeysForRange(days, endDateKey);
+  const rawRows = await Promise.all(
+    dateKeys.map(async (dateKey) => {
+      try {
+        return await kv.get(dailyKey(accountId, dateKey));
+      } catch {
+        return null;
       }
-    } catch {
-      out.push(emptyDaily(dateKey));
+    }),
+  );
+  return dateKeys.map((dateKey, i) => {
+    const raw = rawRows[i];
+    if (raw && raw.dateKey === dateKey) {
+      return { ...emptyDaily(dateKey), ...(raw as DailyStats), dateKey };
     }
-  }
-  return out;
+    return emptyDaily(dateKey);
+  });
 }
 
 async function loadAllPRHistEntries(accountId: string): Promise<PRHistoryEntry[]> {
@@ -914,7 +938,7 @@ export async function recordPRHistory(args: {
 
 async function recomputeSummary(accountId: string): Promise<StatsSummary> {
   const profileLevel = await loadProfileLevel(accountId);
-  const dailies = await loadDailyRecords(accountId, 90);
+  const dailies = await loadDailyRecords(accountId, 90, getTodayKey());
   let streak: StreakLike = { current: 0, longest: 0 };
   try {
     const raw: any = await kv.get(`cali:user:${accountId}:streak`);
@@ -951,31 +975,75 @@ async function recomputeSummary(accountId: string): Promise<StatsSummary> {
 // Read path — API responses
 // ---------------------------------------------------------------------------
 
-async function sparklineFromDailies(
-  accountId: string,
+function movementIndexFromDelta(movementDelta: { avg: number; count: number }): number {
+  return movementDelta.count > 0
+    ? Math.min(100, Math.max(0, Math.round(50 + movementDelta.avg)))
+    : 0;
+}
+
+function computeScoresThroughDay(
   dailies: DailyStats[],
+  endIdx: number,
   streak: StreakLike,
   profileLevel: number,
-): Promise<StatsSparkPoint[]> {
-  const prEntries = await loadAllPRHistEntries(accountId);
+  movementDelta: { avg: number; count: number },
+): StatsSummary {
+  const through = dailies.slice(0, endIdx + 1);
+  return computeScores(through, streak, profileLevel, movementDelta, null);
+}
+
+function sparklineFromDailiesSync(
+  allDailies: DailyStats[],
+  prEntries: PRHistoryEntry[],
+  streak: StreakLike,
+  profileLevel: number,
+  takeLast?: number,
+): StatsSparkPoint[] {
   const points: StatsSparkPoint[] = [];
-  for (let i = 0; i < dailies.length; i++) {
-    const slice = dailies.slice(0, i + 1);
-    const dayEnd = endOfDayMs(dailies[i].dateKey);
-    const windowStart = dayEnd - 30 * 24 * 60 * 60 * 1000;
-    const movementDelta = movementDeltaInWindow(prEntries, windowStart, dayEnd);
-    const partial = computeScores(slice, streak, profileLevel, movementDelta, null);
+  const ms30d = 30 * 24 * 60 * 60 * 1000;
+
+  for (let i = 0; i < allDailies.length; i++) {
+    const dayEnd = endOfDayMs(allDailies[i].dateKey);
+    const movementDelta = movementDeltaInWindow(prEntries, dayEnd - ms30d, dayEnd);
+    const movementIndex = movementIndexFromDelta(movementDelta);
+    const partial = computeScoresThroughDay(allDailies, i, streak, profileLevel, movementDelta);
     points.push({
-      dateKey: dailies[i].dateKey,
+      dateKey: allDailies[i].dateKey,
       athleteScore: partial.athleteScore,
-      movementIndex: partial.movementIndex,
-      volume: totalVolume(dailies[i]),
+      movementIndex,
+      volume: totalVolume(allDailies[i]),
       consistency: partial.consistency,
       effort: partial.effort,
       hypertrophy: partial.hypertrophyPct,
     });
   }
-  return points;
+  return takeLast != null && takeLast > 0 ? points.slice(-takeLast) : points;
+}
+
+async function sparklineFromDailies(
+  accountId: string,
+  dailies: DailyStats[],
+  streak: StreakLike,
+  profileLevel: number,
+  prEntries?: PRHistoryEntry[],
+): Promise<StatsSparkPoint[]> {
+  const entries = prEntries ?? await loadAllPRHistEntries(accountId);
+  return sparklineFromDailiesSync(dailies, entries, streak, profileLevel);
+}
+
+type StatsRangeKey = "7d" | "30d" | "90d";
+
+function buildSparklinesByRange(
+  dailies: DailyStats[],
+  prEntries: PRHistoryEntry[],
+  streak: StreakLike,
+  profileLevel: number,
+): Record<StatsRangeKey, StatsSparkPoint[]> {
+  return {
+    "7d": sparklineFromDailiesSync(dailies, prEntries, streak, profileLevel, 7),
+    "30d": sparklineFromDailiesSync(dailies, prEntries, streak, profileLevel, 30),
+    "90d": sparklineFromDailiesSync(dailies, prEntries, streak, profileLevel),
+  };
 }
 
 function buildMetricSparklines(sparkline: StatsSparkPoint[]): MetricSparklines {
@@ -1252,7 +1320,7 @@ async function needsHypertrophyRebuild(accountId: string): Promise<boolean> {
   const flag: any = await kv.get(backfillFlagKey(accountId));
   if (flag?.version >= ANALYTICS_SCHEMA_VERSION) return false;
 
-  const dailies = await loadDailyRecords(accountId, 90);
+  const dailies = await loadDailyRecords(accountId, 90, getTodayKey());
   const setsLogged = dailies.reduce((s, d) => s + d.setsLogged, 0);
   if (setsLogged === 0) return false;
 
@@ -1300,7 +1368,7 @@ async function needsAnalyticsBackfill(accountId: string): Promise<boolean> {
   if (logs.length === 0) return false;
 
   const totalLogSets = logs.reduce((s, l) => s + l.sets.length, 0);
-  const dailies = await loadDailyRecords(accountId, 90);
+  const dailies = await loadDailyRecords(accountId, 90, getTodayKey());
   const totalDailySets = dailies.reduce((s, d) => s + d.setsLogged, 0);
 
   return totalDailySets < totalLogSets * 0.75;
@@ -1332,6 +1400,14 @@ export async function maybeBackfillAnalytics(
   }
 }
 
+async function loadCachedSummary(accountId: string): Promise<StatsSummary | null> {
+  try {
+    const raw: any = await kv.get(summaryKey(accountId));
+    if (raw && typeof raw.athleteScore === "number") return raw as StatsSummary;
+  } catch { /* ignore */ }
+  return null;
+}
+
 export async function buildStatsResponse(
   accountId: string,
   range: "7d" | "30d" | "90d",
@@ -1340,27 +1416,52 @@ export async function buildStatsResponse(
 ): Promise<{
   summary: StatsSummary;
   sparkline: StatsSparkPoint[];
+  sparklinesByRange: Record<StatsRangeKey, StatsSparkPoint[]>;
   dailyActivity: DailyActivityPoint[];
   heatmapDays: HeatmapDayPoint[];
   metricSparklines: MetricSparklines;
+  metricSparklinesByRange: Record<StatsRangeKey, MetricSparklines>;
 }> {
   await maybeBackfillAnalytics(accountId, lookup);
 
-  const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+  const heatmapAnchor = await getLatestRealDateKey(accountId);
 
-  // Always recompute — cached summary can hold stale hypertrophyPct (e.g. old volume-based 100%).
-  const summary = await recomputeSummary(accountId);
+  const [cachedSummary, dailies, prEntries] = await Promise.all([
+    loadCachedSummary(accountId),
+    loadDailyRecords(accountId, 90, heatmapAnchor),
+    loadAllPRHistEntries(accountId),
+  ]);
 
-  const dailies = await loadDailyRecords(accountId, days);
+  let summary = cachedSummary;
+  if (!summary) {
+    summary = await recomputeSummary(accountId);
+  } else {
+    let prCount = summary.prCount ?? 0;
+    try {
+      const prs = (await kv.getByPrefix(`cali:user:${accountId}:pr:`)) ?? [];
+      prCount = prs.filter((p: any) => p && typeof p.value === "number").length;
+    } catch { /* ignore */ }
+    summary = { ...summary, prCount };
+  }
+
   const streak: StreakLike = { current: summary.streakCurrent, longest: summary.streakLongest };
-  const sparkline = await sparklineFromDailies(accountId, dailies, streak, profileLevel);
+  const sparklinesByRange = buildSparklinesByRange(dailies, prEntries, streak, profileLevel);
+  const sparkline = sparklinesByRange[range];
+
+  const metricSparklinesByRange: Record<StatsRangeKey, MetricSparklines> = {
+    "7d": buildMetricSparklines(sparklinesByRange["7d"]),
+    "30d": buildMetricSparklines(sparklinesByRange["30d"]),
+    "90d": buildMetricSparklines(sparklinesByRange["90d"]),
+  };
 
   return {
     summary,
     sparkline,
+    sparklinesByRange,
     dailyActivity: buildDailyActivity(dailies),
     heatmapDays: buildHeatmapDays(dailies),
-    metricSparklines: buildMetricSparklines(sparkline),
+    metricSparklines: metricSparklinesByRange[range],
+    metricSparklinesByRange,
   };
 }
 

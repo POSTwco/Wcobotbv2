@@ -13,6 +13,7 @@ interface CaliCandleChartProps {
   label?: string;
   height?: number;
   showVolume?: boolean;
+  yDomain?: [number, number];
 }
 
 export function CaliCandleChart({
@@ -21,6 +22,7 @@ export function CaliCandleChart({
   label = "Athlete Index",
   height = 260,
   showVolume = true,
+  yDomain,
 }: CaliCandleChartProps) {
   const gradId = useId().replace(/:/g, "");
 
@@ -70,7 +72,14 @@ export function CaliCandleChart({
         </defs>
         <CartesianGrid stroke="rgba(66,116,185,0.08)" vertical={false} />
         <XAxis dataKey="date" tick={{ fill: "#8494A7", fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis yAxisId="main" tick={{ fill: "#8494A7", fontSize: 10 }} axisLine={false} tickLine={false} width={32} />
+        <YAxis
+          yAxisId="main"
+          domain={yDomain ?? ["auto", "auto"]}
+          tick={{ fill: "#8494A7", fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          width={32}
+        />
         {showVolume && (
           <YAxis yAxisId="vol" orientation="right" hide domain={[0, "auto"]} />
         )}
