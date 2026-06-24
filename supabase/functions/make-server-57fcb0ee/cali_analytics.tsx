@@ -552,7 +552,9 @@ function getTodayKey(): string {
 }
 
 function dateKeysForRange(days: number, endDateKey?: string): string[] {
-  const baseStr = endDateKey || getTodayKey();
+  const today = getTodayKey();
+  // Always include calendar today so charts/heatmap don't stop at last workout day.
+  const baseStr = !endDateKey || endDateKey < today ? today : endDateKey;
   const base = new Date(`${baseStr}T12:00:00Z`);
   const keys: string[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -1424,11 +1426,9 @@ export async function buildStatsResponse(
 }> {
   await maybeBackfillAnalytics(accountId, lookup);
 
-  const heatmapAnchor = await getLatestRealDateKey(accountId);
-
   const [cachedSummary, dailies, prEntries] = await Promise.all([
     loadCachedSummary(accountId),
-    loadDailyRecords(accountId, 90, heatmapAnchor),
+    loadDailyRecords(accountId, 90, getTodayKey()),
     loadAllPRHistEntries(accountId),
   ]);
 
