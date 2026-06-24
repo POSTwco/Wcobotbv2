@@ -1,32 +1,25 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import type { HeatmapDayPoint } from "../../lib/cali-analytics-types";
+import type { HeatmapDayPoint, StatsRange } from "../../lib/cali-analytics-types";
+import { layoutCoin360Treemap, type TreemapTile } from "../../lib/coin360-treemap-layout";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../ui/tooltip";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 
-const DOW_SHORT = ["S", "M", "T", "W", "R", "F", "S"] as const;
-
-const GREEN_DEEP = "#0a7d4a";
-const GREEN_MID = "#16c784";
-const GREEN_BRIGHT = "#3dffa8";
-const RED_DEEP = "#8b1a1a";
-const RED_MID = "#f6465d";
-const RED_BRIGHT = "#ff6b7a";
+const GREEN_DEEP = "#0e4429";
+const GREEN_MID = "#26a641";
+const GREEN_BRIGHT = "#39d353";
+const RED_DEEP = "#3d1418";
+const RED_MID = "#da3633";
+const RED_BRIGHT = "#ff6b6b";
 const NEUTRAL = "#1e2329";
-const VOID = "#131722";
 const CANVAS = "#0b0e11";
-
-// Fixed perfect cell size (px) for real-heatmap feel: uniform squares, always readable,
-// consistent across 7d/30d/90d ranges. 32px chosen for 3-line content + tight gaps.
-const CELL_SIZE = 32;
 
 interface CaliProgressionHeatmapProps {
   data: HeatmapDayPoint[];
+  range: StatsRange;
 }
-
-type GridCell = HeatmapDayPoint | null;
 
 interface PeriodSummary {
   pushReps: number;
@@ -39,8 +32,8 @@ interface PeriodSummary {
   missed: number;
 }
 
-interface WeekMeta {
-  label: string | null;
+function windowDays(range: StatsRange): number {
+  return range === "7d" ? 7 : range === "30d" ? 30 : 90;
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -61,88 +54,40 @@ function mixHex(c1: string, c2: string, t: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-function vibrantTileColor(day: HeatmapDayPoint | null, noData: boolean): string {
-  if (!day || noData) return NEUTRAL;
-
+function vibrantTileColor(day: HeatmapDayPoint, noData: boolean): string {
+  if (noData) return NEUTRAL;
   if (day.active) {
     const t = Math.max(0.12, day.greenScore / 100);
     return t < 0.5
       ? mixHex(GREEN_DEEP, GREEN_MID, t * 2)
       : mixHex(GREEN_MID, GREEN_BRIGHT, (t - 0.5) * 2);
   }
-
   if (day.redScore > 0) {
     const t = Math.max(0.15, day.redScore / 100);
     return t < 0.5
       ? mixHex(RED_DEEP, RED_MID, t * 2)
       : mixHex(RED_MID, RED_BRIGHT, (t - 0.5) * 2);
   }
-
   return NEUTRAL;
 }
 
 function summarizePeriod(days: HeatmapDayPoint[]): PeriodSummary {
   const active = days.filter((d) => d.active);
   const missed = days.filter((d) => d.redScore > 0);
-  const pushReps = days.reduce((s, d) => s + d.pushReps, 0);
-  const pullReps = days.reduce((s, d) => s + d.pullReps, 0);
-  const pushTimeSec = days.reduce((s, d) => s + d.pushTimeSec, 0);
-  const pullTimeSec = days.reduce((s, d) => s + d.pullTimeSec, 0);
-  const hypertrophyAvg = active.length
-    ? Math.round(active.reduce((s, d) => s + d.hypertrophyScore, 0) / active.length)
-    : 0;
-  const intensityAvg = active.length
-    ? Math.round(active.reduce((s, d) => s + d.greenScore, 0) / active.length)
-    : 0;
-
   return {
-    pushReps,
-    pullReps,
-    pushTimeSec,
-    pullTimeSec,
-    hypertrophyAvg,
-    intensityAvg,
+    pushReps: days.reduce((s, d) => s + d.pushReps, 0),
+    pullReps: days.reduce((s, d) => s + d.pullReps, 0),
+    pushTimeSec: days.reduce((s, d) => s + d.pushTimeSec, 0),
+    pullTimeSec: days.reduce((s, d) => s + d.pullTimeSec, 0),
+    hypertrophyAvg: active.length
+      ? Math.round(active.reduce((s, d) => s + d.hypertrophyScore, 0) / active.length)
+      : 0,
+    intensityAvg: active.length
+      ? Math.round(active.reduce((s, d) => s + d.greenScore, 0) / active.length)
+      : 0,
     sessions: active.length,
     missed: missed.length,
   };
-}
-
-function buildContributionGrid(data: HeatmapDayPoint[]): { grid: GridCell[][]; weekMeta: WeekMeta[] } {
-  if (data.length === 0) return { grid: [], weekMeta: [] };
-
-  const firstDow = new Date(`${data[0].dateKey}T12:00:00Z`).getUTCDay();
-  const padded: GridCell[] = Array.from({ length: firstDow }, () => null);
-  padded.push(...data);
-
-  while (padded.length % 7 !== 0) padded.push(null);
-
-  const weeks: GridCell[][] = [];
-  for (let i = 0; i < padded.length; i += 7) {
-    weeks.push(padded.slice(i, i + 7));
-  }
-
-  const grid = Array.from({ length: 7 }, (_, dow) =>
-    weeks.map((week) => week[dow] ?? null),
-  );
-
-  const weekMeta: WeekMeta[] = weeks.map((week, idx) => {
-    const anchor = week.find((d) => d != null);
-    if (!anchor) return { label: null };
-    const d = new Date(`${anchor.dateKey}T12:00:00Z`);
-    const prevAnchor = idx > 0 ? weeks[idx - 1].find((x) => x != null) : null;
-    const prevMonth = prevAnchor
-      ? new Date(`${prevAnchor.dateKey}T12:00:00Z`).getUTCMonth()
-      : -1;
-    const month = d.getUTCMonth();
-    if (month !== prevMonth) {
-      return {
-        label: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase(),
-      };
-    }
-    return { label: null };
-  });
-
-  return { grid, weekMeta };
 }
 
 function formatDateLabel(dateKey: string): string {
@@ -152,14 +97,27 @@ function formatDateLabel(dateKey: string): string {
   return `${dow} ${date}`;
 }
 
-function dayOfMonth(dateKey: string): number {
-  return new Date(`${dateKey}T12:00:00Z`).getUTCDate();
-}
-
 function formatHold(sec: number): string {
   if (sec <= 0) return "";
   if (sec < 60) return `${sec}s`;
   return `${Math.floor(sec / 60)}m`;
+}
+
+function scoreDisplay(day: HeatmapDayPoint): { text: string; positive: boolean } {
+  if (day.active && day.greenScore > 0) {
+    return { text: `+${day.greenScore}%`, positive: true };
+  }
+  if (day.redScore > 0) {
+    return { text: `-${day.redScore}%`, positive: false };
+  }
+  return { text: "—", positive: true };
+}
+
+function volumeDisplay(day: HeatmapDayPoint): string {
+  const total = day.pushReps + day.pullReps;
+  if (total > 0) return `${total} reps`;
+  if (day.volume > 0) return `${day.volume} vol`;
+  return "REST";
 }
 
 function HoverCard({ day, noData }: { day: HeatmapDayPoint; noData: boolean }) {
@@ -249,83 +207,142 @@ function SummaryCard({
   );
 }
 
-function HeatmapTile({
-  day,
+type TileTier = "hero" | "large" | "medium" | "micro";
+
+function tileTier(w: number, h: number): TileTier {
+  const area = w * h;
+  if (area >= 14000) return "hero";
+  if (area >= 5000) return "large";
+  if (area >= 900) return "medium";
+  return "micro";
+}
+
+function TileContent({ tile, tier }: { tile: TreemapTile; tier: TileTier }) {
+  const { day, label, dominancePct } = tile;
+  const score = scoreDisplay(day);
+
+  if (tier === "micro") return null;
+
+  if (tier === "hero") {
+    return (
+      <div className="flex flex-col justify-between h-full p-3 sm:p-4 pointer-events-none">
+        <p
+          className="font-bold text-white leading-none"
+          style={{ fontSize: "clamp(1.4rem, 5vw, 2.4rem)", ...orbitron }}
+        >
+          {label}
+        </p>
+        <div>
+          <p
+            className="font-bold text-white/90 leading-tight"
+            style={{ fontSize: "clamp(0.75rem, 2vw, 1rem)", ...orbitron }}
+          >
+            {volumeDisplay(day)}
+          </p>
+          <p
+            className="font-bold mt-1 flex items-center gap-1"
+            style={{
+              fontSize: "clamp(0.85rem, 2.5vw, 1.15rem)",
+              color: score.positive ? "#e8fff4" : "#ffe8ea",
+              ...orbitron,
+            }}
+          >
+            <span>{score.positive ? "▲" : "▼"}</span>
+            {score.text}
+          </p>
+          <p className="text-white/55 mt-2" style={{ fontSize: "0.6rem", ...dmSans }}>
+            Recency: {dominancePct}%
+          </p>
+          {(day.pushReps > 0 || day.pullReps > 0) && (
+            <p className="text-white/70 mt-1" style={{ fontSize: "0.58rem", ...dmSans }}>
+              PUSH {day.pushReps} · PULL {day.pullReps} · HYP {day.hypertrophyScore}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (tier === "large") {
+    return (
+      <div className="flex flex-col justify-center h-full p-2 sm:p-3 pointer-events-none">
+        <p
+          className="font-bold text-white leading-none"
+          style={{ fontSize: "clamp(0.9rem, 2.5vw, 1.35rem)", ...orbitron }}
+        >
+          {label}
+        </p>
+        <p className="text-white/80 mt-1" style={{ fontSize: "clamp(0.55rem, 1.5vw, 0.7rem)", ...orbitron }}>
+          {volumeDisplay(day)}
+        </p>
+        <p
+          className="font-bold mt-1"
+          style={{
+            fontSize: "clamp(0.65rem, 1.8vw, 0.85rem)",
+            color: score.positive ? "#e8fff4" : "#ffe8ea",
+            ...orbitron,
+          }}
+        >
+          {score.positive ? "▲" : "▼"} {score.text}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full p-1 pointer-events-none text-center">
+      <p
+        className="font-bold text-white/95 leading-none"
+        style={{ fontSize: "clamp(0.45rem, 1.2vw, 0.65rem)", ...orbitron }}
+      >
+        {label}
+      </p>
+      <p
+        className="font-bold mt-0.5"
+        style={{
+          fontSize: "clamp(0.4rem, 1vw, 0.55rem)",
+          color: score.positive ? "#e8fff4" : "#ffe8ea",
+          ...orbitron,
+        }}
+      >
+        {score.text}
+      </p>
+    </div>
+  );
+}
+
+function TreemapTileView({
+  tile,
   noData,
-  isToday,
   index,
 }: {
-  day: GridCell;
+  tile: TreemapTile;
   noData: boolean;
-  isToday: boolean;
   index: number;
 }) {
-  const bg = day ? vibrantTileColor(day, noData) : VOID;
-  const cellPx = `${CELL_SIZE}px`;
+  const { day, x, y, w, h } = tile;
+  const bg = vibrantTileColor(day, noData);
+  const tier = tileTier(w, h);
+  const isToday = tile.dayIndex === 0;
 
   const inner = (
     <motion.div
-      initial={{ opacity: 0, scale: 0.92 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: index * 0.004, duration: 0.16 }}
-      className="relative flex flex-col items-center justify-center overflow-hidden cursor-crosshair select-none transition-[filter,transform] duration-100 hover:brightness-110 hover:z-10 hover:scale-[1.03]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: index * 0.012, duration: 0.2 }}
+      className="absolute overflow-hidden cursor-crosshair select-none transition-[filter] duration-100 hover:brightness-110 hover:z-20"
       style={{
-        width: cellPx,
-        height: cellPx,
+        left: x,
+        top: y,
+        width: w,
+        height: h,
         background: bg,
-        boxShadow: isToday
-          ? "inset 0 0 0 2px rgba(255,255,255,0.65), 0 0 0 1px rgba(255,255,255,0.1)"
-          : "none",
+        boxShadow: isToday ? "inset 0 0 0 2px rgba(255,255,255,0.45)" : undefined,
       }}
     >
-      {day && !noData && (
-        <div className="flex flex-col items-center justify-center text-center leading-none pointer-events-none" style={{ padding: "1px 2px" }}>
-          <span
-            className="font-bold text-white/95"
-            style={{ fontSize: "10px", ...orbitron, letterSpacing: "-0.2px" }}
-          >
-            {dayOfMonth(day.dateKey)}
-          </span>
-          {day.active && (
-            <>
-              <span
-                className="font-bold mt-[1px]"
-                style={{ fontSize: "9px", color: "#e8fff4", ...orbitron }}
-              >
-                +{day.greenScore}%
-              </span>
-              {(day.pushReps > 0 || day.pullReps > 0) && (
-                <span
-                  className="mt-[1px] text-white/75"
-                  style={{ fontSize: "7px", ...dmSans }}
-                >
-                  P{day.pushReps}·L{day.pullReps}
-                </span>
-              )}
-            </>
-          )}
-          {!day.active && day.redScore > 0 && (
-            <span
-              className="font-bold mt-[1px]"
-              style={{ fontSize: "9px", color: "#ffe8ea", ...orbitron }}
-            >
-              -{day.redScore}%
-            </span>
-          )}
-          {!day.active && day.redScore === 0 && day.hypertrophyScore === 0 && (
-            <span
-              className="text-white/30 mt-[1px]"
-              style={{ fontSize: "8px", ...orbitron }}
-            >
-              —
-            </span>
-          )}
-        </div>
-      )}
+      <TileContent tile={tile} tier={tier} />
     </motion.div>
   );
-
-  if (!day) return inner;
 
   return (
     <Tooltip>
@@ -341,17 +358,44 @@ function HeatmapTile({
   );
 }
 
-export function CaliProgressionHeatmap({ data }: CaliProgressionHeatmapProps) {
+export function CaliProgressionHeatmap({ data, range }: CaliProgressionHeatmapProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
   const noData = useMemo(
     () => data.every((d) => !d.active && d.greenScore === 0 && d.redScore === 0),
     [data],
   );
 
-  const { grid, weekMeta } = useMemo(() => buildContributionGrid(data), [data]);
-  const numWeeks = grid[0]?.length ?? 0;
-  const todayKey = data.length > 0 ? data[data.length - 1]?.dateKey : null;
+  const days = windowDays(range);
+  const recencyDays = useMemo(
+    () => (data.length ? [...data.slice(-days)].reverse() : []),
+    [data, days],
+  );
 
-  const summary7 = useMemo(() => summarizePeriod(data.slice(-7)), [data]);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const w = Math.floor(rect.width);
+      const h = Math.max(280, Math.floor(w / 2));
+      setSize({ w, h });
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const tiles = useMemo(() => {
+    if (size.w <= 0 || recencyDays.length === 0) return [];
+    return layoutCoin360Treemap(recencyDays, size.w, size.h);
+  }, [recencyDays, size.w, size.h]);
+
+  const summaryWindow = useMemo(() => summarizePeriod(recencyDays), [recencyDays]);
   const summary30 = useMemo(() => summarizePeriod(data.slice(-30)), [data]);
 
   if (data.length === 0) return null;
@@ -360,139 +404,86 @@ export function CaliProgressionHeatmap({ data }: CaliProgressionHeatmapProps) {
     return (
       <div>
         <p className="text-[0.6rem] font-bold tracking-widest text-[#8494A7] mb-3" style={orbitron}>
-          PROGRESSION HEATMAP
+          ACTIVITY HEATMAP
         </p>
         <div
           className="flex items-center justify-center rounded-lg border border-dashed text-xs text-[#8494A7] py-10"
           style={{ borderColor: "rgba(66,116,185,0.25)", background: CANVAS, ...dmSans }}
         >
-          Complete your first workout to unlock progression heatmap
+          Complete your first workout to unlock activity heatmap
         </div>
       </div>
     );
   }
 
   const pushSub = [
-    summary7.pushReps > 0 ? `${summary7.pushReps} reps 7d` : null,
-    summary7.pushTimeSec > 0 ? `${formatHold(summary7.pushTimeSec)} hold` : null,
-    `${summary30.pushReps} reps 30d`,
+    summaryWindow.pushReps > 0 ? `${summaryWindow.pushReps} reps` : null,
+    summaryWindow.pushTimeSec > 0 ? `${formatHold(summaryWindow.pushTimeSec)} hold` : null,
+    `${summary30.pushReps} reps (30d)`,
   ].filter(Boolean).join(" · ");
 
   const pullSub = [
-    summary7.pullReps > 0 ? `${summary7.pullReps} reps 7d` : null,
-    summary7.pullTimeSec > 0 ? `${formatHold(summary7.pullTimeSec)} hold` : null,
-    `${summary30.pullReps} reps 30d`,
+    summaryWindow.pullReps > 0 ? `${summaryWindow.pullReps} reps` : null,
+    summaryWindow.pullTimeSec > 0 ? `${formatHold(summaryWindow.pullTimeSec)} hold` : null,
+    `${summary30.pullReps} reps (30d)`,
   ].filter(Boolean).join(" · ");
 
   return (
     <div>
-      <p className="text-[0.6rem] font-bold tracking-widest text-[#8494A7] mb-3" style={orbitron}>
-        PROGRESSION HEATMAP
-      </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <p className="text-[0.6rem] font-bold tracking-widest text-[#8494A7]" style={orbitron}>
+          ACTIVITY HEATMAP
+        </p>
+        <p className="text-[0.55rem] text-[#6AA3E0]/80 tracking-wider" style={orbitron}>
+          ACTIVITY · {range.toUpperCase()} · RECENCY DOMINANCE
+        </p>
+      </div>
 
-      {/* Summary strip — ticker / market row style (matches real heatmap polish) */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         <SummaryCard
           label="PUSH MOTION"
-          value={`${summary7.pushReps}`}
-          sub={pushSub || "No push volume 7d"}
+          value={`${summaryWindow.pushReps}`}
+          sub={pushSub || "No push volume"}
           accent={GREEN_MID}
         />
         <SummaryCard
           label="PULL MOTION"
-          value={`${summary7.pullReps}`}
-          sub={pullSub || "No pull volume 7d"}
+          value={`${summaryWindow.pullReps}`}
+          sub={pullSub || "No pull volume"}
           accent="#6AA3E0"
         />
         <SummaryCard
           label="HYPERTROPHY"
-          value={`${summary7.hypertrophyAvg}`}
-          sub={`${summary7.sessions}/7 sessions · avg ${summary30.hypertrophyAvg} (30d)`}
+          value={`${summaryWindow.hypertrophyAvg}`}
+          sub={`${summaryWindow.sessions}/${days} sessions · avg ${summary30.hypertrophyAvg} (30d)`}
           accent="#D4A843"
         />
         <SummaryCard
           label="INTENSITY"
-          value={summary7.intensityAvg > 0 ? `+${summary7.intensityAvg}%` : "—"}
-          sub={`${summary7.missed} missed · ${summary30.sessions} sessions (30d)`}
-          accent={summary7.missed > 0 ? RED_MID : GREEN_BRIGHT}
+          value={summaryWindow.intensityAvg > 0 ? `+${summaryWindow.intensityAvg}%` : "—"}
+          sub={`${summaryWindow.missed} missed · ${summary30.sessions} sessions (30d)`}
+          accent={summaryWindow.missed > 0 ? RED_MID : GREEN_BRIGHT}
         />
       </div>
 
       <TooltipProvider delayDuration={60}>
         <div
+          ref={containerRef}
           className="w-full rounded-lg overflow-hidden border border-white/5"
-          style={{ background: CANVAS }}
+          style={{ background: CANVAS, aspectRatio: "2 / 1", minHeight: 280 }}
         >
-          {/* Heatmap body: fixed DOW sidebar + single shared horizontal scroller for header + cells (perfect sync, real heatmap UX) */}
-          <div className="flex p-1 gap-1">
-            {/* DOW labels (non-scrolling sidebar) */}
-            <div className="flex flex-col shrink-0" style={{ width: 18, gap: 1 }}>
-              {/* Spacer to align with month header row height when present */}
-              {numWeeks > 0 && <div style={{ height: 14 }} />}
-              {DOW_SHORT.map((label, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-center text-[#8494A7]/55 font-bold"
-                  style={{ height: CELL_SIZE, fontSize: "9px", ...orbitron }}
-                >
-                  {label}
-                </div>
+          {tiles.length > 0 && size.w > 0 && (
+            <div className="relative w-full" style={{ width: size.w, height: size.h }}>
+              {tiles.map((tile, idx) => (
+                <TreemapTileView
+                  key={tile.day.dateKey}
+                  tile={tile}
+                  noData={false}
+                  index={idx}
+                />
               ))}
             </div>
-
-            {/* Shared scroll container: month row + grid rows inside */}
-            <div
-              className="overflow-x-auto flex-1 min-w-0"
-              style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.12) transparent" }}
-            >
-              {/* Month header (fixed px cols) */}
-              {numWeeks > 0 && (
-                <div className="border-b border-white/5 pb-1 mb-1" style={{ background: VOID, marginLeft: -1 }}>
-                  <div
-                    className="grid"
-                    style={{
-                      gridTemplateColumns: `repeat(${numWeeks}, ${CELL_SIZE}px)`,
-                      gap: 1,
-                    }}
-                  >
-                    {weekMeta.map((meta, i) => (
-                      <div
-                        key={i}
-                        className="text-[0.5rem] font-bold text-[#8494A7] truncate px-0.5"
-                        style={{ ...orbitron, height: 13 }}
-                      >
-                        {meta.label ?? ""}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Grid rows — fixed perfect square cells */}
-              <div style={{ gap: 1, display: "flex", flexDirection: "column" }}>
-                {grid.map((row, rowIdx) => (
-                  <div
-                    key={rowIdx}
-                    className="grid"
-                    style={{
-                      gridTemplateColumns: `repeat(${numWeeks}, ${CELL_SIZE}px)`,
-                      gap: 1,
-                    }}
-                  >
-                    {row.map((day, colIdx) => (
-                      <HeatmapTile
-                        key={day?.dateKey ?? `pad-${rowIdx}-${colIdx}`}
-                        day={day}
-                        noData={false}
-                        isToday={day?.dateKey === todayKey}
-                        index={rowIdx * numWeeks + colIdx}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </TooltipProvider>
 
@@ -503,7 +494,7 @@ export function CaliProgressionHeatmap({ data }: CaliProgressionHeatmapProps) {
             <span className="w-3.5 h-full" style={{ background: GREEN_MID }} />
             <span className="w-3.5 h-full" style={{ background: GREEN_BRIGHT }} />
           </span>
-          Intensity + hypertrophy
+          Session intensity + hypertrophy
         </span>
         <span className="flex items-center gap-1.5">
           <span className="flex h-3 rounded-sm overflow-hidden">
@@ -513,7 +504,6 @@ export function CaliProgressionHeatmap({ data }: CaliProgressionHeatmapProps) {
           </span>
           Missed / gap
         </span>
-        <span className="text-[#6AA3E0]/75">P·L = push · pull reps</span>
       </div>
     </div>
   );

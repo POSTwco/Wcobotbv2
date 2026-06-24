@@ -1506,12 +1506,16 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
     }
     const range = parseStatsRange(c.req.query("range"));
     const profile = await loadOrInitProfile(accountId);
-    const { summary, sparkline, dailyActivity, heatmapDays, metricSparklines } = await buildStatsResponse(
-      accountId, range, profile.level, getExerciseSafe,
-    );
+    const {
+      summary, sparkline, sparklinesByRange, dailyActivity, heatmapDays,
+      metricSparklines, metricSparklinesByRange,
+    } = await buildStatsResponse(accountId, range, profile.level, getExerciseSafe);
     return c.json({
       success: true,
-      data: { summary, sparkline, dailyActivity, heatmapDays, metricSparklines, range },
+      data: {
+        summary, sparkline, sparklinesByRange, dailyActivity, heatmapDays,
+        metricSparklines, metricSparklinesByRange, range,
+      },
     });
   });
 

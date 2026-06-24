@@ -873,15 +873,30 @@ export const api = {
       request<{ streak: { current: number; longest: number; lastDate: string; updatedAt: number } }>(
         "/cali/streak", { caliSessionToken }),
 
-    stats: (caliSessionToken: string, range: import("./cali-analytics-types").StatsRange = "7d") =>
+    stats: (
+      caliSessionToken: string,
+      range: import("./cali-analytics-types").StatsRange = "90d",
+      opts?: { timeoutMs?: number },
+    ) =>
       request<{
         summary: import("./cali-analytics-types").StatsSummary;
         sparkline: import("./cali-analytics-types").StatsSparkPoint[];
+        sparklinesByRange: Record<
+          import("./cali-analytics-types").StatsRange,
+          import("./cali-analytics-types").StatsSparkPoint[]
+        >;
         dailyActivity: import("./cali-analytics-types").DailyActivityPoint[];
         heatmapDays: import("./cali-analytics-types").HeatmapDayPoint[];
         metricSparklines: import("./cali-analytics-types").MetricSparklines;
+        metricSparklinesByRange: Record<
+          import("./cali-analytics-types").StatsRange,
+          import("./cali-analytics-types").MetricSparklines
+        >;
         range: import("./cali-analytics-types").StatsRange;
-      }>(`/cali/stats?range=${encodeURIComponent(range)}`, { caliSessionToken }),
+      }>(`/cali/stats?range=${encodeURIComponent(range)}`, {
+        caliSessionToken,
+        timeoutMs: opts?.timeoutMs ?? 45_000,
+      }),
 
     movementStats: (caliSessionToken: string, limit = 12) =>
       request<{ movements: import("./cali-analytics-types").MovementStat[] }>(

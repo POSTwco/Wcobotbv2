@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, BarChart3, Flame, Loader2, Shield, Trophy } from "lucide-react";
+import { ArrowLeft, BarChart3, Flame, Shield, Trophy } from "lucide-react";
 import { api } from "../../lib/api";
 import { useCaliSession } from "./cali-context";
 import { CaliLoader } from "./cali-loader";
@@ -37,6 +37,22 @@ const EMPTY_SPARKLINES: MetricSparklines = {
   hypertrophy: [],
 };
 
+function windowDays(range: StatsRange): number {
+  return range === "7d" ? 7 : range === "30d" ? 30 : 90;
+}
+
+const EMPTY_SPARKLINES_BY_RANGE: Record<StatsRange, StatsSparkPoint[]> = {
+  "7d": [],
+  "30d": [],
+  "90d": [],
+};
+
+const EMPTY_METRIC_SPARKLINES_BY_RANGE: Record<StatsRange, MetricSparklines> = {
+  "7d": EMPTY_SPARKLINES,
+  "30d": EMPTY_SPARKLINES,
+  "90d": EMPTY_SPARKLINES,
+};
+
 function confidenceLabel(c: StatsSummary["dataConfidence"]): string {
   switch (c) {
     case "high": return "HIGH CONFIDENCE";
@@ -50,14 +66,22 @@ export function CaliAnalytics() {
   const cali = useCaliSession();
   const [range, setRange] = useState<StatsRange>("7d");
   const [summary, setSummary] = useState<StatsSummary | null>(null);
-  const [sparkline, setSparkline] = useState<StatsSparkPoint[]>([]);
-  const [heatmapDays, setHeatmapDays] = useState<HeatmapDayPoint[]>([]);
-  const [metricSparklines, setMetricSparklines] = useState<MetricSparklines>(EMPTY_SPARKLINES);
+  const [sparklinesByRange, setSparklinesByRange] = useState(EMPTY_SPARKLINES_BY_RANGE);
+  const [metricSparklinesByRange, setMetricSparklinesByRange] = useState(EMPTY_METRIC_SPARKLINES_BY_RANGE);
+  const [fullHeatmapDays, setFullHeatmapDays] = useState<HeatmapDayPoint[]>([]);
   const [movements, setMovements] = useState<MovementStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [movError, setMovError] = useState<string | null>(null);
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+
+  const days = windowDays(range);
+  const sparkline = sparklinesByRange[range] ?? [];
+  const heatmapDays = useMemo(
+    () => (fullHeatmapDays.length > days ? fullHeatmapDays.slice(-days) : fullHeatmapDays),
+    [fullHeatmapDays, days],
+  );
+  const metricSparklines = metricSparklinesByRange[range] ?? EMPTY_SPARKLINES;
 
   const load = useCallback(async () => {
     if (!cali.sessionToken) return;
@@ -66,14 +90,22 @@ export function CaliAnalytics() {
     setMovError(null);
     const token = cali.sessionToken;
     const [st, mov] = await Promise.all([
-      api.cali.stats(token, range),
+      api.cali.stats(token, "90d"),
       api.cali.movementStats(token, 12),
     ]);
     if (st.success && st.data) {
       setSummary(st.data.summary);
-      setSparkline(st.data.sparkline);
-      setHeatmapDays(st.data.heatmapDays ?? []);
-      setMetricSparklines(st.data.metricSparklines ?? EMPTY_SPARKLINES);
+      setSparklinesByRange(st.data.sparklinesByRange ?? {
+        "7d": st.data.sparkline ?? [],
+        "30d": st.data.sparkline ?? [],
+        "90d": st.data.sparkline ?? [],
+      });
+      setMetricSparklinesByRange(st.data.metricSparklinesByRange ?? {
+        "7d": st.data.metricSparklines ?? EMPTY_SPARKLINES,
+        "30d": st.data.metricSparklines ?? EMPTY_SPARKLINES,
+        "90d": st.data.metricSparklines ?? EMPTY_SPARKLINES,
+      });
+      setFullHeatmapDays(st.data.heatmapDays ?? []);
     } else {
       cali.handleAuthError(st.code);
       setError(st.error || "Couldn't load analytics.");
@@ -84,7 +116,7 @@ export function CaliAnalytics() {
       setMovError(mov.error || "Couldn't load movement stats.");
     }
     setLoading(false);
-  }, [cali.sessionToken, cali.handleAuthError, range]);
+  }, [cali.sessionToken, cali.handleAuthError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -188,7 +220,6 @@ export function CaliAnalytics() {
               {r.toUpperCase()}
             </button>
           ))}
-          {loading && <Loader2 className="w-4 h-4 animate-spin text-[#8494A7] ml-auto" />}
         </div>
         <p className="text-[0.6rem] text-[#8494A7] mt-1.5" style={dmSans}>
           Chart window: {range.toUpperCase()} · Summary metrics use rolling 30-day rollups
@@ -286,7 +317,7 @@ export function CaliAnalytics() {
 
       {heatmapDays.length > 0 && (
         <CaliGlassPanel accent="#10b981" className="p-3 sm:p-4">
-          <CaliProgressionHeatmap data={heatmapDays} />
+          <CaliProgressionHeatmap data={heatmapDays} range={range} />
         </CaliGlassPanel>
       )}
 
