@@ -158,12 +158,6 @@ export function SponsorsTab({ wallet, sessionToken }: { wallet: string; sessionT
   const stats = useMemo(() => ({
     total: sponsors.length,
     active: sponsors.filter((s) => s.active).length,
-    title: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("title") : s.tier === "title")).length,
-    premium: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("premium") : s.tier === "premium")).length,
-    standard: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("standard") : s.tier === "standard")).length,
-    routine: sponsors.filter((s) => (s.tiers?.length ? s.tiers.includes("routine") : s.tier === "routine")).length,
-    totalImpressions: sponsors.reduce((sum, s) => sum + (s.impressions || 0), 0),
-    totalClicks: sponsors.reduce((sum, s) => sum + (s.clicks || 0), 0),
   }), [sponsors]);
 
   if (loading) {
@@ -215,31 +209,6 @@ export function SponsorsTab({ wallet, sessionToken }: { wallet: string; sessionT
           <button onClick={load} className="px-3 py-1.5 rounded-lg bg-[#4274B9]/10 border border-[#4274B9]/20 text-[#6AA3E0] text-[0.55rem] hover:bg-[#4274B9]/20 transition-all" style={{ fontFamily: "Orbitron, sans-serif" }}>
             REFRESH
           </button>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
-          <p className="text-[#8494A7] text-[0.5rem]">ACTIVE</p>
-          <p className="text-[#10b981] text-lg" style={{ fontFamily: "Orbitron, sans-serif" }}>{stats.active}</p>
-        </div>
-        <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
-          <p className="text-[#8494A7] text-[0.5rem]">BY TIER</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[#D4A843] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.title}T</span>
-            <span className="text-[#6AA3E0] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.premium}P</span>
-            <span className="text-[#8494A7] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.standard}S</span>
-            <span className="text-[#D4A843] text-xs" style={{ fontFamily: "Orbitron" }}>{stats.routine}R</span>
-          </div>
-        </div>
-        <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
-          <p className="text-[#8494A7] text-[0.5rem]">IMPRESSIONS</p>
-          <p className="text-[#6AA3E0] text-lg" style={{ fontFamily: "Orbitron, sans-serif" }}>{stats.totalImpressions.toLocaleString()}</p>
-        </div>
-        <div className="bg-[#0B1120] rounded-lg p-3 border border-[#4274B9]/10">
-          <p className="text-[#8494A7] text-[0.5rem]">CLICKS</p>
-          <p className="text-[#D4A843] text-lg" style={{ fontFamily: "Orbitron, sans-serif" }}>{stats.totalClicks.toLocaleString()}</p>
         </div>
       </div>
 

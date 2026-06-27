@@ -64,7 +64,7 @@ import { CalisthenicsAdminPage } from "../pages/calisthenics-admin";
 import { AdminWelcomeOverlay } from "./admin-welcome";
 import { AthleteOnboardedOverlay } from "./athlete-onboarded-overlay";
 import { SnapshotsTab } from "./snapshots-tab";
-import { CaliAdminStats } from "./cali/cali-admin-stats";
+import { AdminCommandCenter } from "./admin-command-center";
 import { AdminAuthEnvelope } from "./admin-auth-envelope";
 
 // ---------------------------------------------------------------------------
@@ -353,11 +353,8 @@ export function AdminPanel() {
           </div>
         </div>
 
-        {/* Live unique-IP visit counter — privacy-preserving traffic gauge */}
-        <VisitCounter wallet={session.wallet} sessionToken={session.token} />
-
-        {/* Calisthenics live stats — editor opens via Cali Editor tab only */}
-        <CaliAdminStats wallet={session.wallet} sessionToken={session.token} />
+        {/* Professional Army Command Center — Unified non-redundant master sitrep */}
+        <AdminCommandCenter wallet={session.wallet} sessionToken={session.token} />
 
         {/* Tab Navigation */}
         <div className="border-b border-[#D4A843]/10 overflow-x-auto">
