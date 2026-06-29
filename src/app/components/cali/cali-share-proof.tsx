@@ -725,7 +725,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.97, y: 10, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 260 }}
-            className="w-full max-w-[1100px] rounded-3xl overflow-hidden border"
+            className="w-full max-w-[1100px] rounded-3xl border max-h-[92vh] overflow-y-auto"
             style={{
               background: "linear-gradient(160deg, #111827, #0B1120)",
               borderColor: "rgba(212,168,67,0.35)",
@@ -734,7 +734,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: "linear-gradient(135deg, #D4A843, #B8860B)" }}>
                   <Award className="h-5 w-5 text-[#0B1120]" />
@@ -755,7 +755,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
             </div>
 
             {/* Body */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 p-4 sm:p-6">
               {/* Preview */}
               <div className="lg:col-span-3">
                 <div className="mb-3 flex items-center justify-between">
@@ -763,11 +763,11 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                   <div className="text-[10px] text-[#8494A7]">1080×1080 • ready for social</div>
                 </div>
 
-                <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/60 p-4">
+                <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/60 p-3 sm:p-4">
                   <canvas
                     ref={canvasRef}
-                    className="w-full h-auto rounded-xl shadow-inner"
-                    style={{ maxHeight: "620px", background: "#0B1120" }}
+                    className="w-full h-auto rounded-xl shadow-inner max-h-[220px] sm:max-h-[320px] lg:max-h-[620px]"
+                    style={{ background: "#0B1120" }}
                   />
                 </div>
 
@@ -777,7 +777,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
               </div>
 
               {/* Controls */}
-              <div className="lg:col-span-2 space-y-5">
+              <div className="lg:col-span-2 space-y-3 sm:space-y-5">
                 {/* Mode toggle - now fully live */}
                 <div>
                   <div className="text-[#D4A843] text-xs font-bold tracking-[2px] mb-2" style={orbitron}>STYLE</div>
@@ -811,13 +811,13 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     {isCameraOpen ? (
                       // Live camera preview (premium in-app camera, not file picker)
                       <div className="space-y-2">
-                        <div className="relative rounded-xl overflow-hidden border border-[#D4A843]/30 bg-black w-full" style={{ minHeight: '240px' }}>
+                        <div className="relative rounded-xl overflow-hidden border border-[#D4A843]/30 bg-black w-full min-h-[180px] sm:min-h-[240px]">
                           <video
                             ref={videoRef}
                             autoPlay
                             playsInline
                             muted
-                            className="w-full h-full max-h-[320px] sm:max-h-[380px] object-cover bg-black aspect-video"
+                            className="w-full h-full max-h-[240px] sm:max-h-[300px] object-cover bg-black aspect-video"
                           />
                           <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 px-2">
                             <motion.button
@@ -936,9 +936,9 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                 )}
 
                 {/* Summary - now using full real data from completed workout */}
-                <div>
+                <div className="hidden sm:block">
                   <div className="text-[#D4A843] text-xs font-bold tracking-[2px] mb-2" style={orbitron}>WORKOUT SUMMARY</div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.015] p-4 text-sm" style={dmSans}>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.015] p-3 sm:p-4 text-xs sm:text-sm" style={dmSans}>
                     <div className="flex justify-between py-0.5">
                       <span className="text-[#8494A7]">Level</span>
                       <span className="font-bold text-white">L{proof.level}</span>
