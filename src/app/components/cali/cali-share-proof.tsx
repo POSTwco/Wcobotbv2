@@ -1,14 +1,13 @@
 /**
  * CaliShareProof — WCO branded workout proof / receipt / sports card generator.
  * Pure client-side canvas. Aesthetic rebuild for premium 2026 sports card look.
- * Uses fist for small header brand + BoTB shield as bottom-right watermark (no center overlay).
+ * Uses fist for small header brand.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Download, Share2, Award, Camera, Upload, Trash2, Copy, Check, RefreshCw } from "lucide-react";
 import fistLogo from "../../../assets/brand/fist-wco.jpg";
-import botbLogo from "../../../assets/brand/botb-color.png";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -75,7 +74,6 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fistRef = useRef<HTMLImageElement | null>(null);
-  const botbRef = useRef<HTMLImageElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -170,21 +168,16 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     }
   }, [facingMode, isCameraOpen, stopCamera, startCamera]);
 
-  // Preload both logos once (fist for header, botb for bottom-right watermark)
+  // Preload fist logo once
   useEffect(() => {
-    if (fistRef.current && botbRef.current) return;
-
-    const load = (src: string, ref: React.MutableRefObject<HTMLImageElement | null>) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        ref.current = img;
-        draw();
-      };
-      img.src = src as unknown as string;
+    if (fistRef.current) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      fistRef.current = img;
+      draw();
     };
-    if (!fistRef.current) load(fistLogo as unknown as string, fistRef);
-    if (!botbRef.current) load(botbLogo as unknown as string, botbRef);
+    img.src = fistLogo as unknown as string;
   }, []);
 
   // Redraw on open, mode, data, photo or caption change
@@ -404,15 +397,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       ctx.fillText(`• ${m}`, 100, movesY + 42 + i * 34);
     });
 
-    // Footer - BoTB logo on right (no redundant POWERED BY HEDERA here, it's in the header above)
-    const botb = botbRef.current;
-    if (botb && botb.complete) {
-      ctx.globalAlpha = 0.9;
-      const logoX = W - 215;   // slid left to avoid right border
-      const logoY = H - 135;
-      ctx.drawImage(botb, logoX, logoY, 135, 52);
-      ctx.globalAlpha = 1;
-    }
+    // Footer
   }
 
   function drawSportsCard(ctx: CanvasRenderingContext2D, W: number, H: number) {
@@ -432,7 +417,6 @@ export function CaliShareProof({ open, onClose, data }: Props) {
 
     const photo = photoRef.current!;
     const fist = fistRef.current;
-    const botb = botbRef.current;
 
     // Draw user photo full-bleed (cover)
     const scale = Math.max(W / photo.width, H / photo.height);
@@ -662,15 +646,6 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.fillStyle = COLORS.gold;
     ctx.font = `500 10px 'DM Sans', sans-serif`;
     ctx.fillText("Powered by Hedera", padX, H - 42);
-
-    // BoTB shield - slid left to clear right border
-    if (botb && botb.complete) {
-      ctx.globalAlpha = 0.85;
-      const bw = 140;
-      const bh = 55;
-      ctx.drawImage(botb, W - 215, H - 100, bw, bh);
-      ctx.globalAlpha = 1;
-    }
   }
 
   async function handleDownload() {
@@ -882,7 +857,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     className={`flex-1 rounded-xl py-2 text-sm font-bold border transition ${mode === "receipt" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
                     style={dmSans}
                   >
-                    PURE RECEIPT
+                    RECEIPT
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.01 }}
@@ -891,7 +866,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     className={`flex-1 rounded-xl py-2 text-sm font-bold border transition ${mode === "selfie" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
                     style={dmSans}
                   >
-                    SELFIE SPORTS CARD
+                    SPORTS CARD
                   </motion.button>
                 </div>
 
@@ -935,25 +910,28 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => startCamera("user")}
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-[#D4A843]/40 py-2 text-xs font-bold text-white hover:bg-[#D4A843]/10 active:bg-[#D4A843]/20"
+                          className="flex-1 flex items-center justify-center rounded-xl border border-[#D4A843]/40 py-2 text-xs font-bold text-white hover:bg-[#D4A843]/10 active:bg-[#D4A843]/20"
                           style={dmSans}
+                          title="Take Photo"
                         >
-                          <Camera className="h-3.5 w-3.5" /> TAKE PHOTO
+                          <Camera className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={triggerGallery}
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2 text-xs font-bold text-white hover:bg-white/5 active:bg-white/10"
+                          className="flex-1 flex items-center justify-center rounded-xl border border-white/15 py-2 text-xs font-bold text-white hover:bg-white/5 active:bg-white/10"
                           style={dmSans}
+                          title="Choose Photo"
                         >
-                          <Upload className="h-3.5 w-3.5" /> CHOOSE PHOTO
+                          <Upload className="h-3.5 w-3.5" />
                         </button>
                         {photoSrc && (
                           <button
                             onClick={removePhoto}
-                            className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 py-2 px-3 text-xs font-bold text-red-400 hover:bg-red-500/10 active:bg-red-500/20"
+                            className="flex items-center justify-center rounded-xl border border-red-500/30 py-2 px-3 text-xs font-bold text-red-400 hover:bg-red-500/10 active:bg-red-500/20"
                             style={dmSans}
+                            title="Remove Photo"
                           >
-                            <Trash2 className="h-3.5 w-3.5" /> REMOVE
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         )}
                       </div>
@@ -992,26 +970,6 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     />
                   </div>
                 )}
-
-                {/* Compact workout stats */}
-                <div className="hidden sm:block rounded-xl border border-white/10 bg-white/[0.01] p-3 text-xs" style={dmSans}>
-                  <div className="flex justify-between py-px">
-                    <span className="text-[#8494A7]">Level</span>
-                    <span className="font-bold text-white">L{proof.level} • {proof.totalSets} sets</span>
-                  </div>
-                  <div className="flex justify-between py-px">
-                    <span className="text-[#8494A7]">Exercises</span>
-                    <span className="font-bold text-white">{proof.uniqueExercises}</span>
-                  </div>
-                  <div className="flex justify-between py-px">
-                    <span className="text-[#8494A7]">PRs • Streak</span>
-                    <span className="font-bold text-emerald-400">{proof.prCount} • {proof.streak}d</span>
-                  </div>
-                  <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
-                    <span className="text-[#8494A7]">Tier</span>
-                    <span className="font-bold text-[#D4A843]">{proof.athleteTier}</span>
-                  </div>
-                </div>
 
                 {/* Share actions */}
                 <div className="space-y-2 pt-1">
