@@ -854,7 +854,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.985 }}
                     onClick={() => setMode("receipt")}
-                    className={`flex-1 rounded-xl py-2 text-sm font-bold border transition ${mode === "receipt" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
+                    className={`flex-1 rounded-xl py-2 text-sm font-bold border transition backdrop-blur-sm vip-shimmer-overlay ${mode === "receipt" ? "bg-white/10 border-[#D4A843] text-[#D4A843]" : "bg-white/5 border-[#D4A843]/30 text-white hover:bg-white/10 hover:border-[#D4A843]/50"}`}
                     style={dmSans}
                   >
                     RECEIPT
@@ -863,7 +863,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.985 }}
                     onClick={() => setMode("selfie")}
-                    className={`flex-1 rounded-xl py-2 text-sm font-bold border transition ${mode === "selfie" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
+                    className={`flex-1 rounded-xl py-2 text-sm font-bold border transition backdrop-blur-sm vip-shimmer-overlay ${mode === "selfie" ? "bg-white/10 border-[#D4A843] text-[#D4A843]" : "bg-white/5 border-[#D4A843]/30 text-white hover:bg-white/10 hover:border-[#D4A843]/50"}`}
                     style={dmSans}
                   >
                     SPORTS CARD
@@ -978,8 +978,8 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     whileTap={{ scale: 0.985 }}
                     onClick={() => shareToPlatform("native")}
                     disabled={isGenerating}
-                    className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold disabled:opacity-60"
-                    style={{ background: "linear-gradient(135deg, #D4A843, #B8860B)", color: "#0B1120", ...dmSans }}
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold border border-[#D4A843] bg-white/5 text-[#D4A843] hover:bg-white/10 hover:border-[#D4A843]/70 disabled:opacity-60 backdrop-blur-sm vip-shimmer-overlay"
+                    style={dmSans}
                   >
                     <Share2 className="h-4 w-4" />
                     {isGenerating ? "PREPARING..." : "SHARE PROOF"}
