@@ -1,13 +1,14 @@
 /**
  * CaliShareProof — WCO branded workout proof / receipt / sports card generator.
- * Pure client-side canvas. Triggered after complete workout (finishing UI/UX touch).
- * Phase 1 scaffold: Pure Receipt mode + placeholder data + logo + basic renderer.
+ * Pure client-side canvas. Aesthetic rebuild for premium 2026 sports card look.
+ * Uses fist for small header brand + BoTB shield as bottom-right watermark (no center overlay).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Download, Share2, Award, Camera, Upload, Trash2, Copy, Check, RefreshCw } from "lucide-react";
 import fistLogo from "../../../assets/brand/fist-wco.jpg";
+import botbLogo from "../../../assets/brand/botb-color.png";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -73,11 +74,18 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const [mode, setMode] = useState<"receipt" | "selfie">("receipt");
   const [isGenerating, setIsGenerating] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const logoRef = useRef<HTMLImageElement | null>(null);
+  const fistRef = useRef<HTMLImageElement | null>(null);
+  const botbRef = useRef<HTMLImageElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  const getLevelLabel = (level: number): string => {
+    if (level === 1) return "BEGINNER";
+    if (level === 2) return "INTERMEDIATE";
+    return "ADVANCED";
+  };
   const [photoSrc, setPhotoSrc] = useState<string | null>(null);
   const [customCaption, setCustomCaption] = useState<string>("");
   const [copied, setCopied] = useState(false);
@@ -162,16 +170,21 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     }
   }, [facingMode, isCameraOpen, stopCamera, startCamera]);
 
-  // Preload logo once
+  // Preload both logos once (fist for header, botb for bottom-right watermark)
   useEffect(() => {
-    if (logoRef.current) return;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      logoRef.current = img;
-      draw();
+    if (fistRef.current && botbRef.current) return;
+
+    const load = (src: string, ref: React.MutableRefObject<HTMLImageElement | null>) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        ref.current = img;
+        draw();
+      };
+      img.src = src as unknown as string;
     };
-    img.src = fistLogo as unknown as string;
+    if (!fistRef.current) load(fistLogo as unknown as string, fistRef);
+    if (!botbRef.current) load(botbLogo as unknown as string, botbRef);
   }, []);
 
   // Redraw on open, mode, data, photo or caption change
@@ -305,14 +318,13 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.fillStyle = "rgba(212,168,67,0.08)";
     ctx.fillRect(70, 70, W - 140, 160);
 
-    // Logo (power fist)
-    const logo = logoRef.current;
-    if (logo && logo.complete) {
+    // Logo (small fist header brand only)
+    const fist = fistRef.current;
+    if (fist && fist.complete) {
       const logoW = 92;
       const logoH = 92;
-      ctx.drawImage(logo, 92, 88, logoW, logoH);
+      ctx.drawImage(fist, 92, 88, logoW, logoH);
     } else {
-      // Fallback gold square while loading
       ctx.fillStyle = COLORS.gold;
       ctx.fillRect(92, 88, 92, 92);
     }
@@ -330,19 +342,19 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.font = `600 20px 'DM Sans', sans-serif`;
     ctx.fillText("CALISTHENICS • POWERED BY HEDERA", 205, 198);
 
-    // Receipt / card title
+    // Receipt label + difficulty header (BEGINNER / INTERMEDIATE / ADVANCED)
     ctx.fillStyle = COLORS.gold;
     ctx.font = `700 22px Orbitron, sans-serif`;
     ctx.fillText("RECEIPT", 92, 270);
 
-    // Big level + status
+    const levelLabel = getLevelLabel(proof.level);
     ctx.fillStyle = COLORS.white;
-    ctx.font = `900 120px Orbitron, sans-serif`;
-    ctx.fillText(`L${proof.level}`, 92, 400);
+    ctx.font = `900 64px Orbitron, sans-serif`;
+    ctx.fillText(levelLabel, 92, 355);
 
     ctx.fillStyle = COLORS.blueLight;
-    ctx.font = `700 32px Orbitron, sans-serif`;
-    ctx.fillText("COMPLETE", 92, 445);
+    ctx.font = `700 28px Orbitron, sans-serif`;
+    ctx.fillText(`LEVEL ${proof.level} • COMPLETE`, 92, 395);
 
     // Date only (wallet removed per request - no user ID exposure)
     ctx.fillStyle = COLORS.slate;
@@ -392,15 +404,13 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       ctx.fillText(`• ${m}`, 100, movesY + 42 + i * 34);
     });
 
-    // Footer - removed redundant "OFFICIAL WCO CALISTHENICS PROOF" text (was causing overlay with moves)
-    ctx.fillStyle = COLORS.gold;
-    ctx.font = `700 18px Orbitron, sans-serif`;
-    ctx.fillText("POWERED BY HEDERA", W - 340, H - 92);
-
-    // Small fist stamp in corner (if logo ready)
-    if (logo && logo.complete) {
-      ctx.globalAlpha = 0.15;
-      ctx.drawImage(logo, W - 170, H - 170, 110, 110);
+    // Footer - BoTB logo on right (no redundant POWERED BY HEDERA here, it's in the header above)
+    const botb = botbRef.current;
+    if (botb && botb.complete) {
+      ctx.globalAlpha = 0.9;
+      const logoX = W - 215;   // slid left to avoid right border
+      const logoY = H - 135;
+      ctx.drawImage(botb, logoX, logoY, 135, 52);
       ctx.globalAlpha = 1;
     }
   }
@@ -412,16 +422,17 @@ export function CaliShareProof({ open, onClose, data }: Props) {
 
     // Premium gold frame (sports card)
     ctx.strokeStyle = COLORS.gold;
-    ctx.lineWidth = 24;
-    ctx.strokeRect(26, 26, W - 52, H - 52);
+    ctx.lineWidth = 22;
+    ctx.strokeRect(28, 28, W - 56, H - 56);
 
     // Inner blue accent line
     ctx.strokeStyle = COLORS.blue;
-    ctx.lineWidth = 5;
-    ctx.strokeRect(50, 50, W - 100, H - 100);
+    ctx.lineWidth = 4;
+    ctx.strokeRect(52, 52, W - 104, H - 104);
 
     const photo = photoRef.current!;
-    const logo = logoRef.current;
+    const fist = fistRef.current;
+    const botb = botbRef.current;
 
     // Draw user photo full-bleed (cover)
     const scale = Math.max(W / photo.width, H / photo.height);
@@ -432,90 +443,111 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.drawImage(photo, dx, dy, dw, dh);
 
     // Subtle vignette + dark overlay for text contrast (sports card depth)
-    const vignette = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.75);
-    vignette.addColorStop(0, "rgba(11,17,32,0.05)");
-    vignette.addColorStop(1, "rgba(11,17,32,0.65)");
+    const vignette = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.78);
+    vignette.addColorStop(0, "rgba(11,17,32,0.04)");
+    vignette.addColorStop(1, "rgba(11,17,32,0.68)");
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, W, H);
 
-    // Stronger bottom gradient for stats area
-    const bottomGrad = ctx.createLinearGradient(0, H * 0.52, 0, H);
-    bottomGrad.addColorStop(0, "rgba(11,17,32,0.25)");
-    bottomGrad.addColorStop(0.55, "rgba(11,17,32,0.88)");
-    bottomGrad.addColorStop(1, "rgba(11,17,32,0.97)");
+    // Stronger bottom gradient for premium panel area
+    const bottomGrad = ctx.createLinearGradient(0, H * 0.48, 0, H);
+    bottomGrad.addColorStop(0, "rgba(11,17,32,0.18)");
+    bottomGrad.addColorStop(0.52, "rgba(11,17,32,0.90)");
+    bottomGrad.addColorStop(1, "rgba(11,17,32,0.98)");
     ctx.fillStyle = bottomGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Large faded power fist watermark over the selfie (branded overlay)
-    if (logo && logo.complete) {
-      ctx.globalAlpha = 0.09;
-      const wm = 420;
-      ctx.drawImage(logo, (W - wm) / 2, H * 0.12, wm, wm);
-      ctx.globalAlpha = 1;
+    // Top branding strip (over selfie) - clean premium header
+    ctx.fillStyle = "rgba(9,14,26,0.72)";
+    ctx.fillRect(52, 52, W - 104, 128);
+
+    // Small fist brand on left
+    if (fist && fist.complete) {
+      ctx.drawImage(fist, 70, 64, 78, 78);
     }
 
-    // Top branding strip (over selfie)
-    ctx.fillStyle = "rgba(11,17,32,0.55)";
-    ctx.fillRect(50, 50, W - 100, 120);
-
-    if (logo && logo.complete) {
-      ctx.drawImage(logo, 68, 62, 88, 88);
-    }
+    // WCO small
     ctx.fillStyle = COLORS.gold;
-    ctx.font = `700 26px Orbitron, sans-serif`;
-    ctx.fillText("WCO", 175, 98);
+    ctx.font = `700 22px Orbitron, sans-serif`;
+    ctx.fillText("WCO", 162, 88);
 
+    // Main difficulty header (BEGINNER / INTERMEDIATE / ADVANCED) - 2026 sports card style
+    const levelLabel = getLevelLabel(proof.level);
+    ctx.fillStyle = COLORS.gold;
+    ctx.font = `900 46px Orbitron, sans-serif`;
+    ctx.fillText(levelLabel, 162, 128);
+
+    // Sub: LEVEL + COMPLETE
     ctx.fillStyle = COLORS.white;
-    ctx.font = `900 58px Orbitron, sans-serif`;
-    ctx.fillText(`L${proof.level}`, 175, 148);
+    ctx.font = `700 22px Orbitron, sans-serif`;
+    ctx.fillText(`LEVEL ${proof.level}  •  COMPLETE`, 162, 156);
 
-    ctx.fillStyle = COLORS.gold;
-    ctx.font = `700 26px Orbitron, sans-serif`;
-    ctx.fillText("COMPLETE", 175, 175);
+    // Bottom premium stats panel — professional, translucent, with soft glow
+    const panelTop = H - 355;
+    const panelH = 318;
+    ctx.fillStyle = "rgba(11, 17, 32, 0.82)";
+    ctx.fillRect(48, panelTop, W - 96, panelH);
 
-    // Bottom premium stats container (glass-like dark panel with gold trim)
-    const panelTop = H - 340;
-    const panelH = 310;
-    ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
-    ctx.fillRect(45, panelTop, W - 90, panelH);
-
-    // Gold border for container
-    ctx.strokeStyle = COLORS.gold;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(45, panelTop, W - 90, panelH);
-
-    // Subtle inner border
-    ctx.strokeStyle = "rgba(212,168,67,0.25)";
+    // Subtle tactical grid texture inside panel (matching pure receipt)
+    ctx.strokeStyle = "rgba(212,168,67,0.045)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(52, panelTop + 7, W - 104, panelH - 14);
+    for (let x = 56; x < W - 56; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, panelTop + 8);
+      ctx.lineTo(x, panelTop + panelH - 8);
+      ctx.stroke();
+    }
+    for (let y = panelTop + 8; y < panelTop + panelH - 8; y += 40) {
+      ctx.beginPath();
+      ctx.moveTo(56, y);
+      ctx.lineTo(W - 56, y);
+      ctx.stroke();
+    }
 
-    const padX = 65;
-    let curY = panelTop + 22;
+    // Soft gold outer glow border
+    ctx.save();
+    ctx.shadowColor = "rgba(212, 168, 67, 0.45)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = COLORS.gold;
+    ctx.lineWidth = 3.5;
+    ctx.strokeRect(48, panelTop, W - 96, panelH);
+    ctx.restore();
 
-    // Header
+    // Subtle inner line
+    ctx.strokeStyle = "rgba(212,168,67,0.22)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(56, panelTop + 8, W - 112, panelH - 16);
+
+    const padX = 68;
+    let curY = panelTop + 24;
+
+    // Panel header — cleaner
     ctx.fillStyle = COLORS.gold;
-    ctx.font = `700 18px Orbitron, sans-serif`;
-    ctx.fillText("OFFICIAL WCO SPORTS CARD", padX, curY);
+    ctx.font = `700 15px Orbitron, sans-serif`;
+    ctx.fillText("Athlete routine stats", padX, curY);
 
-    curY += 22;
+    curY += 20;
     ctx.fillStyle = COLORS.slate;
-    ctx.font = `500 13px 'DM Sans', sans-serif`;
+    ctx.font = `500 12px 'DM Sans', sans-serif`;
     ctx.fillText(formatDate(proof.completedAt), padX, curY);
 
     // Divider
-    curY += 12;
-    ctx.strokeStyle = "rgba(212,168,67,0.35)";
+    curY += 13;
+    ctx.strokeStyle = "rgba(212,168,67,0.32)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(padX, curY);
-    ctx.lineTo(W - 65, curY);
+    ctx.lineTo(W - 68, curY);
     ctx.stroke();
 
-    // Stats grid - 3 columns x 2 rows of mini containers
-    curY += 18;
-    const colW = 170;
+    // Stats — evenly spaced, larger professional translucent containers with glow
+    curY += 16;
+    const statsAvail = W - 136;
     const colGap = 18;
-    const rowH = 58;
+    const colW = Math.floor((statsAvail - 2 * colGap) / 3);
+    const rowH = 62;
 
     const stats = [
       { label: "SETS", val: String(proof.totalSets), clr: COLORS.gold },
@@ -526,74 +558,119 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       { label: "PULL", val: String(proof.pullCount ?? 0), clr: "#10b981" },
     ];
 
+    const drawRounded = (x, y, w, h, r) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    };
+
     for (let i = 0; i < 6; i++) {
       const col = i % 3;
       const row = Math.floor(i / 3);
       const sx = padX + col * (colW + colGap);
-      const sy = curY + row * (rowH + 8);
+      const sy = curY + row * (rowH + 9);
 
-      // Mini stat container
-      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-      ctx.fillRect(sx, sy, colW, rowH);
-      ctx.strokeStyle = "rgba(212,168,67,0.4)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(sx, sy, colW, rowH);
+      // translucent container
+      ctx.fillStyle = "rgba(15, 23, 42, 0.58)";
+      drawRounded(sx, sy, colW, rowH, 8);
+      ctx.fill();
 
-      // Label
+      // soft gold glow border
+      ctx.save();
+      ctx.shadowColor = "rgba(212, 168, 67, 0.35)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.strokeStyle = "rgba(212,168,67,0.55)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+
+      // label (cleaner)
       ctx.fillStyle = stats[i].clr;
-      ctx.font = `600 10px 'DM Sans', sans-serif`;
-      ctx.fillText(stats[i].label, sx + 8, sy + 14);
+      ctx.font = `600 11px 'DM Sans', sans-serif`;
+      ctx.fillText(stats[i].label, sx + 14, sy + 18);
 
-      // Value
+      // value (cleaner, stronger)
       ctx.fillStyle = COLORS.white;
-      ctx.font = `700 20px Orbitron, sans-serif`;
-      ctx.fillText(stats[i].val, sx + 8, sy + 38);
+      ctx.font = `700 22px Orbitron, sans-serif`;
+      ctx.fillText(stats[i].val, sx + 14, sy + 44);
     }
 
-    // Tier badge container
-    curY += 2 * (rowH + 8) + 12;
+    // Tier row — elegant translucent bar with glow
+    curY += 2 * (rowH + 9) + 8;
     const tierH = 32;
-    ctx.fillStyle = "rgba(212,168,67,0.12)";
-    ctx.fillRect(padX, curY, W - 130, tierH);
+    const tierWidth = W - 136;
+
+    ctx.save();
+    ctx.shadowColor = "rgba(212,168,67,0.4)";
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = "rgba(212,168,67,0.09)";
+    ctx.fillRect(padX, curY, tierWidth, tierH);
     ctx.strokeStyle = COLORS.gold;
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(padX, curY, W - 130, tierH);
+    ctx.strokeRect(padX, curY, tierWidth, tierH);
+    ctx.restore();
 
     ctx.fillStyle = COLORS.gold;
-    ctx.font = `600 11px 'DM Sans', sans-serif`;
-    ctx.fillText("TIER", padX + 10, curY + 12);
+    ctx.font = `600 10px 'DM Sans', sans-serif`;
+    ctx.fillText("ATHLETE TIER", padX + 12, curY + 13);
 
+    // Center the tier value
+    const tierValue = (proof.athleteTier || "UNRANKED").toUpperCase();
+    const tierCenterX = padX + tierWidth / 2;
+
+    ctx.textAlign = "center";
     ctx.fillStyle = COLORS.white;
-    ctx.font = `700 18px Orbitron, sans-serif`;
-    ctx.fillText((proof.athleteTier || "UNRANKED").toUpperCase(), padX + 55, curY + 13);
+    ctx.font = `700 17px Orbitron, sans-serif`;
+    ctx.fillText(tierValue, tierCenterX, curY + 21);
+    ctx.textAlign = "left";
 
-    // Moves line
-    curY += tierH + 10;
+    // Moves line — cleaner
+    curY += tierH + 18;
     const moves = (proof.topMoves || []).slice(0, 3);
     if (moves.length > 0) {
+      ctx.fillStyle = COLORS.gold;
+      ctx.font = `600 12px 'DM Sans', sans-serif`;
+      ctx.fillText("MOVES", padX, curY);
       ctx.fillStyle = COLORS.slate;
-      ctx.font = `500 11px 'DM Sans', sans-serif`;
-      ctx.fillText("MOVES: " + moves.join("  •  "), padX, curY);
+      ctx.font = `500 14px 'DM Sans', sans-serif`;
+      ctx.fillText(moves.join("  •  "), padX + 58, curY);
     }
 
-    // Caption (tasteful quote if provided) - only on selfie sports card
+    // Optional caption (selfie only)
     const cap = customCaption.trim();
     if (cap) {
-      curY += 16;
+      curY += 15;
       ctx.fillStyle = COLORS.slate;
-      ctx.font = `400 11px 'DM Sans', sans-serif`;
-      const dcap = cap.length > 55 ? cap.slice(0,52) + "..." : cap;
+      ctx.font = `400 10px 'DM Sans', sans-serif`;
+      const dcap = cap.length > 52 ? cap.slice(0, 49) + "..." : cap;
       ctx.fillText(`“${dcap}”`, padX, curY);
     }
 
-    // Footer - simplified per request: bottom left is golden "; Powered by Hedera"
+    // Footer text - no leading semicolon
     ctx.fillStyle = COLORS.gold;
-    ctx.font = `500 11px 'DM Sans', sans-serif`;
-    ctx.fillText("; Powered by Hedera", padX, H - 48);
+    ctx.font = `500 10px 'DM Sans', sans-serif`;
+    ctx.fillText("Powered by Hedera", padX, H - 42);
 
-    ctx.fillStyle = COLORS.gold;
-    ctx.font = `600 11px Orbitron, sans-serif`;
-    ctx.fillText("WCO CALISTHENICS", W - 200, H - 48);
+    // BoTB shield - slid left to clear right border
+    if (botb && botb.complete) {
+      ctx.globalAlpha = 0.85;
+      const bw = 140;
+      const bh = 55;
+      ctx.drawImage(botb, W - 215, H - 100, bw, bh);
+      ctx.globalAlpha = 1;
+    }
   }
 
   async function handleDownload() {
@@ -626,73 +703,96 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     return `Just crushed my WCO Level ${proof.level} workout — ${proof.totalSets} sets across ${proof.uniqueExercises} moves${moves ? ` (${moves})` : ""}. ${proof.prCount} PRs. ${proof.streak}-day streak. Real proof on Hedera. #WCO #Cali #HederaWeb3`;
   }
 
-  async function shareToPlatform(platform: string) {
+  // Centralized proof file + text generator
+  async function getProofFileAndText() {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/png", 0.98)
+    );
+    if (!blob) return null;
+    const filename = `wco-proof-l${proof.level}.png`;
+    const file = new File([blob], filename, { type: "image/png" });
+    const text = getShareText();
+    return { blob, file, filename, text };
+  }
 
+  async function shareToPlatform(platform: string) {
     setShareError(null);
     setIsGenerating(true);
+
     try {
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/png", 0.98)
-      );
-      if (!blob) return;
-
-      const filename = `wco-proof-l${proof.level}.png`;
-      const file = new File([blob], filename, { type: "image/png" });
-      const text = getShareText();
-
-      // Try native Web Share with file (great on mobile, supports image + text)
-      if (platform === "native" || !platform) {
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              text,
-              title: "WCO Workout Proof",
-            });
-            return; // success
-          } catch (e) {
-            // user cancelled or not supported, fall through
-          }
-        }
+      const proof = await getProofFileAndText();
+      if (!proof) {
+        setShareError("Could not generate proof image.");
+        return;
       }
 
-      // Always download for manual attach (FB/IG web don't support auto image attach)
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      const { blob, file, filename, text } = proof;
 
-      // Copy caption to clipboard for easy paste (premium UX)
-      try {
-        await navigator.clipboard?.writeText(text);
-      } catch {}
+      const doDownloadAndCopy = () => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      // Platform-specific intents + feedback
-      const platformName = platform === "fb" ? "Facebook" : platform === "ig" ? "Instagram" : "X";
+        try {
+          navigator.clipboard?.writeText(text);
+        } catch {}
+      };
+
+      if (platform === "native") {
+        // Big SHARE PROOF button uses the best experience (system share sheet with actual photo)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], text, title: "WCO Workout Proof" });
+            setShareFeedback("✅ Photo + caption shared!");
+            setTimeout(() => setShareFeedback(null), 3000);
+            return;
+          } catch (e: any) {
+            if (e.name === "AbortError") return;
+          }
+        }
+        doDownloadAndCopy();
+        setShareFeedback("✅ PNG downloaded + caption copied. Use share sheet or attach the file.");
+        setTimeout(() => setShareFeedback(null), 4000);
+        return;
+      }
+
+      // Dedicated buttons (X / Facebook / Instagram): direct per-app behavior
+      // Download + copy always happens so the photo is ready.
+      // Then open the specific app (deep link on mobile) or site.
+      doDownloadAndCopy();
+
       if (platform === "x") {
         window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
-        setShareFeedback(`✅ Image downloaded. Caption copied. Paste & attach on X.`);
+        setShareFeedback("✅ PNG downloaded + caption copied. X opened with your text — attach the PNG.");
       } else if (platform === "fb") {
         window.open(
           `https://www.facebook.com/sharer/sharer.php?u=https://wcorg.io/calisthenics&quote=${encodeURIComponent(text)}`,
           "_blank"
         );
-        setShareFeedback(`✅ Image downloaded & caption copied! On Facebook, attach the PNG and the message may prefill.`);
+        setShareFeedback("✅ PNG downloaded + caption copied. Facebook opened with the message — attach the PNG.");
       } else if (platform === "ig") {
-        setShareFeedback(`✅ Image downloaded & caption copied! Open the Instagram app, create post, and attach the PNG.`);
-      } else if (platform === "native") {
-        // already handled
+        const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+        if (isMobile) {
+          // Try to open the Instagram app directly
+          window.location.href = "instagram://library";
+          setTimeout(() => window.open("https://www.instagram.com/", "_blank"), 900);
+        } else {
+          window.open("https://www.instagram.com/", "_blank");
+        }
+        setShareFeedback("✅ PNG downloaded + caption copied. Instagram opened — create a post and attach the PNG (in your recent photos).");
       }
-      setTimeout(() => setShareFeedback(null), 4500);
+
+      setTimeout(() => setShareFeedback(null), 5500);
     } catch (e) {
-      setShareError("Share failed. Image was downloaded as fallback.");
-      setTimeout(() => setShareError(null), 2500);
+      setShareError("Share failed. PNG downloaded as fallback.");
+      setTimeout(() => setShareError(null), 3000);
     } finally {
       setIsGenerating(false);
     }
@@ -758,215 +858,162 @@ export function CaliShareProof({ open, onClose, data }: Props) {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 p-4 sm:p-6">
               {/* Preview */}
               <div className="lg:col-span-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="text-[#D4A843] text-xs font-bold tracking-[2px]" style={orbitron}>LIVE PREVIEW — {mode === "receipt" ? "RECEIPT" : "SPORTS CARD"}</div>
-                  <div className="text-[10px] text-[#8494A7]">1080×1080 • ready for social</div>
+                <div className="mb-2 text-[#D4A843] text-[10px] font-bold tracking-[2px] pl-1" style={orbitron}>
+                  PREVIEW
                 </div>
 
-                <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/60 p-3 sm:p-4">
+                <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/70 p-2 sm:p-3 shadow-2xl">
                   <canvas
                     ref={canvasRef}
-                    className="w-full h-auto rounded-xl shadow-inner max-h-[220px] sm:max-h-[320px] lg:max-h-[620px]"
+                    className="w-full h-auto rounded-xl max-h-[220px] sm:max-h-[320px] lg:max-h-[620px]"
                     style={{ background: "#0B1120" }}
                   />
-                </div>
-
-                <div className="mt-3 text-[10px] text-[#8494A7] text-center" style={dmSans}>
-                  This image is generated locally in your browser using real workout data. Nothing is uploaded.
                 </div>
               </div>
 
               {/* Controls */}
-              <div className="lg:col-span-2 space-y-3 sm:space-y-5">
-                {/* Mode toggle - now fully live */}
-                <div>
-                  <div className="text-[#D4A843] text-xs font-bold tracking-[2px] mb-2" style={orbitron}>STYLE</div>
-                  <div className="flex gap-2">
-                    <motion.button
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.985 }}
-                      onClick={() => setMode("receipt")}
-                      className={`flex-1 rounded-xl py-2.5 text-sm font-bold border transition ${mode === "receipt" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
-                      style={dmSans}
-                    >
-                      PURE RECEIPT
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.985 }}
-                      onClick={() => setMode("selfie")}
-                      className={`flex-1 rounded-xl py-2.5 text-sm font-bold border transition ${mode === "selfie" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
-                      style={dmSans}
-                    >
-                      SELFIE SPORTS CARD
-                    </motion.button>
-                  </div>
+              <div className="lg:col-span-2 space-y-4">
+                {/* Mode toggle */}
+                <div className="flex gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.985 }}
+                    onClick={() => setMode("receipt")}
+                    className={`flex-1 rounded-xl py-2 text-sm font-bold border transition ${mode === "receipt" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
+                    style={dmSans}
+                  >
+                    PURE RECEIPT
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.985 }}
+                    onClick={() => setMode("selfie")}
+                    className={`flex-1 rounded-xl py-2 text-sm font-bold border transition ${mode === "selfie" ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]" : "border-white/15 text-white hover:bg-white/5"}`}
+                    style={dmSans}
+                  >
+                    SELFIE SPORTS CARD
+                  </motion.button>
                 </div>
 
-                {/* Photo / Selfie controls (Phase 3) - now with real in-app camera */}
+                {/* Selfie photo controls */}
                 {mode === "selfie" && (
-                  <div>
-                    <div className="text-[#D4A843] text-xs font-bold tracking-[2px] mb-2" style={orbitron}>YOUR SELFIE</div>
-
+                  <div className="space-y-2">
                     {isCameraOpen ? (
-                      // Live camera preview (premium in-app camera, not file picker)
-                      <div className="space-y-2">
-                        <div className="relative rounded-xl overflow-hidden border border-[#D4A843]/30 bg-black w-full min-h-[180px] sm:min-h-[240px]">
-                          <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="w-full h-full max-h-[240px] sm:max-h-[300px] object-cover bg-black aspect-video"
-                          />
-                          <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 px-2">
-                            <motion.button
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={captureFromCamera}
-                              className="px-5 py-2.5 bg-[#D4A843] text-[#0B1120] rounded-full text-sm font-bold flex items-center gap-1.5 active:scale-95 transition-transform touch-manipulation"
-                              style={dmSans}
-                            >
-                              <Camera className="h-4 w-4" /> SNAP
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={toggleCamera}
-                              className="px-4 py-2.5 bg-white/10 text-white rounded-full text-sm font-bold flex items-center gap-1.5 border border-white/30 active:scale-95 transition-transform touch-manipulation"
-                              style={dmSans}
-                            >
-                              <RefreshCw className="h-4 w-4" /> FLIP CAM
-                            </motion.button>
-                            <button
-                              onClick={stopCamera}
-                              className="px-4 py-2.5 rounded-full text-sm font-bold border border-white/30 text-white active:scale-95 transition-transform touch-manipulation"
-                              style={dmSans}
-                            >
-                              CANCEL
-                            </button>
-                          </div>
-                        </div>
-                        <div className="text-[10px] text-center text-[#8494A7]" style={dmSans}>
-                          Point camera • Tap FLIP CAM to reverse • SNAP to capture
+                      <div className="relative rounded-xl overflow-hidden border border-[#D4A843]/30 bg-black w-full min-h-[170px] sm:min-h-[210px]">
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full max-h-[210px] sm:max-h-[260px] object-cover bg-black aspect-video"
+                        />
+                        <div className="absolute bottom-2.5 left-0 right-0 flex justify-center gap-1.5 px-2">
+                          <button
+                            onClick={captureFromCamera}
+                            className="px-4 py-2 bg-[#D4A843] text-[#0B1120] rounded-full text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform touch-manipulation"
+                            style={dmSans}
+                          >
+                            <Camera className="h-3.5 w-3.5" /> SNAP
+                          </button>
+                          <button
+                            onClick={toggleCamera}
+                            className="px-3 py-2 bg-white/10 text-white rounded-full text-xs font-bold flex items-center gap-1 border border-white/30 active:scale-95 transition-transform touch-manipulation"
+                            style={dmSans}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" /> FLIP
+                          </button>
+                          <button
+                            onClick={stopCamera}
+                            className="px-3 py-2 rounded-full text-xs font-bold border border-white/30 text-white active:scale-95 transition-transform touch-manipulation"
+                            style={dmSans}
+                          >
+                            CANCEL
+                          </button>
                         </div>
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        <motion.button
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.985 }}
+                        <button
                           onClick={() => startCamera("user")}
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-[#D4A843]/40 py-2.5 text-sm font-bold text-white hover:bg-[#D4A843]/10 active:bg-[#D4A843]/20"
+                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-[#D4A843]/40 py-2 text-xs font-bold text-white hover:bg-[#D4A843]/10 active:bg-[#D4A843]/20"
                           style={dmSans}
                         >
-                          <Camera className="h-4 w-4" /> TAKE PHOTO (FRONT CAM)
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.985 }}
+                          <Camera className="h-3.5 w-3.5" /> TAKE PHOTO
+                        </button>
+                        <button
                           onClick={triggerGallery}
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2.5 text-sm font-bold text-white hover:bg-white/5 active:bg-white/10"
+                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2 text-xs font-bold text-white hover:bg-white/5 active:bg-white/10"
                           style={dmSans}
                         >
-                          <Upload className="h-4 w-4" /> CHOOSE PHOTO
-                        </motion.button>
+                          <Upload className="h-3.5 w-3.5" /> CHOOSE PHOTO
+                        </button>
                         {photoSrc && (
-                          <motion.button
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.985 }}
+                          <button
                             onClick={removePhoto}
-                            className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 py-2.5 px-4 text-sm font-bold text-red-400 hover:bg-red-500/10 active:bg-red-500/20"
+                            className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 py-2 px-3 text-xs font-bold text-red-400 hover:bg-red-500/10 active:bg-red-500/20"
                             style={dmSans}
                           >
-                            <Trash2 className="h-4 w-4" /> REMOVE
-                          </motion.button>
+                            <Trash2 className="h-3.5 w-3.5" /> REMOVE
+                          </button>
                         )}
                       </div>
                     )}
 
                     {photoSrc && !isCameraOpen && (
-                      <div className="mt-2 flex items-center gap-3">
-                        <img
-                          src={photoSrc}
-                          alt="your selfie preview"
-                          className="w-14 h-14 rounded-lg object-cover border border-[#D4A843]/40"
-                        />
-                        <div className="text-[10px] text-emerald-400 leading-tight" style={dmSans}>
-                          Selfie ready.<br />Preview updates live.
-                        </div>
-                      </div>
-                    )}
-                    {!photoSrc && !isCameraOpen && (
-                      <div className="mt-1 text-[10px] text-amber-400" style={dmSans}>
-                        TAKE opens live front camera • FLIP CAM for rear • Best on mobile in good light
+                      <div className="flex items-center gap-2 pt-1">
+                        <img src={photoSrc} alt="selfie preview" className="w-10 h-10 rounded-md object-cover border border-[#D4A843]/30" />
+                        <span className="text-[10px] text-emerald-400" style={dmSans}>Selfie ready</span>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Caption customization - only for selfie sports card (not pure receipt) */}
+                {/* Caption (selfie only) */}
                 {mode === "selfie" && (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-[#D4A843] text-xs font-bold tracking-[2px]" style={orbitron}>CAPTION</div>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.985 }}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-[#D4A843] text-[10px] font-bold tracking-[1px]" style={orbitron}>CAPTION</div>
+                      <button
                         onClick={copyCaption}
-                        className="flex items-center gap-1 text-[10px] text-[#6AA3E0] hover:text-white transition"
+                        className="flex items-center gap-1 text-[10px] text-[#6AA3E0] hover:text-white"
                         style={dmSans}
                       >
                         {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                         {copied ? "COPIED" : "COPY"}
-                      </motion.button>
+                      </button>
                     </div>
                     <textarea
                       value={customCaption}
                       onChange={(e) => setCustomCaption(e.target.value)}
-                      placeholder="Optional: customize the message before sharing..."
-                      className="w-full text-xs p-2 rounded-lg bg-black/30 border border-white/10 text-[#E8ECF0] placeholder:text-[#8494A7]/60 resize-y min-h-[44px]"
+                      placeholder="Optional caption..."
+                      className="w-full text-xs p-2 rounded-lg bg-black/30 border border-white/10 text-[#E8ECF0] placeholder:text-[#8494A7]/50 resize-y min-h-[40px]"
                       style={dmSans}
                       rows={2}
                     />
-                    <div className="text-[9px] text-[#8494A7] mt-1" style={dmSans}>
-                      Leave empty to use auto-generated text with your real workout stats.
-                    </div>
                   </div>
                 )}
 
-                {/* Summary - now using full real data from completed workout */}
-                <div className="hidden sm:block">
-                  <div className="text-[#D4A843] text-xs font-bold tracking-[2px] mb-2" style={orbitron}>WORKOUT SUMMARY</div>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.015] p-3 sm:p-4 text-xs sm:text-sm" style={dmSans}>
-                    <div className="flex justify-between py-0.5">
-                      <span className="text-[#8494A7]">Level</span>
-                      <span className="font-bold text-white">L{proof.level}</span>
-                    </div>
-                    <div className="flex justify-between py-0.5">
-                      <span className="text-[#8494A7]">Sets logged</span>
-                      <span className="font-bold text-white">{proof.totalSets}</span>
-                    </div>
-                    <div className="flex justify-between py-0.5">
-                      <span className="text-[#8494A7]">Unique exercises</span>
-                      <span className="font-bold text-white">{proof.uniqueExercises}</span>
-                    </div>
-                    <div className="flex justify-between py-0.5">
-                      <span className="text-[#8494A7]">PRs hit</span>
-                      <span className="font-bold text-emerald-400">{proof.prCount}</span>
-                    </div>
-                    <div className="flex justify-between py-0.5">
-                      <span className="text-[#8494A7]">Current streak</span>
-                      <span className="font-bold text-[#D4A843]">{proof.streak} days</span>
-                    </div>
-                    <div className="flex justify-between pt-2 mt-2 border-t border-white/10">
-                      <span className="text-[#8494A7]">Athlete tier</span>
-                      <span className="font-bold text-[#D4A843]">{proof.athleteTier}</span>
-                    </div>
+                {/* Compact workout stats */}
+                <div className="hidden sm:block rounded-xl border border-white/10 bg-white/[0.01] p-3 text-xs" style={dmSans}>
+                  <div className="flex justify-between py-px">
+                    <span className="text-[#8494A7]">Level</span>
+                    <span className="font-bold text-white">L{proof.level} • {proof.totalSets} sets</span>
+                  </div>
+                  <div className="flex justify-between py-px">
+                    <span className="text-[#8494A7]">Exercises</span>
+                    <span className="font-bold text-white">{proof.uniqueExercises}</span>
+                  </div>
+                  <div className="flex justify-between py-px">
+                    <span className="text-[#8494A7]">PRs • Streak</span>
+                    <span className="font-bold text-emerald-400">{proof.prCount} • {proof.streak}d</span>
+                  </div>
+                  <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
+                    <span className="text-[#8494A7]">Tier</span>
+                    <span className="font-bold text-[#D4A843]">{proof.athleteTier}</span>
                   </div>
                 </div>
 
-                {/* Actions - Phase 5 full sharing */}
+                {/* Share actions */}
                 <div className="space-y-2 pt-1">
                   <motion.button
                     whileHover={{ scale: 1.01 }}
@@ -977,7 +1024,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     style={{ background: "linear-gradient(135deg, #D4A843, #B8860B)", color: "#0B1120", ...dmSans }}
                   >
                     <Share2 className="h-4 w-4" />
-                    {isGenerating ? "PREPARING..." : "SHARE PROOF (Native / File)"}
+                    {isGenerating ? "PREPARING..." : "SHARE PROOF"}
                   </motion.button>
 
                   <motion.button
@@ -985,73 +1032,69 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     whileTap={{ scale: 0.985 }}
                     onClick={handleDownload}
                     disabled={isGenerating}
-                    className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 text-sm font-bold border border-white/15 text-white hover:bg-white/5 disabled:opacity-60"
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl py-2 text-sm font-bold border border-white/15 text-white hover:bg-white/5 disabled:opacity-60"
                     style={dmSans}
                   >
                     <Download className="h-4 w-4" />
-                    {isGenerating ? "PREPARING PNG..." : "DOWNLOAD PNG"}
+                    {isGenerating ? "PREPARING..." : "DOWNLOAD PNG"}
                   </motion.button>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.985 }}
                       onClick={() => shareToPlatform("x")}
                       disabled={isGenerating}
-                      className="flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2.5 text-xs font-bold text-white hover:bg-white/5 disabled:opacity-60"
+                      className="py-2.5 rounded-xl border border-white/15 flex items-center justify-center hover:bg-white/5 disabled:opacity-60"
+                      title="Share to X"
                       style={dmSans}
                     >
-                      <Share2 className="h-3.5 w-3.5" /> X / TWITTER
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25l-7.451 9.06L4.5 2.25H1.5l6.9 8.4L1.5 21.75h3l7.2-8.76 5.55 6.76h3l-7.2-8.76 7.2-8.76h-3z" />
+                      </svg>
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.985 }}
                       onClick={() => shareToPlatform("fb")}
                       disabled={isGenerating}
-                      className="flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2.5 text-xs font-bold text-white hover:bg-white/5 disabled:opacity-60"
+                      className="py-2.5 rounded-xl border border-white/15 flex items-center justify-center hover:bg-white/5 disabled:opacity-60"
+                      title="Share to Facebook"
                       style={dmSans}
                     >
-                      <Share2 className="h-3.5 w-3.5" /> FACEBOOK
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2">
+                        <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.03V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" />
+                      </svg>
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.985 }}
                       onClick={() => shareToPlatform("ig")}
                       disabled={isGenerating}
-                      className="flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2.5 text-xs font-bold text-white hover:bg-white/5 disabled:opacity-60"
+                      className="py-2.5 rounded-xl border border-white/15 flex items-center justify-center hover:bg-white/5 disabled:opacity-60"
+                      title="Share to Instagram"
                       style={dmSans}
                     >
-                      <Share2 className="h-3.5 w-3.5" /> INSTAGRAM
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+                      </svg>
                     </motion.button>
                   </div>
 
-                  <p className="text-[10px] leading-snug text-center text-[#8494A7] pt-1" style={dmSans}>
-                    Native share sends the image + caption directly where supported.<br />Otherwise downloads + opens platform intent. All local.
-                  </p>
                   {shareError && (
-                    <div className="text-[10px] text-red-400 text-center" style={dmSans}>{shareError}</div>
+                    <div className="text-[10px] text-red-400 text-center pt-1" style={dmSans}>{shareError}</div>
                   )}
                   {shareFeedback && (
-                    <div className="text-[10px] text-emerald-400 text-center mt-1" style={dmSans}>{shareFeedback}</div>
+                    <div className="text-[10px] text-emerald-400 text-center pt-1" style={dmSans}>{shareFeedback}</div>
                   )}
                 </div>
 
-                {/* Hidden input only for CHOOSE PHOTO (gallery). TAKE PHOTO now uses live getUserMedia camera preview */}
-                <input
-                  ref={galleryInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoSelect}
-                  className="hidden"
-                />
+                <input ref={galleryInputRef} type="file" accept="image/*" onChange={handlePhotoSelect} className="hidden" />
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="border-t border-white/10 px-6 py-3 text-[10px] text-[#8494A7] flex items-center justify-between" style={dmSans}>
-              <div>Real data • Generated locally • WCO official branding</div>
-              <div className="text-[#D4A843]/70">POWER FIST EDITION</div>
-            </div>
           </motion.div>
         </motion.div>
       )}

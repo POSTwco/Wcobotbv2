@@ -7,6 +7,7 @@ import { useEliteSession } from "./elite-context";
 import { CaliExerciseCard } from "../cali/cali-exercise-card";
 import { CaliLoader } from "../cali/cali-loader";
 import { getAvatarGender } from "../../lib/cali-avatar-prefs";
+import { CaliShareProof } from "../cali/cali-share-proof";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -22,6 +23,10 @@ export function EliteWorkout() {
   const [savingExercise, setSavingExercise] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [activeBlock, setActiveBlock] = useState(0);
+
+  // Share Your Proof (full parity with cali routines)
+  const [showShareProof, setShowShareProof] = useState(false);
+  const [proofData, setProofData] = useState<any>(null);
 
   useEffect(() => {
     if (!elite.sessionToken || !id) return;
@@ -90,13 +95,52 @@ export function EliteWorkout() {
       if (a.note?.trim()) row.note = a.note.trim();
       bulk.push(row);
     }
+    const completedAt = new Date().toISOString();
     const res = await api.elite.logSets(elite.sessionToken, plan.workoutId, bulk, {
       completed: true,
-      completedAt: new Date().toISOString(),
+      completedAt,
     });
     setCompleting(false);
-    if (res.success) toast.success("Elite session complete — vault logged.");
-    else toast.error(res.error || "Complete failed");
+
+    if (res.success) {
+      toast.success("Elite session complete — vault logged.");
+
+      // Build real snapshot for Share Your Proof (all data from the just-completed elite plan)
+      let pushCount = 0;
+      let pullCount = 0;
+      const exerciseNames: string[] = [];
+      plan.blocks.forEach((b: any) => {
+        b.items.forEach((it: any) => {
+          const name = it.name || it.exerciseId || "Move";
+          exerciseNames.push(name);
+          const cat = (it.category || "").toLowerCase();
+          const setsForItem = it.sets || 1;
+          if (cat.includes("push")) pushCount += setsForItem;
+          if (cat.includes("pull")) pullCount += setsForItem;
+        });
+      });
+      const uniqueExercises = Array.from(new Set(exerciseNames));
+      const topMoves = uniqueExercises.slice(0, 5);
+      const totalSets = bulk.length > 0 ? bulk.length : setsTotal;
+
+      const snapshotProof = {
+        level: 3 as const, // Elite sessions treated as Advanced tier work
+        completedAt,
+        totalSets,
+        uniqueExercises: Math.max(1, uniqueExercises.length),
+        prCount: 0,
+        athleteScore: 0,
+        athleteTier: "ELITE",
+        streak: 0,
+        topMoves,
+        pushCount,
+        pullCount,
+      };
+      setProofData(snapshotProof);
+      setShowShareProof(true);
+    } else {
+      toast.error(res.error || "Complete failed");
+    }
   };
 
   if (loading) return <CaliLoader variant="workout" />;
@@ -168,6 +212,13 @@ export function EliteWorkout() {
         {completing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
         Complete Elite Session
       </button>
+
+      {/* Share Your Proof — now available for Elite Training too (full parity, same premium redesigned sports card) */}
+      <CaliShareProof
+        open={showShareProof}
+        onClose={() => setShowShareProof(false)}
+        data={proofData}
+      />
     </div>
   );
 }
