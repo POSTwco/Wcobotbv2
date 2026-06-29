@@ -4,7 +4,7 @@
 
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Trophy, Flame, Zap, ArrowRight, TrendingUp, TrendingDown } from "lucide-react";
+import { Trophy, Flame, Zap, ArrowRight, TrendingUp, TrendingDown, Share2 } from "lucide-react";
 import { Link } from "react-router";
 import confetti from "canvas-confetti";
 import { ATHLETE_TIER_CONFIG, deltaColor, formatDelta, type AthleteTier } from "../../lib/cali-analytics-types";
@@ -21,6 +21,7 @@ interface Props {
   athleteTier?: AthleteTier;
   movementDelta?: number;
   onClose: () => void;
+  onShareProof?: () => void;
 }
 
 function fireVictoryConfetti() {
@@ -33,7 +34,7 @@ function fireVictoryConfetti() {
 }
 
 export function CaliWorkoutCelebration({
-  open, xp, level, streak, message, athleteTier, movementDelta, onClose,
+  open, xp, level, streak, message, athleteTier, movementDelta, onClose, onShareProof,
 }: Props) {
   const fired = useRef(false);
 
@@ -144,6 +145,22 @@ export function CaliWorkoutCelebration({
             </div>
 
             <div className="flex flex-col gap-2">
+              {onShareProof && (
+                <button
+                  onClick={() => onShareProof()}
+                  className="flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold w-full"
+                  style={{
+                    ...dmSans,
+                    background: "linear-gradient(135deg, #D4A843, #B8860B)",
+                    color: "#0B1120",
+                    boxShadow: "0 4px 18px rgba(212,168,67,0.4)",
+                  }}
+                >
+                  <Share2 className="w-4 h-4" />
+                  SHARE YOUR WCO PROOF
+                </button>
+              )}
+
               <Link
                 to="/calisthenics"
                 onClick={onClose}

@@ -17,6 +17,7 @@ import { CaliWorkoutProgress } from "./cali-workout-progress";
 import { CaliExerciseCard } from "./cali-exercise-card";
 import { CaliCoachToast } from "./cali-coach-toast";
 import { CaliWorkoutCelebration } from "./cali-workout-celebration";
+import { CaliShareProof } from "./cali-share-proof";
 import { CaliMotionRail } from "./cali-motion-rail";
 import { CaliWorkoutSponsorBanner } from "./cali-workout-sponsor-banner";
 import { getCoachMessage, getIncompleteSetsPrompt } from "../../lib/cali-coach-messages";
@@ -153,6 +154,10 @@ export function CaliWorkout() {
   const [celebrationTier, setCelebrationTier] = useState<import("../../lib/cali-analytics-types").AthleteTier | undefined>();
   const [celebrationMovementDelta, setCelebrationMovementDelta] = useState<number | undefined>();
   const [streak, setStreak] = useState(0);
+
+  // Phase 2: share proof state (basic wiring)
+  const [showShareProof, setShowShareProof] = useState(false);
+  const [proofData, setProofData] = useState<any>(null);
 
   const [activeBlock, setActiveBlock] = useState(0);
   const [focusedItemIndex, setFocusedItemIndex] = useState(0);
@@ -567,6 +572,39 @@ export function CaliWorkout() {
       setCelebrationTier(statsRes.data.summary.athleteTier);
       setCelebrationMovementDelta(statsRes.data.summary.deltas.movement7d);
     }
+
+    // Prepare full real proof data for share (Phase 4+)
+    const exerciseNames = plan.blocks.flatMap((b: any) => b.items.map((it: any) => it.name));
+    const uniqueExerciseNames = [...new Set(exerciseNames)];
+    const topMoves = uniqueExerciseNames.slice(0, 5);
+
+    // Compute push/pull counts from the workout structure (planned sets per category)
+    let pushCount = 0;
+    let pullCount = 0;
+    plan.blocks.forEach((b: any) => {
+      b.items.forEach((it: any) => {
+        const cat = (it.category || '').toLowerCase();
+        const setsForItem = it.sets || 1;
+        if (cat.includes('push')) pushCount += setsForItem;
+        if (cat.includes('pull')) pullCount += setsForItem;
+      });
+    });
+
+    const snapshotProof = {
+      level: plan.level,
+      completedAt: completedAt,
+      totalSets: setsLogged,
+      uniqueExercises: uniqueExerciseNames.length,
+      prCount: res.data.prChanges?.length ?? 0,
+      athleteScore: statsRes.success && statsRes.data ? statsRes.data.summary.athleteScore : 0,
+      athleteTier: statsRes.success && statsRes.data ? statsRes.data.summary.athleteTier : undefined,
+      streak: newStreak,
+      topMoves,
+      pushCount,
+      pullCount,
+    };
+    setProofData(snapshotProof);
+
     completeTutorial();
     setShowCelebration(true);
   }, [actuals, plan, cali, completeTutorial, setsLogged]);
@@ -590,6 +628,12 @@ export function CaliWorkout() {
     }
     void executeComplete();
   }, [plan, setsLogged, setsTotal, executeComplete]);
+
+  // Phase 2 handoff: close celebration + open share proof modal
+  const openShareProof = useCallback(() => {
+    setShowCelebration(false);
+    setShowShareProof(true);
+  }, []);
 
   useEffect(() => {
     setFocusedItemIndex(0);
@@ -752,6 +796,14 @@ export function CaliWorkout() {
         movementDelta={celebrationMovementDelta}
         message={getCoachMessage("workoutComplete")}
         onClose={() => setShowCelebration(false)}
+        onShareProof={openShareProof}
+      />
+
+      {/* Share Proof modal (Phase 2+ wiring) */}
+      <CaliShareProof
+        open={showShareProof}
+        onClose={() => setShowShareProof(false)}
+        data={proofData}
       />
 
       {/* Sticky bottom action bar */}
