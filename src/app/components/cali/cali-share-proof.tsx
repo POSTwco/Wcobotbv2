@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Download, Share2, Award, Camera, Upload, Trash2, Copy, Check } from "lucide-react";
+import { X, Download, Share2, Award, Camera, Upload, Trash2, Copy, Check, RefreshCw } from "lucide-react";
 import fistLogo from "../../../assets/brand/fist-wco.jpg";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
@@ -84,6 +84,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
 
   const proof: ProofData = {
     ...PLACEHOLDER,
@@ -94,13 +95,15 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   };
 
   // === Camera functions (must be declared early to avoid TDZ in effects that list them in deps) ===
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (requestedMode?: "user" | "environment") => {
+    const mode = requestedMode || facingMode;
     setShareError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } }
       });
       streamRef.current = stream;
+      setFacingMode(mode);
       setIsCameraOpen(true); // render the <video> element first
     } catch (err: any) {
       console.error("Camera error:", err);
@@ -113,7 +116,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       setShareError(msg);
       setTimeout(() => setShareError(null), 4000);
     }
-  }, []);
+  }, [facingMode]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -145,6 +148,19 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       img.src = dataUrl;
     }
   }, [stopCamera]);
+
+  const toggleCamera = useCallback(() => {
+    const newMode = facingMode === "user" ? "environment" : "user";
+    if (isCameraOpen) {
+      stopCamera();
+      // small delay to let stream close
+      setTimeout(() => {
+        startCamera(newMode);
+      }, 150);
+    } else {
+      startCamera(newMode);
+    }
+  }, [facingMode, isCameraOpen, stopCamera, startCamera]);
 
   // Preload logo once
   useEffect(() => {
@@ -795,27 +811,36 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     {isCameraOpen ? (
                       // Live camera preview (premium in-app camera, not file picker)
                       <div className="space-y-2">
-                        <div className="relative rounded-xl overflow-hidden border border-[#D4A843]/30 bg-black" style={{ minHeight: '180px' }}>
+                        <div className="relative rounded-xl overflow-hidden border border-[#D4A843]/30 bg-black w-full" style={{ minHeight: '240px' }}>
                           <video
                             ref={videoRef}
                             autoPlay
                             playsInline
                             muted
-                            className="w-full h-auto max-h-[220px] object-cover bg-black"
+                            className="w-full h-full max-h-[320px] sm:max-h-[380px] object-cover bg-black aspect-video"
                           />
-                          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">
+                          <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2 px-2">
                             <motion.button
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
                               onClick={captureFromCamera}
-                              className="px-4 py-1.5 bg-[#D4A843] text-[#0B1120] rounded-full text-xs font-bold flex items-center gap-1"
+                              className="px-5 py-2.5 bg-[#D4A843] text-[#0B1120] rounded-full text-sm font-bold flex items-center gap-1.5 active:scale-95 transition-transform touch-manipulation"
                               style={dmSans}
                             >
-                              <Camera className="h-3.5 w-3.5" /> SNAP PHOTO
+                              <Camera className="h-4 w-4" /> SNAP
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={toggleCamera}
+                              className="px-4 py-2.5 bg-white/10 text-white rounded-full text-sm font-bold flex items-center gap-1.5 border border-white/30 active:scale-95 transition-transform touch-manipulation"
+                              style={dmSans}
+                            >
+                              <RefreshCw className="h-4 w-4" /> FLIP CAM
                             </motion.button>
                             <button
                               onClick={stopCamera}
-                              className="px-3 py-1.5 rounded-full text-xs font-bold border border-white/30 text-white"
+                              className="px-4 py-2.5 rounded-full text-sm font-bold border border-white/30 text-white active:scale-95 transition-transform touch-manipulation"
                               style={dmSans}
                             >
                               CANCEL
@@ -823,7 +848,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                           </div>
                         </div>
                         <div className="text-[10px] text-center text-[#8494A7]" style={dmSans}>
-                          Look at the camera • Tap SNAP to capture
+                          Point camera • Tap FLIP CAM to reverse • SNAP to capture
                         </div>
                       </div>
                     ) : (
@@ -831,30 +856,30 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                         <motion.button
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.985 }}
-                          onClick={startCamera}
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-[#D4A843]/40 py-2 text-xs font-bold text-white hover:bg-[#D4A843]/10"
+                          onClick={() => startCamera("user")}
+                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-[#D4A843]/40 py-2.5 text-sm font-bold text-white hover:bg-[#D4A843]/10 active:bg-[#D4A843]/20"
                           style={dmSans}
                         >
-                          <Camera className="h-3.5 w-3.5" /> TAKE PHOTO (CAMERA)
+                          <Camera className="h-4 w-4" /> TAKE PHOTO (FRONT CAM)
                         </motion.button>
                         <motion.button
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.985 }}
                           onClick={triggerGallery}
-                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2 text-xs font-bold text-white hover:bg-white/5"
+                          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/15 py-2.5 text-sm font-bold text-white hover:bg-white/5 active:bg-white/10"
                           style={dmSans}
                         >
-                          <Upload className="h-3.5 w-3.5" /> CHOOSE PHOTO
+                          <Upload className="h-4 w-4" /> CHOOSE PHOTO
                         </motion.button>
                         {photoSrc && (
                           <motion.button
                             whileHover={{ scale: 1.01 }}
                             whileTap={{ scale: 0.985 }}
                             onClick={removePhoto}
-                            className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 py-2 px-3 text-xs font-bold text-red-400 hover:bg-red-500/10"
+                            className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 py-2.5 px-4 text-sm font-bold text-red-400 hover:bg-red-500/10 active:bg-red-500/20"
                             style={dmSans}
                           >
-                            <Trash2 className="h-3.5 w-3.5" /> REMOVE
+                            <Trash2 className="h-4 w-4" /> REMOVE
                           </motion.button>
                         )}
                       </div>
@@ -874,7 +899,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                     )}
                     {!photoSrc && !isCameraOpen && (
                       <div className="mt-1 text-[10px] text-amber-400" style={dmSans}>
-                        TAKE opens live camera in-app • CHOOSE uses file picker
+                        TAKE opens live front camera • FLIP CAM for rear • Best on mobile in good light
                       </div>
                     )}
                   </div>
