@@ -422,6 +422,8 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
   const [applications, setApplications] = useState<any[]>([]);
   const [loadingApps, setLoadingApps] = useState(true);
   const [processingApp, setProcessingApp] = useState<string | null>(null);
+  /** Past (approved/rejected) applications — collapsed by default */
+  const [showProcessedApps, setShowProcessedApps] = useState(false);
 
   // Athlete onboarded celebration overlay
   const [showOnboarded, setShowOnboarded] = useState(false);
@@ -823,6 +825,12 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
           </div>
         ) : (
           <div className="space-y-2">
+            {/* Active / pending — always visible */}
+            {pendingApps.length === 0 && (
+              <div className="text-center py-4 bg-[#0B1120] rounded-xl border border-[#4274B9]/10">
+                <p className="text-[#8494A7] text-xs">No active applications.</p>
+              </div>
+            )}
             {pendingApps.map((app: any) => (
               <div
                 key={app.id}
@@ -907,24 +915,76 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                 </div>
               </div>
             ))}
-            {processedApps.map((app: any) => (
-              <div
-                key={app.id}
-                className="p-3 rounded-xl bg-[#0B1120] border border-[#4274B9]/10 opacity-60"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[#E8ECF0] text-sm font-semibold truncate">{app.name}</p>
-                    <p className="text-[#8494A7] text-[0.6rem]">{app.country} · {app.wallet}</p>
+
+            {/* Past applications (approved/rejected) — collapsed by default */}
+            {processedApps.length > 0 && (
+              <div className="mt-1 rounded-xl border border-[#4274B9]/15 bg-[#0B1120]/80 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowProcessedApps((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors"
+                  aria-expanded={showProcessedApps}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-[#8494A7] shrink-0 transition-transform duration-200 ${showProcessedApps ? "rotate-0" : "-rotate-90"}`}
+                    />
+                    <span
+                      className="text-[#8494A7] text-[0.65rem] font-bold tracking-wider"
+                      style={{ fontFamily: "Orbitron, sans-serif" }}
+                    >
+                      PAST APPLICATIONS
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[0.5rem] font-bold bg-[#4274B9]/15 text-[#6AA3E0]">
+                      {processedApps.length}
+                    </span>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[0.5rem] font-bold ${
-                    app.status === "approved" ? "bg-[#10b981]/10 text-[#10b981]" : "bg-red-500/10 text-red-400"
-                  }`} style={{ fontFamily: "Orbitron, sans-serif" }}>
-                    {app.status?.toUpperCase()}
+                  <span className="text-[0.55rem] text-[#8494A7] shrink-0">
+                    {showProcessedApps ? "Hide" : "Show"}
                   </span>
-                </div>
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {showProcessedApps && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-1.5 px-2 pb-2 pt-0.5 border-t border-[#4274B9]/10">
+                        {processedApps.map((app: any) => (
+                          <div
+                            key={app.id}
+                            className="p-2.5 rounded-lg bg-[#0B1120] border border-[#4274B9]/10 opacity-70"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[#E8ECF0] text-sm font-semibold truncate">{app.name}</p>
+                                <p className="text-[#8494A7] text-[0.6rem] truncate">
+                                  {app.country} · <span className="font-mono text-[#6AA3E0]/80">{app.wallet}</span>
+                                </p>
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[0.5rem] font-bold shrink-0 ${
+                                  app.status === "approved"
+                                    ? "bg-[#10b981]/10 text-[#10b981]"
+                                    : "bg-red-500/10 text-red-400"
+                                }`}
+                                style={{ fontFamily: "Orbitron, sans-serif" }}
+                              >
+                                {app.status?.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
