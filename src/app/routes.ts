@@ -21,25 +21,8 @@ import { TermsPage } from "./pages/terms";
 import { WhitepaperPage } from "./pages/whitepaper";
 import { RouteErrorPage, NotFoundPage } from "./components/error-boundary";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ARCHIVED — Security Test Suites (PASSED 100% — 2026-03-17)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// The following pages have been decommissioned from production routing after
-// achieving a 100% pass rate across all test vectors. The source files are
-// retained as auditable dead code per Web3 security disclosure best practices.
-//
-//   /security-audit    → ./pages/security-audit.tsx
-//                        IvyFi Pen Test verification (7/7 attack vectors blocked)
-//                        Final run: 2026-03-17 — 100% PASS
-//
-//   /security-pentest  → ./pages/security-pentest-user.tsx
-//                        Full attack surface pen test (32/32 tests, 8 categories)
-//                        Final run: 2026-03-17 — 100% PASS
-//
-// These files are NOT imported and produce zero bundle impact.
-// To re-run tests, restore the imports and route entries below.
-// ─────────────────────────────────────────────────────────────────────────────
+// Historical client pen-test UIs removed from the tree (2026-07 hygiene pass).
+// See docs/security-archive/README.md and SECURITY.md — not continuous certification.
 
 export const router = createBrowserRouter([
   {

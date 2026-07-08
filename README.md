@@ -38,7 +38,8 @@
   <img src="https://img.shields.io/github/last-commit/POSTwco/Wcobotbv2?style=flat-square&label=last%20commit&labelColor=0B1120&color=D4A843" alt="Last Commit" />
   <img src="https://img.shields.io/github/languages/top/POSTwco/Wcobotbv2?style=flat-square&labelColor=0B1120&color=4274B9" alt="Top Language" />
   <img src="https://img.shields.io/github/repo-size/POSTwco/Wcobotbv2?style=flat-square&labelColor=0B1120&color=8494A7" alt="Repo Size" />
-  <img src="https://img.shields.io/badge/security-pen_tested_100%25-D4A843?style=flat-square&labelColor=0B1120" alt="Security" />
+  <img src="https://img.shields.io/badge/security-layered_auth_%7C_challenge--sign-D4A843?style=flat-square&labelColor=0B1120" alt="Security" />
+  <img src="https://img.shields.io/badge/license-Proprietary-8494A7?style=flat-square&labelColor=0B1120" alt="License" />
 </p>
 
 ---
@@ -293,7 +294,8 @@ export function hasTier(sp: Sponsor, tier: SponsorTier): boolean {
 | Admin access | Challenge-sign → short-lived session |
 | Input sanitization | `sanitizeString`, `sanitizeUrl`, `sanitizeNumber` on all writes |
 | Error responses | Frontend strips stack traces, keys, connection strings |
-| Pen testing | 100% pass rate across 39 attack vectors (archived in `security-*.tsx`) |
+| Residual risks | Documented in [`SECURITY.md`](./SECURITY.md) — honest operator checklist |
+| Historical checks | Snapshot harnesses archived under `docs/security-archive/` (not continuous cert) |
 
 <details>
 <summary><strong>🔐 Admin auth flow (curl)</strong></summary>
@@ -482,26 +484,28 @@ https://wotsoauebnoyvegcvouo.supabase.co/functions/v1/make-server-57fcb0ee
 
 ## Contributing
 
-We welcome PRs from the backend and Web3 community. A few ground rules:
+This repository is **proprietary** ([`LICENSE`](./LICENSE)). External contributions are by invitation unless otherwise announced.
 
-1. **Shared types first** — if you change a schema, update `src/app/lib/types.ts` and the server handler together
-2. **Deploy both layers** — frontend-only pushes are not enough for API changes
-3. **No secrets in commits** — anon keys in `utils/supabase/info.ts` are public by design; service role keys are not
-4. **Match the security model** — new write endpoints need rate limits + sanitization
+Full guidelines: **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** · security: **[`SECURITY.md`](./SECURITY.md)**
+
+Ground rules:
+
+1. **Local green** — `pnpm build` before any push
+2. **Shared types first** — schema changes update `src/app/lib/types.ts` and the edge handler together
+3. **Deploy both layers** when API changes — frontend push ≠ edge deploy
+4. **No secrets** — anon keys are public by design; service role / treasury keys never commit
+5. **Wallet & admin flows** are high-risk — extra review required
+6. **Honest security language** — no permanent “100% pen tested” claims
 
 ```bash
-# Branch naming
-git checkout -b feat/sponsor-analytics-v2
-git checkout -b fix/routine-tier-normalization
-
-# Commit style (conventional-ish)
-git commit -m "feat(sponsors): add routine tier impression tracking"
-git commit -m "fix(edge): normalize sponsor tiers on save"
+pnpm install
+pnpm dev
+pnpm build
+pnpm preview
 ```
 
 <p align="center">
   <a href="https://github.com/POSTwco/Wcobotbv2/issues"><img src="https://img.shields.io/badge/🐛_Report_Bug-open_an_issue-D4A843?style=for-the-badge&labelColor=0B1120" alt="Report Bug" /></a>
-  <a href="https://github.com/POSTwco/Wcobotbv2/pulls"><img src="https://img.shields.io/badge/🔀_Send_PR-open_a_PR-6AA3E0?style=for-the-badge&labelColor=0B1120" alt="Send PR" /></a>
 </p>
 
 ---

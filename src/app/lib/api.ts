@@ -1018,13 +1018,20 @@ try {
   }
 } catch (e) { /* ignore */ }
 
-// Debug aid — run after the bridge so we report the final state.
-if (typeof window !== 'undefined') {
+// Dev-only debug aid — never expose API client on window in production.
+if (typeof window !== "undefined" && import.meta.env.DEV) {
   try {
     const adminObj: any = (api as any).admin || {};
     const caliKeys = Object.keys(adminObj).filter((k: string) => /cali/i.test(k));
     const rootCaliKeys = Object.keys(api || {}).filter((k: string) => /cali/i.test(k));
-    console.log('[API] cali admin methods registered on load (after bridge):', caliKeys.length ? caliKeys : 'NONE', 'root cali keys:', rootCaliKeys);
+    console.log(
+      "[API] cali admin methods registered on load (after bridge):",
+      caliKeys.length ? caliKeys : "NONE",
+      "root cali keys:",
+      rootCaliKeys,
+    );
     (window as any).__WCO_API = api;
-  } catch (e) { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
