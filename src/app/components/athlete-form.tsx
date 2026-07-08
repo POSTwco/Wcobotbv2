@@ -237,12 +237,14 @@ export function AthleteForm({
             <div className="mt-3 pt-3 border-t border-[#4274B9]/10">
               <FieldWithIcon
                 icon={<svg className="w-3 h-3 text-[#4274B9]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 7v10M16 7v10M8 12h8M8 17h8"/></svg>}
-                label="Hedera Wallet (Arena Chat Verified Badge)"
+                label="Hedera Wallet (from application · admin only)"
                 value={form.wallet}
                 onChange={(v) => updateField("wallet", v)}
                 placeholder="0.0.XXXXXXX"
               />
-              <p className="text-[#4274B9]/50 text-[0.5rem] mt-1">If set, this athlete will appear with a verified badge in Arena Chat when messaging from this wallet.</p>
+              <p className="text-[#4274B9]/50 text-[0.5rem] mt-1">
+                Copied from the athlete application on approve. Admin-only on this form (email/phone too). Also powers the Arena Chat verified badge when they message from this wallet.
+              </p>
               <label className="flex items-center gap-2.5 mt-3 cursor-pointer group">
                 <Checkbox
                   checked={form.eliteAccess}

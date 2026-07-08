@@ -58,6 +58,7 @@
  *   GET  /admin/dashboard     CEO one-glance summary (counts, alerts)
  *
  * ADMIN WRITE routes (require X-Admin-Session):
+ *   GET    /admin/athletes                List athletes (full admin fields + wallet backfill)
  *   POST   /admin/athletes                Create or update athlete
  *   DELETE /admin/athletes/:id            Delete athlete
  *   POST   /admin/battles/batch-status    Batch-update multiple battles' status
@@ -1905,6 +1906,66 @@ app.get(`${PREFIX}/admin/session`, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/athletes — Full athlete records for admin (email, phone, wallet)
+// Lazy-backfills wallet from applicantWallet / linked application when missing.
+// ---------------------------------------------------------------------------
+app.get(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
+  try {
+    const athletes = await kv.getByPrefix("athlete:");
+    athletes.sort((a: any, b: any) => (a.rank ?? 999) - (b.rank ?? 999));
+
+    // Map applicationId → application wallet for backfill of already-approved athletes
+    const applications = await kv.getByPrefix("application:");
+    const appWalletById = new Map<string, string>();
+    const appWalletByAthleteId = new Map<string, string>();
+    for (const app of applications as any[]) {
+      if (app?.wallet && isValidHederaAccountId(app.wallet)) {
+        if (app.id) appWalletById.set(app.id, app.wallet);
+        if (app.athleteId) appWalletByAthleteId.set(app.athleteId, app.wallet);
+      }
+    }
+
+    const repaired: any[] = [];
+    for (const raw of athletes as any[]) {
+      let a = raw;
+      let needsWrite = false;
+
+      const fromApplicant =
+        a.applicantWallet && isValidHederaAccountId(a.applicantWallet) ? a.applicantWallet : "";
+      const fromApp =
+        (a.applicationId && appWalletById.get(a.applicationId)) ||
+        appWalletByAthleteId.get(a.id) ||
+        "";
+      const resolvedWallet =
+        (a.wallet && isValidHederaAccountId(a.wallet) ? a.wallet : "") ||
+        fromApplicant ||
+        fromApp ||
+        "";
+
+      if (resolvedWallet && a.wallet !== resolvedWallet) {
+        a = { ...a, wallet: resolvedWallet, updatedAt: now() };
+        needsWrite = true;
+      }
+      if (resolvedWallet && !a.applicantWallet) {
+        a = { ...a, applicantWallet: resolvedWallet };
+        needsWrite = true;
+      }
+
+      if (needsWrite) {
+        await kv.set(`athlete:${a.id}`, a);
+        console.log(`[ADMIN] Backfilled wallet on athlete ${a.id} (${a.name}) → ${resolvedWallet}`);
+      }
+      repaired.push(a);
+    }
+
+    return c.json({ success: true, data: repaired });
+  } catch (error) {
+    console.log(`[ADMIN] Error listing athletes: ${error}`);
+    return c.json({ success: false, error: safeErrorMsg("Failed to list athletes") }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /admin/athletes — Create or update athlete
 // ---------------------------------------------------------------------------
 app.post(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
@@ -1993,8 +2054,15 @@ app.post(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
       secondaryColor: sanitizeString(body.secondaryColor || existing?.secondaryColor || "", 20),
       // Weight class (official WCO divisions)
       weightClass: sanitizeString(body.weightClass || existing?.weightClass || "", 60),
-      // Verified Hedera wallet for Arena Chat athlete badge
-      wallet: (body.wallet && isValidHederaAccountId(body.wallet)) ? body.wallet : (existing?.wallet || ""),
+      // Verified Hedera wallet for Arena Chat athlete badge + admin profile
+      wallet: (body.wallet && isValidHederaAccountId(body.wallet))
+        ? body.wallet
+        : (existing?.wallet || existing?.applicantWallet || ""),
+      // Preserve application linkage + original applicant wallet (immutable audit)
+      applicationId: existing?.applicationId || body.applicationId || "",
+      applicantWallet: existing?.applicantWallet ||
+        ((body.wallet && isValidHederaAccountId(body.wallet)) ? body.wallet : "") ||
+        "",
       eliteAccess: body.eliteAccess === true || (body.eliteAccess !== false && existing?.eliteAccess === true),
       totalVotes: existing?.totalVotes ?? 0,
       tokensStaked: existing?.tokensStaked ?? 0,
@@ -4849,6 +4917,11 @@ app.post(`${PREFIX}/admin/applications/:id/approve`, requireAdminSession, async 
     const allAthletes = await kv.getByPrefix("athlete:");
     const rank = allAthletes.length + 1;
 
+    // Application wallet must live on the athlete as `wallet` (admin profile + Arena Chat badge).
+    // Keep applicantWallet as immutable audit trail of what was on the application.
+    const applicantWallet =
+      app.wallet && isValidHederaAccountId(app.wallet) ? app.wallet : "";
+
     const athlete = {
       id: athleteId,
       name: app.name,
@@ -4888,7 +4961,9 @@ app.post(`${PREFIX}/admin/applications/:id/approve`, requireAdminSession, async 
       totalVotes: 0,
       tokensStaked: 0,
       applicationId: appId,
-      applicantWallet: app.wallet,
+      // Hedera wallet from application — admin profile field + Arena Chat verified badge
+      wallet: applicantWallet,
+      applicantWallet,
       createdAt: now(),
       updatedAt: now(),
     };

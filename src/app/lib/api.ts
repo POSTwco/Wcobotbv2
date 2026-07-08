@@ -395,6 +395,10 @@ export const api = {
         { method: "POST", body: { battleIds, status }, adminWallet, sessionToken }
       ),
 
+    /** Full athlete records (email, phone, wallet) — admin session required */
+    getAthletes: (adminWallet: string, sessionToken?: string) =>
+      request<Athlete[]>("/admin/athletes", { adminWallet, sessionToken }),
+
     createAthlete: (data: AthleteFormData, adminWallet: string, sessionToken?: string) =>
       request<Athlete>("/admin/athletes", { method: "POST", body: data, adminWallet, sessionToken }),
 

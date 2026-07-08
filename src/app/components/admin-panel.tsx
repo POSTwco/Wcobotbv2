@@ -445,12 +445,18 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
 
   const loadAthletes = useCallback(async () => {
     setLoading(true);
-    const res = await api.getAthletes();
+    // Admin endpoint returns full records (email/phone/wallet) and backfills
+    // application wallets onto athletes approved before the wallet transfer fix.
+    const res = await api.admin.getAthletes(wallet, sessionToken);
     if (res.success && res.data) {
       setAthletes(res.data);
+    } else {
+      // Fallback to public list if admin route not yet deployed
+      const pub = await api.getAthletes();
+      if (pub.success && pub.data) setAthletes(pub.data);
     }
     setLoading(false);
-  }, []);
+  }, [wallet, sessionToken]);
 
   const loadApplications = useCallback(async () => {
     setLoadingApps(true);
@@ -511,7 +517,8 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
       nftCardBorderColor: athlete.nftCardBorderColor || "#4274B9",
       nftCardGlowGradient: athlete.nftCardGlowGradient || "",
       bracketSeat: athlete.bracketSeat ?? 0,
-      wallet: athlete.wallet || "",
+      // Prefer verified wallet; fall back to application wallet for pre-fix records
+      wallet: athlete.wallet || athlete.applicantWallet || "",
       eliteAccess: athlete.eliteAccess === true,
       primaryColor: athlete.primaryColor || "",
       secondaryColor: athlete.secondaryColor || "",
@@ -734,6 +741,11 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                   <p className="text-[#8494A7] text-[0.6rem] truncate">
                     {ath.country} · {ath.wins}W-{ath.losses}L · PWR: {ath.totalPowerRating?.toFixed(1) || "N/A"}
                   </p>
+                  {(ath.wallet || ath.applicantWallet) && (
+                    <p className="text-[#6AA3E0] text-[0.55rem] font-mono truncate mt-0.5" title="Application / verified wallet">
+                      {ath.wallet || ath.applicantWallet}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
