@@ -60,7 +60,7 @@ export function EliteWorkout() {
       const v = Number(a?.value);
       if (!Number.isFinite(v) || v <= 0) continue;
       const body: any = { blockIndex: b, itemIndex: i, setIndex: s, value: v };
-      const rpe = Number(a?.rpe);
+      const rpe = Math.round(Number(a?.rpe));
       if (a?.rpe && rpe >= 1 && rpe <= 10) body.rpe = rpe;
       if (a?.note?.trim()) body.note = a.note.trim();
       toLog.push(body);
@@ -90,7 +90,7 @@ export function EliteWorkout() {
       const v = Number(a.value);
       if (!Number.isFinite(v) || v <= 0) continue;
       const row: any = { blockIndex: b, itemIndex: i, setIndex: s, value: v };
-      const rpe = Number(a.rpe);
+      const rpe = Math.round(Number(a.rpe));
       if (a.rpe && rpe >= 1 && rpe <= 10) row.rpe = rpe;
       if (a.note?.trim()) row.note = a.note.trim();
       bulk.push(row);

@@ -152,7 +152,7 @@ function HoverCard({ day, noData }: { day: HeatmapDayPoint; noData: boolean }) {
           {day.pullTimeSec > 0 ? ` · ${day.pullTimeSec}s hold` : ""}
         </p>
         <p className="text-[#C8D0DC] text-[0.65rem]">
-          {day.avgRpe != null ? `RPE ${day.avgRpe}` : "RPE —"}
+          {day.avgRpe != null ? `Intensity ${day.avgRpe}` : "Intensity —"}
           {" · "}Hypertrophy {day.hypertrophyScore}
           {day.prHits > 0 ? ` · PR x${day.prHits}` : ""}
         </p>

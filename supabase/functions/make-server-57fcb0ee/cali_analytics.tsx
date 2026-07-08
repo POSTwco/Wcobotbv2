@@ -302,13 +302,15 @@ function getTargetForSet(plan: PlanLike, set: LogSet): SetTarget | null {
 
 /**
  * Per-set hypertrophy stimulus (0–100).
- * High scores require max RPE (10), failure signals, and/or reps well above prescription.
- * Sets without RPE log 0 — hypertrophy can't be inferred from volume alone.
+ * Intensity (API field `rpe`) 1–10: 10 = max intensity = primary hypertrophy fuel.
+ * High scores require max intensity (10), failure signals, and/or reps well above prescription.
+ * Sets without intensity log 0 — hypertrophy can't be inferred from volume alone.
  */
 function scoreSetHypertrophy(set: LogSet, target: SetTarget | null, isElite = false): number {
   if (typeof set.rpe !== "number" || set.rpe < 1 || set.rpe > 10) return 0;
 
   let score = 0;
+  // Intensity 10 = max effort / hypertrophy peak
   const maxEffort = set.rpe >= 10;
   const nearMax = set.rpe >= 9;
   const failure = isFailureSignal(set);
@@ -382,7 +384,7 @@ function hypertrophyPctFromDailies(dailies: DailyStats[]): number {
     failure += d.failureSets ?? 0;
   }
 
-  // No RPE logged in the window → hypertrophy stimulus unknown, score 0 (not 100).
+  // No intensity logged in the window → hypertrophy stimulus unknown, score 0 (not 100).
   if (withRpe === 0 || scoredSets === 0) return 0;
 
   const avgSetScore = signalSum / scoredSets;
@@ -391,7 +393,7 @@ function hypertrophyPctFromDailies(dailies: DailyStats[]): number {
 
   let blended = avgSetScore * 0.5 + maxEffortRate * 100 * 0.3 + failureRate * 100 * 0.2;
 
-  // Without majority max-effort (RPE 10) sets, cap well below 100.
+  // Without majority max-intensity (10) sets, cap well below 100.
   if (maxEffortRate < 0.5) {
     blended = Math.min(blended, avgSetScore * 0.45);
   }

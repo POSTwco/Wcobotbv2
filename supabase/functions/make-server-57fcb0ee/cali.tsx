@@ -2134,7 +2134,7 @@ interface ValidatedSet {
   exerciseId: string;
   metric: "reps" | "time_sec";
   value: number; // reps OR seconds
-  rpe?: number; // 1..10
+  rpe?: number; // Intensity 1..10 integer (API field name: rpe)
   note?: string;
   loggedAt: number;
 }
@@ -2184,13 +2184,14 @@ function validateLoggedSet(raw: any, plan: WorkoutPlan): SetValidationResult {
     return { error: "value must be 0..100000", field: "value" };
   }
 
+  // Intensity 1–10 (integer). Field name stays `rpe` for storage compatibility.
   let rpe: number | undefined;
   if (raw.rpe !== undefined && raw.rpe !== null) {
     const n = Number(raw.rpe);
     if (!Number.isFinite(n) || n < 1 || n > 10) {
-      return { error: "rpe must be 1..10", field: "rpe" };
+      return { error: "intensity (rpe) must be 1..10", field: "rpe" };
     }
-    rpe = Math.round(n * 10) / 10;
+    rpe = Math.min(10, Math.max(1, Math.round(n)));
   }
 
   const note = raw.note !== undefined ? sanitizeString(raw.note, MAX_NOTE_LEN) : undefined;

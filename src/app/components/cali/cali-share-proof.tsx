@@ -6,7 +6,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Download, Share2, Award, Camera, Upload, Trash2, Copy, Check, RefreshCw } from "lucide-react";
+import {
+  X, Download, Share2, Award, Camera, Upload, Trash2, Copy, Check, RefreshCw,
+  Grid3x3, Timer, Flashlight, FlipHorizontal2, ZoomIn, RotateCcw,
+} from "lucide-react";
 import fistLogo from "../../../assets/brand/fist-wco.jpg";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
@@ -69,6 +72,32 @@ function formatDate(iso: string): string {
   }
 }
 
+/** Full-bleed cover draw with user zoom (1–3) and pan (−1..1). Fixes uncontrolled punch-in. */
+function drawImageCoverTransform(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  W: number,
+  H: number,
+  zoom: number,
+  panX: number,
+  panY: number,
+) {
+  const z = Math.max(1, Math.min(3, zoom));
+  const baseScale = Math.max(W / img.width, H / img.height);
+  const scale = baseScale * z;
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  const maxPanX = Math.max(0, (dw - W) / 2);
+  const maxPanY = Math.max(0, (dh - H) / 2);
+  const dx = (W - dw) / 2 + Math.max(-1, Math.min(1, panX)) * maxPanX;
+  const dy = (H - dh) / 2 + Math.max(-1, Math.min(1, panY)) * maxPanY;
+  ctx.drawImage(img, dx, dy, dw, dh);
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
 export function CaliShareProof({ open, onClose, data }: Props) {
   const [mode, setMode] = useState<"receipt" | "selfie">("receipt");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -91,6 +120,18 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  // Ultimate selfie studio
+  const [photoZoom, setPhotoZoom] = useState(1); // 1.0–3.0
+  const [photoPan, setPhotoPan] = useState({ x: 0, y: 0 }); // −1..1
+  const [mirrorPreview, setMirrorPreview] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
+  const [timerSec, setTimerSec] = useState<0 | 3 | 5>(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [isDraggingPan, setIsDraggingPan] = useState(false);
+  const panDragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const proof: ProofData = {
     ...PLACEHOLDER,
@@ -104,12 +145,32 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const startCamera = useCallback(async (requestedMode?: "user" | "environment") => {
     const mode = requestedMode || facingMode;
     setShareError(null);
+    setTorchOn(false);
+    setTorchSupported(false);
     try {
+      // Stop prior stream cleanly before requesting a new one
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: {
+          facingMode: { ideal: mode },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
       });
       streamRef.current = stream;
       setFacingMode(mode);
+      // Detect torch capability (usually rear camera only)
+      try {
+        const track = stream.getVideoTracks()[0];
+        const caps = track?.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
+        setTorchSupported(Boolean(caps && "torch" in caps && caps.torch));
+      } catch {
+        setTorchSupported(false);
+      }
       setIsCameraOpen(true); // render the <video> element first
     } catch (err: any) {
       console.error("Camera error:", err);
@@ -125,6 +186,12 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   }, [facingMode]);
 
   const stopCamera = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setCountdown(null);
+    setTorchOn(false);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -135,16 +202,37 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     setIsCameraOpen(false);
   }, []);
 
+  const setTorch = useCallback(async (on: boolean) => {
+    const track = streamRef.current?.getVideoTracks()?.[0];
+    if (!track) return;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] });
+      setTorchOn(on);
+    } catch (e) {
+      console.warn("Torch not available:", e);
+      setTorchSupported(false);
+      setTorchOn(false);
+    }
+  }, []);
+
   const captureFromCamera = useCallback(() => {
     if (!videoRef.current) return;
     const video = videoRef.current;
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    // Capture full frame; zoom/pan applied in drawSportsCard so post-snap reframe works
     const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = video.videoWidth || 640;
-    tempCanvas.height = video.videoHeight || 480;
+    tempCanvas.width = vw;
+    tempCanvas.height = vh;
     const ctx = tempCanvas.getContext("2d");
     if (ctx) {
-      ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-      const dataUrl = tempCanvas.toDataURL("image/png");
+      const shouldMirror = mirrorPreview && facingMode === "user";
+      if (shouldMirror) {
+        ctx.translate(vw, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, vw, vh);
+      const dataUrl = tempCanvas.toDataURL("image/jpeg", 0.92);
       const img = new Image();
       img.onload = () => {
         photoRef.current = img;
@@ -153,13 +241,36 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       };
       img.src = dataUrl;
     }
-  }, [stopCamera]);
+  }, [stopCamera, mirrorPreview, facingMode]);
+
+  const snapWithTimer = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    if (timerSec === 0) {
+      captureFromCamera();
+      return;
+    }
+    let n = timerSec;
+    setCountdown(n);
+    countdownTimerRef.current = setInterval(() => {
+      n -= 1;
+      if (n <= 0) {
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+        setCountdown(null);
+        captureFromCamera();
+      } else {
+        setCountdown(n);
+      }
+    }, 1000);
+  }, [timerSec, captureFromCamera]);
 
   const toggleCamera = useCallback(() => {
     const newMode = facingMode === "user" ? "environment" : "user";
     if (isCameraOpen) {
       stopCamera();
-      // small delay to let stream close
       setTimeout(() => {
         startCamera(newMode);
       }, 150);
@@ -167,6 +278,18 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       startCamera(newMode);
     }
   }, [facingMode, isCameraOpen, stopCamera, startCamera]);
+
+  const cycleTimer = useCallback(() => {
+    setTimerSec((t) => (t === 0 ? 3 : t === 3 ? 5 : 0));
+  }, []);
+
+  const retakePhoto = useCallback(() => {
+    photoRef.current = null;
+    setPhotoSrc(null);
+    setPhotoZoom(1);
+    setPhotoPan({ x: 0, y: 0 });
+    startCamera(facingMode);
+  }, [startCamera, facingMode]);
 
   // Preload fist logo once
   useEffect(() => {
@@ -180,13 +303,13 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     img.src = fistLogo as unknown as string;
   }, []);
 
-  // Redraw on open, mode, data, photo or caption change
+  // Redraw on open, mode, data, photo, caption, or crop transform change
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => draw(), 40);
       return () => clearTimeout(t);
     }
-  }, [open, mode, proof.level, proof.totalSets, proof.athleteTier, photoSrc, customCaption]);
+  }, [open, mode, proof.level, proof.totalSets, proof.athleteTier, photoSrc, customCaption, photoZoom, photoPan.x, photoPan.y]);
 
   // Reset custom caption + errors/feedback when modal closes (polish)
   useEffect(() => {
@@ -195,6 +318,9 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       setShareError(null);
       setShareFeedback(null);
       setCopied(false);
+      setPhotoZoom(1);
+      setPhotoPan({ x: 0, y: 0 });
+      setCountdown(null);
       if (isCameraOpen) stopCamera();
     }
   }, [open, isCameraOpen]);  // stopCamera is stable, no need in deps
@@ -236,6 +362,8 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       img.onload = () => {
         photoRef.current = img;
         setPhotoSrc(src);
+        setPhotoZoom(1);
+        setPhotoPan({ x: 0, y: 0 });
       };
       img.onerror = () => {
         setShareError("Failed to load photo. Please try a different image.");
@@ -250,6 +378,32 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const removePhoto = useCallback(() => {
     photoRef.current = null;
     setPhotoSrc(null);
+    setPhotoZoom(1);
+    setPhotoPan({ x: 0, y: 0 });
+  }, []);
+
+  const onPanPointerDown = useCallback((e: React.PointerEvent) => {
+    if (!photoSrc && !isCameraOpen) return;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    panDragRef.current = { x: e.clientX, y: e.clientY, panX: photoPan.x, panY: photoPan.y };
+    setIsDraggingPan(true);
+  }, [photoSrc, isCameraOpen, photoPan.x, photoPan.y]);
+
+  const onPanPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!panDragRef.current) return;
+    const dx = e.clientX - panDragRef.current.x;
+    const dy = e.clientY - panDragRef.current.y;
+    // Sensitivity scales with zoom — more zoom = more pan range feel
+    const sens = 0.004 / Math.max(1, photoZoom * 0.6);
+    setPhotoPan({
+      x: clamp(panDragRef.current.panX + dx * sens, -1, 1),
+      y: clamp(panDragRef.current.panY + dy * sens, -1, 1),
+    });
+  }, [photoZoom]);
+
+  const onPanPointerUp = useCallback(() => {
+    panDragRef.current = null;
+    setIsDraggingPan(false);
   }, []);
 
   const triggerGallery = useCallback(() => {
@@ -418,13 +572,8 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     const photo = photoRef.current!;
     const fist = fistRef.current;
 
-    // Draw user photo full-bleed (cover)
-    const scale = Math.max(W / photo.width, H / photo.height);
-    const dw = photo.width * scale;
-    const dh = photo.height * scale;
-    const dx = (W - dw) / 2;
-    const dy = (H - dh) / 2;
-    ctx.drawImage(photo, dx, dy, dw, dh);
+    // Full-bleed cover + user zoom/pan (default zoom 1.0 = no extra punch-in)
+    drawImageCoverTransform(ctx, photo, W, H, photoZoom, photoPan.x, photoPan.y);
 
     // Subtle vignette + dark overlay for text contrast (sports card depth)
     const vignette = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.78);
@@ -870,27 +1019,134 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                   </motion.button>
                 </div>
 
-                {/* Selfie photo controls */}
+                {/* Ultimate selfie camera studio */}
                 {mode === "selfie" && (
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {isCameraOpen ? (
-                      <div className="relative rounded-xl overflow-hidden border border-[#D4A843]/30 bg-black w-full min-h-[170px] sm:min-h-[210px]">
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className="w-full h-full max-h-[210px] sm:max-h-[260px] object-cover bg-black aspect-video"
-                        />
-                        <div className="absolute bottom-2.5 left-0 right-0 flex justify-center gap-1.5 px-2">
+                      <div className="space-y-2">
+                        {/* Square viewfinder — matches sports card crop */}
+                        <div
+                          className="relative rounded-xl overflow-hidden border border-[#D4A843]/40 bg-black w-full aspect-square max-h-[280px] sm:max-h-[320px] mx-auto touch-none select-none"
+                          onPointerDown={onPanPointerDown}
+                          onPointerMove={onPanPointerMove}
+                          onPointerUp={onPanPointerUp}
+                          onPointerCancel={onPanPointerUp}
+                          style={{ cursor: isDraggingPan ? "grabbing" : "grab" }}
+                        >
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="absolute inset-0 w-full h-full object-cover bg-black"
+                            style={{
+                              transform: `scale(${photoZoom}) translate(${photoPan.x * 12}%, ${photoPan.y * 12}%) scaleX(${mirrorPreview && facingMode === "user" ? -1 : 1})`,
+                              transformOrigin: "center center",
+                            }}
+                          />
+                          {/* Gold square safe-area guide */}
+                          <div className="pointer-events-none absolute inset-2 rounded-lg border-2 border-[#D4A843]/50" />
+                          {showGrid && (
+                            <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3">
+                              {Array.from({ length: 9 }).map((_, i) => (
+                                <div key={i} className="border border-white/20" />
+                              ))}
+                            </div>
+                          )}
+                          {countdown != null && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                              <span className="text-6xl font-black text-[#D4A843] drop-shadow-lg" style={orbitron}>
+                                {countdown}
+                              </span>
+                            </div>
+                          )}
+                          <div className="absolute top-2 left-2 right-2 flex justify-between pointer-events-none">
+                            <span className="text-[9px] font-bold text-white/80 bg-black/50 px-1.5 py-0.5 rounded" style={dmSans}>
+                              {photoZoom.toFixed(1)}×
+                            </span>
+                            <span className="text-[9px] font-bold text-[#D4A843] bg-black/50 px-1.5 py-0.5 rounded" style={dmSans}>
+                              CARD FRAME
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Zoom slider */}
+                        <div className="flex items-center gap-2 px-0.5">
+                          <ZoomIn className="h-3.5 w-3.5 text-[#D4A843] flex-shrink-0" />
+                          <input
+                            type="range"
+                            min={1}
+                            max={3}
+                            step={0.05}
+                            value={photoZoom}
+                            onChange={(e) => {
+                              const z = Number(e.target.value);
+                              setPhotoZoom(z);
+                              if (z <= 1.05) setPhotoPan({ x: 0, y: 0 });
+                            }}
+                            className="flex-1 h-1.5 accent-[#D4A843] cursor-pointer"
+                            aria-label="Zoom"
+                          />
+                          <span className="text-[10px] text-[#8494A7] w-8 text-right tabular-nums" style={dmSans}>
+                            {photoZoom.toFixed(1)}×
+                          </span>
+                        </div>
+
+                        {/* Tool row */}
+                        <div className="flex flex-wrap gap-1.5 justify-center">
                           <button
-                            onClick={captureFromCamera}
-                            className="px-4 py-2 bg-[#D4A843] text-[#0B1120] rounded-full text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform touch-manipulation"
+                            type="button"
+                            onClick={() => setShowGrid((g) => !g)}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 touch-manipulation ${showGrid ? "border-[#D4A843] text-[#D4A843] bg-[#D4A843]/10" : "border-white/20 text-white/80"}`}
                             style={dmSans}
+                            title="Rule of thirds grid"
                           >
-                            <Camera className="h-3.5 w-3.5" /> SNAP
+                            <Grid3x3 className="h-3 w-3" /> GRID
                           </button>
                           <button
+                            type="button"
+                            onClick={cycleTimer}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 touch-manipulation ${timerSec > 0 ? "border-[#D4A843] text-[#D4A843] bg-[#D4A843]/10" : "border-white/20 text-white/80"}`}
+                            style={dmSans}
+                            title="Countdown timer"
+                          >
+                            <Timer className="h-3 w-3" /> {timerSec === 0 ? "TIMER" : `${timerSec}s`}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMirrorPreview((m) => !m)}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 touch-manipulation ${mirrorPreview ? "border-[#D4A843] text-[#D4A843] bg-[#D4A843]/10" : "border-white/20 text-white/80"}`}
+                            style={dmSans}
+                            title="Mirror preview (front camera)"
+                          >
+                            <FlipHorizontal2 className="h-3 w-3" /> MIRROR
+                          </button>
+                          {torchSupported && (
+                            <button
+                              type="button"
+                              onClick={() => setTorch(!torchOn)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 touch-manipulation ${torchOn ? "border-[#D4A843] text-[#D4A843] bg-[#D4A843]/10" : "border-white/20 text-white/80"}`}
+                              style={dmSans}
+                              title="Flashlight"
+                            >
+                              <Flashlight className="h-3 w-3" /> TORCH
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Capture bar */}
+                        <div className="flex justify-center gap-1.5 px-1">
+                          <button
+                            type="button"
+                            onClick={snapWithTimer}
+                            disabled={countdown != null}
+                            className="px-4 py-2 bg-[#D4A843] text-[#0B1120] rounded-full text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform touch-manipulation disabled:opacity-60"
+                            style={dmSans}
+                          >
+                            <Camera className="h-3.5 w-3.5" /> {countdown != null ? "…" : "SNAP"}
+                          </button>
+                          <button
+                            type="button"
                             onClick={toggleCamera}
                             className="px-3 py-2 bg-white/10 text-white rounded-full text-xs font-bold flex items-center gap-1 border border-white/30 active:scale-95 transition-transform touch-manipulation"
                             style={dmSans}
@@ -898,6 +1154,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                             <RefreshCw className="h-3.5 w-3.5" /> FLIP
                           </button>
                           <button
+                            type="button"
                             onClick={stopCamera}
                             className="px-3 py-2 rounded-full text-xs font-bold border border-white/30 text-white active:scale-95 transition-transform touch-manipulation"
                             style={dmSans}
@@ -905,42 +1162,108 @@ export function CaliShareProof({ open, onClose, data }: Props) {
                             CANCEL
                           </button>
                         </div>
+                        <p className="text-[9px] text-[#8494A7] text-center" style={dmSans}>
+                          Drag to reframe · zoom 1–3× · frame matches sports card
+                        </p>
                       </div>
                     ) : (
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => startCamera("user")}
-                          className="flex-1 flex items-center justify-center rounded-xl border border-[#D4A843]/40 py-2 text-xs font-bold text-white hover:bg-[#D4A843]/10 active:bg-[#D4A843]/20"
-                          style={dmSans}
-                          title="Take Photo"
-                        >
-                          <Camera className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={triggerGallery}
-                          className="flex-1 flex items-center justify-center rounded-xl border border-white/15 py-2 text-xs font-bold text-white hover:bg-white/5 active:bg-white/10"
-                          style={dmSans}
-                          title="Choose Photo"
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                        </button>
-                        {photoSrc && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
-                            onClick={removePhoto}
-                            className="flex items-center justify-center rounded-xl border border-red-500/30 py-2 px-3 text-xs font-bold text-red-400 hover:bg-red-500/10 active:bg-red-500/20"
+                            type="button"
+                            onClick={() => startCamera("user")}
+                            className="flex-1 flex items-center justify-center rounded-xl border border-[#D4A843]/40 py-2 text-xs font-bold text-white hover:bg-[#D4A843]/10 active:bg-[#D4A843]/20"
                             style={dmSans}
-                            title="Remove Photo"
+                            title="Take Photo"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Camera className="h-3.5 w-3.5" />
                           </button>
-                        )}
-                      </div>
-                    )}
+                          <button
+                            type="button"
+                            onClick={triggerGallery}
+                            className="flex-1 flex items-center justify-center rounded-xl border border-white/15 py-2 text-xs font-bold text-white hover:bg-white/5 active:bg-white/10"
+                            style={dmSans}
+                            title="Choose Photo"
+                          >
+                            <Upload className="h-3.5 w-3.5" />
+                          </button>
+                          {photoSrc && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={retakePhoto}
+                                className="flex items-center justify-center rounded-xl border border-[#D4A843]/30 py-2 px-3 text-xs font-bold text-[#D4A843] hover:bg-[#D4A843]/10"
+                                style={dmSans}
+                                title="Retake"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={removePhoto}
+                                className="flex items-center justify-center rounded-xl border border-red-500/30 py-2 px-3 text-xs font-bold text-red-400 hover:bg-red-500/10 active:bg-red-500/20"
+                                style={dmSans}
+                                title="Remove Photo"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
 
-                    {photoSrc && !isCameraOpen && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <img src={photoSrc} alt="selfie preview" className="w-10 h-10 rounded-md object-cover border border-[#D4A843]/30" />
-                        <span className="text-[10px] text-emerald-400" style={dmSans}>Selfie ready</span>
+                        {photoSrc && (
+                          <div className="space-y-2 rounded-xl border border-[#D4A843]/20 bg-black/30 p-2.5">
+                            <div className="flex items-center gap-2">
+                              <img src={photoSrc} alt="selfie preview" className="w-10 h-10 rounded-md object-cover border border-[#D4A843]/30" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[10px] text-emerald-400 block" style={dmSans}>Selfie ready — adjust crop</span>
+                                <span className="text-[9px] text-[#8494A7]" style={dmSans}>Drag card preview area or use zoom</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <ZoomIn className="h-3.5 w-3.5 text-[#D4A843] flex-shrink-0" />
+                              <input
+                                type="range"
+                                min={1}
+                                max={3}
+                                step={0.05}
+                                value={photoZoom}
+                                onChange={(e) => {
+                                  const z = Number(e.target.value);
+                                  setPhotoZoom(z);
+                                  if (z <= 1.05) setPhotoPan({ x: 0, y: 0 });
+                                }}
+                                className="flex-1 h-1.5 accent-[#D4A843] cursor-pointer"
+                                aria-label="Photo zoom"
+                              />
+                              <span className="text-[10px] text-[#8494A7] w-8 text-right tabular-nums" style={dmSans}>
+                                {photoZoom.toFixed(1)}×
+                              </span>
+                            </div>
+                            <div
+                              className="relative h-20 rounded-lg overflow-hidden border border-white/10 bg-black cursor-grab active:cursor-grabbing touch-none"
+                              onPointerDown={onPanPointerDown}
+                              onPointerMove={onPanPointerMove}
+                              onPointerUp={onPanPointerUp}
+                              onPointerCancel={onPanPointerUp}
+                              title="Drag to reframe"
+                            >
+                              <img
+                                src={photoSrc}
+                                alt=""
+                                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                style={{
+                                  transform: `scale(${photoZoom}) translate(${photoPan.x * 12}%, ${photoPan.y * 12}%)`,
+                                  transformOrigin: "center center",
+                                }}
+                                draggable={false}
+                              />
+                              <div className="absolute inset-0 flex items-end justify-center pb-1 pointer-events-none">
+                                <span className="text-[8px] text-white/70 bg-black/50 px-1.5 rounded" style={dmSans}>DRAG TO REFRAME</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

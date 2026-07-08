@@ -114,7 +114,7 @@ const WELCOME_L2: StepCopy = {
   body: "Quick refresher on the logging flow:",
   bullets: [
     "Use the preview and coaching guide before each move",
-    "Log reps or time for each set — RPE is optional",
+    "Log reps or time for each set — Intensity 1–10 is optional but fuels hypertrophy",
     "Save with Log all sets before moving on",
     "Complete Workout once all sets are logged",
   ],
@@ -131,7 +131,7 @@ const STEP_COPY_L1: Record<Exclude<TutorialStep, "welcome" | "done">, StepCopy> 
   },
   enterSet: {
     title: "Log each set",
-    body: "Type how many reps or seconds you completed for Set 1. RPE is optional but helpful.",
+    body: "Type how many reps or seconds you completed for Set 1. Intensity (1–10) is optional but fuels your hypertrophy score — 10 is max.",
   },
   logSets: {
     title: "Save your work",
@@ -162,7 +162,7 @@ const STEP_COPY_L2: Record<Exclude<TutorialStep, "welcome" | "done">, StepCopy> 
   },
   enterSet: {
     title: "Log each set",
-    body: "Enter your reps or hold time for Set 1. Add RPE if you want to track intensity.",
+    body: "Enter your reps or hold time for Set 1. Add Intensity 1–10 to track effort (10 = max, fuels hypertrophy).",
   },
   logSets: {
     title: "Save your work",

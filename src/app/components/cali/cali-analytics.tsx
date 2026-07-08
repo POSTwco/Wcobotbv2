@@ -247,7 +247,7 @@ export function CaliAnalytics() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <p className="col-span-full text-[0.6rem] text-[#8494A7] -mb-1" style={dmSans}>
-          Hypertrophy scores max RPE (10), failure signals, and reps above prescription — log RPE every set.
+          Hypertrophy scores max Intensity (10), failure signals, and reps above prescription — log Intensity 1–10 every set (10 = max effort).
         </p>
         <CaliMetricTile
           label="CONSISTENCY"

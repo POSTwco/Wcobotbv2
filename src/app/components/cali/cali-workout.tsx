@@ -345,7 +345,7 @@ export function CaliWorkout() {
         if (lastSavedRef.current[key] === signature && loggedSets.has(key)) continue;
 
         const setBody: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: valueNum };
-        const rpeNum = Number(a.rpe);
+        const rpeNum = Math.round(Number(a.rpe));
         if (a.rpe && Number.isFinite(rpeNum) && rpeNum >= 1 && rpeNum <= 10) setBody.rpe = rpeNum;
         if (a.note?.trim()) setBody.note = a.note.trim();
         toLog.push(setBody);
@@ -391,7 +391,7 @@ export function CaliWorkout() {
       const v = Number(a.value);
       if (!Number.isFinite(v) || v <= 0) continue;
       const set: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: v };
-      const rpe = Number(a.rpe);
+      const rpe = Math.round(Number(a.rpe));
       if (a.rpe && Number.isFinite(rpe) && rpe >= 1 && rpe <= 10) set.rpe = rpe;
       if (a.note?.trim()) set.note = a.note.trim();
       bulk.push(set);
@@ -545,7 +545,7 @@ export function CaliWorkout() {
       const v = Number(a.value);
       if (!Number.isFinite(v) || v <= 0) continue;
       const set: LoggedSet = { blockIndex: b, itemIndex: i, setIndex: s, value: v };
-      const rpe = Number(a.rpe);
+      const rpe = Math.round(Number(a.rpe));
       if (a.rpe && Number.isFinite(rpe) && rpe >= 1 && rpe <= 10) set.rpe = rpe;
       if (a.note?.trim()) set.note = a.note.trim();
       bulk.push(set);
