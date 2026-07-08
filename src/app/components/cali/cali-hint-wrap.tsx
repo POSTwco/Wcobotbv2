@@ -1,27 +1,100 @@
 /**
- * Hover (desktop) / tap (mobile) help — quiet for veterans, clear for first-timers.
- * Does not change underlying values; only explains real data on the page.
+ * Desktop: hover tooltip.
+ * Mobile / coarse pointer: sticky popover (tap ℹ to open, tap outside or ✕ to close).
+ * Fixes flash-and-dismiss on touch devices where Radix Tooltip cannot stay open.
  */
 
-import { Info } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Info, X } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 
+const PANEL =
+  "max-w-[min(300px,calc(100vw-2rem))] w-[min(300px,calc(100vw-2rem))] bg-[#0F1729] border border-[#D4A843]/45 text-[#C8D0DC] px-3 py-2.5 shadow-xl shadow-black/50 z-[200]";
+
 interface Props {
   title: string;
-  /** Plain explanation; may include live numbers from the parent. */
   hint: string;
   children: React.ReactNode;
   side?: "top" | "bottom" | "left" | "right";
-  /** Desktop: icon fades in on hover. Mobile: soft always-visible affordance. */
   showIcon?: boolean;
-  /** Stretch trigger to full width (tiles, panels). */
   block?: boolean;
   className?: string;
-  /** Delay before show (ms). Default 280 — avoids accidental spam. */
   delayMs?: number;
+}
+
+function useCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(hover: none), (pointer: coarse)");
+    const apply = () => setCoarse(mq.matches);
+    apply();
+    mq.addEventListener?.("change", apply);
+    mq.addListener?.(apply);
+    return () => {
+      mq.removeEventListener?.("change", apply);
+      mq.removeListener?.(apply);
+    };
+  }, []);
+
+  return coarse;
+}
+
+function HintBody({
+  title,
+  hint,
+  onClose,
+  showClose,
+}: {
+  title: string;
+  hint: string;
+  onClose?: () => void;
+  showClose?: boolean;
+}) {
+  return (
+    <div className="relative">
+      {showClose && onClose && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }}
+          className="absolute -top-0.5 -right-0.5 p-1.5 rounded-md text-[#8494A7] hover:text-white active:bg-white/10 touch-manipulation"
+          aria-label="Close"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+      <p
+        className={`text-[0.65rem] font-bold text-[#D4A843] tracking-wide mb-1 ${showClose ? "pr-6" : ""}`}
+        style={orbitron}
+      >
+        {title}
+      </p>
+      <p className="text-[0.7rem] leading-relaxed text-[#C8D0DC]" style={dmSans}>
+        {hint}
+      </p>
+      {showClose && (
+        <p className="text-[0.55rem] text-[#8494A7] mt-2" style={dmSans}>
+          Tap ✕ or outside to close
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function CaliHintWrap({
@@ -34,6 +107,50 @@ export function CaliHintWrap({
   className = "",
   delayMs = 280,
 }: Props) {
+  const isTouchUi = useCoarsePointer();
+  const [open, setOpen] = useState(false);
+
+  const rowClass = `${block ? "flex w-full" : "inline-flex"} items-start gap-1 ${className}`;
+
+  // ── Mobile / touch: Popover stays open until dismissed ──────────────
+  if (isTouchUi) {
+    return (
+      <div className={rowClass}>
+        <div className={block ? "min-w-0 flex-1 w-full" : "min-w-0"}>{children}</div>
+        {showIcon && (
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="shrink-0 mt-0.5 p-2 -mr-1 rounded-lg text-[#D4A843] bg-[#D4A843]/10 border border-[#D4A843]/25 active:bg-[#D4A843]/20 touch-manipulation min-w-[36px] min-h-[36px] flex items-center justify-center"
+                aria-label={`About ${title}`}
+                aria-expanded={open}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              side={side}
+              sideOffset={10}
+              align="end"
+              collisionPadding={12}
+              className={`${PANEL} !w-[min(300px,calc(100vw-1.5rem))] p-3`}
+              style={{ width: "min(300px, calc(100vw - 1.5rem))" }}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              onPointerDownOutside={() => setOpen(false)}
+              onEscapeKeyDown={() => setOpen(false)}
+            >
+              <HintBody title={title} hint={hint} showClose onClose={() => setOpen(false)} />
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+    );
+  }
+
+  // ── Desktop: hover tooltip ─────────────────────────────────────────
   return (
     <Tooltip delayDuration={delayMs}>
       <TooltipTrigger asChild>
@@ -44,26 +161,14 @@ export function CaliHintWrap({
           <span className={block ? "min-w-0 flex-1 w-full" : "min-w-0"}>{children}</span>
           {showIcon && (
             <Info
-              className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#D4A843]/70 flex-shrink-0 opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100 transition-opacity duration-200"
+              className="w-3.5 h-3.5 text-[#D4A843]/70 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200"
               aria-hidden
             />
           )}
         </span>
       </TooltipTrigger>
-      <TooltipContent
-        side={side}
-        sideOffset={8}
-        className="max-w-[min(300px,calc(100vw-2rem))] bg-[#0F1729]/98 border border-[#D4A843]/40 text-[#C8D0DC] px-3 py-2.5 shadow-xl shadow-black/50 z-[120]"
-      >
-        <p className="text-[0.65rem] font-bold text-[#D4A843] tracking-wide mb-1" style={orbitron}>
-          {title}
-        </p>
-        <p className="text-[0.7rem] leading-relaxed text-[#C8D0DC]" style={dmSans}>
-          {hint}
-        </p>
-        <p className="text-[0.55rem] text-[#8494A7] mt-1.5 sm:hidden" style={dmSans}>
-          Tap outside to close
-        </p>
+      <TooltipContent side={side} sideOffset={8} className={PANEL}>
+        <HintBody title={title} hint={hint} />
       </TooltipContent>
     </Tooltip>
   );
