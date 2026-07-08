@@ -3,6 +3,7 @@ import { TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { deltaColor, formatDelta } from "../../lib/cali-analytics-types";
 import { CaliStatsSparkline } from "./cali-stats-sparkline";
 import { CaliGlassPanel } from "./cali-glass-panel";
+import { CaliHintWrap } from "./cali-hint-wrap";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -15,24 +16,27 @@ interface CaliMetricTileProps {
   accent: string;
   sparkData?: number[];
   onClick?: () => void;
+  /** Hover / mobile-tap definition; may include live numbers. */
+  hintTitle?: string;
+  hint?: string;
 }
 
 export function CaliMetricTile({
   label, value, delta, deltaSuffix = "", accent, sparkData, onClick,
+  hintTitle, hint,
 }: CaliMetricTileProps) {
   const Tag = onClick ? "button" : "div";
   const color = deltaColor(delta);
   const DeltaIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
 
-  return (
-    <CaliGlassPanel accent={accent} glow className="p-2.5 sm:p-3 min-h-[80px]">
+  const body = (
+    <CaliGlassPanel accent={accent} glow className="p-2.5 sm:p-3 min-h-[80px] w-full">
       <Tag
         type={onClick ? "button" : undefined}
         onClick={onClick}
         className={`text-left w-full h-full flex flex-col ${
           onClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
         }`}
-        title={label === "HYPERTROPHY" ? "Intensity 1–10 · 10 = max effort fuel" : undefined}
       >
         <p className="text-[0.55rem] font-bold tracking-widest mb-0.5" style={{ ...orbitron, color: accent }}>
           {label}
@@ -64,4 +68,14 @@ export function CaliMetricTile({
       </Tag>
     </CaliGlassPanel>
   );
+
+  if (hint && hintTitle) {
+    return (
+      <CaliHintWrap title={hintTitle} hint={hint} block side="top" className="w-full">
+        {body}
+      </CaliHintWrap>
+    );
+  }
+
+  return body;
 }
