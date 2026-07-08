@@ -24,7 +24,7 @@ export function CaliMovementChart({
   metric = "athleteScore",
   label = "Athlete Index",
   color = "#4274B9",
-  height = 220,
+  height = 150,
 }: CaliMovementChartProps) {
   const [mode, setMode] = useState<ChartMode>("candle");
   const gradId = useId().replace(/:/g, "");
@@ -60,13 +60,13 @@ export function CaliMovementChart({
 
   return (
     <div>
-      <div className="flex gap-1 mb-3">
+      <div className="flex gap-1 mb-1.5">
         {(["candle", "line"] as ChartMode[]).map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => setMode(m)}
-            className={`px-2 py-0.5 rounded text-[0.55rem] font-bold tracking-wider ${
+            className={`px-2 py-0.5 rounded text-[0.5rem] font-bold tracking-wider min-h-[28px] ${
               mode === m ? "text-white" : "text-[#8494A7]"
             }`}
             style={{
@@ -85,7 +85,7 @@ export function CaliMovementChart({
           data={data}
           metric={metric}
           label={label}
-          height={height + 20}
+          height={height + 12}
           showVolume={metric === "volume"}
           yDomain={yDomain}
         />

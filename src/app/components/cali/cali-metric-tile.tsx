@@ -25,15 +25,16 @@ export function CaliMetricTile({
   const DeltaIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
 
   return (
-    <CaliGlassPanel accent={accent} glow className="p-3 sm:p-4 min-h-[96px]">
+    <CaliGlassPanel accent={accent} glow className="p-2.5 sm:p-3 min-h-[80px]">
       <Tag
         type={onClick ? "button" : undefined}
         onClick={onClick}
         className={`text-left w-full h-full flex flex-col ${
           onClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
         }`}
+        title={label === "HYPERTROPHY" ? "Intensity 1–10 · 10 = max effort fuel" : undefined}
       >
-        <p className="text-[0.6rem] font-bold tracking-widest mb-1" style={{ ...orbitron, color: accent }}>
+        <p className="text-[0.55rem] font-bold tracking-widest mb-0.5" style={{ ...orbitron, color: accent }}>
           {label}
         </p>
         <div className="flex items-end justify-between gap-2 mt-auto">
@@ -42,21 +43,21 @@ export function CaliMetricTile({
               key={value}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-xl sm:text-2xl font-bold leading-none"
+              className="text-lg sm:text-xl font-bold leading-none"
               style={{ ...orbitron, color: delta !== 0 ? color : "#fff" }}
             >
               {value}
             </motion.p>
-            <div className="flex items-center gap-1 mt-1.5" style={{ color }}>
+            <div className="flex items-center gap-1 mt-1" style={{ color }}>
               <DeltaIcon className="w-3 h-3" />
-              <span className="text-[0.65rem] font-semibold" style={dmSans}>
+              <span className="text-[0.6rem] font-semibold" style={dmSans}>
                 {formatDelta(delta, deltaSuffix)}
               </span>
             </div>
           </div>
           {sparkData && sparkData.length > 1 && (
-            <div className="w-16 h-8 shrink-0 opacity-90">
-              <CaliStatsSparkline data={sparkData} bicolor height={32} />
+            <div className="w-14 h-7 shrink-0 opacity-90">
+              <CaliStatsSparkline data={sparkData} bicolor height={28} />
             </div>
           )}
         </div>

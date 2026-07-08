@@ -142,6 +142,17 @@ export function formatDelta(value: number, suffix = "%"): string {
   return `${sign}${value.toFixed(1)}${suffix}`;
 }
 
+/** Compact PnL-style delta for dense portfolio UI. Caps extreme % for readability. */
+export function formatDeltaCompact(value: number, suffix = "%"): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value > 500) return `>500${suffix}`;
+  if (value < -500) return `<-500${suffix}`;
+  const abs = Math.abs(value);
+  const decimals = abs >= 100 ? 0 : abs >= 10 ? 0 : 1;
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(decimals)}${suffix}`;
+}
+
 export function deltaColor(value: number): string {
   if (value > 0) return "#10b981";
   if (value < 0) return "#ef4444";
