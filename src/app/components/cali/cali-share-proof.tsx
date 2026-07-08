@@ -575,36 +575,72 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     // Full-bleed cover + user zoom/pan (default zoom 1.0 = no extra punch-in)
     drawImageCoverTransform(ctx, photo, W, H, photoZoom, photoPan.x, photoPan.y);
 
-    // Subtle vignette + dark overlay for text contrast (sports card depth)
+    // Soft vignette — lighter so glass panels + photo breathe
     const vignette = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.78);
-    vignette.addColorStop(0, "rgba(11,17,32,0.04)");
-    vignette.addColorStop(1, "rgba(11,17,32,0.68)");
+    vignette.addColorStop(0, "rgba(11,17,32,0.02)");
+    vignette.addColorStop(1, "rgba(11,17,32,0.42)");
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, W, H);
 
-    // Stronger bottom gradient for premium panel area
-    const bottomGrad = ctx.createLinearGradient(0, H * 0.48, 0, H);
-    bottomGrad.addColorStop(0, "rgba(11,17,32,0.18)");
-    bottomGrad.addColorStop(0.52, "rgba(11,17,32,0.90)");
-    bottomGrad.addColorStop(1, "rgba(11,17,32,0.98)");
+    // Lighter bottom fade (panel itself carries glass — don't crush the photo)
+    const bottomGrad = ctx.createLinearGradient(0, H * 0.52, 0, H);
+    bottomGrad.addColorStop(0, "rgba(11,17,32,0.05)");
+    bottomGrad.addColorStop(0.45, "rgba(20,40,78,0.28)");
+    bottomGrad.addColorStop(1, "rgba(11,17,32,0.48)");
     ctx.fillStyle = bottomGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Top branding strip (over selfie) - clean premium header
-    ctx.fillStyle = "rgba(9,14,26,0.72)";
-    ctx.fillRect(52, 52, W - 104, 128);
+    // Top branding strip — more transparent glass with WCO blue tint
+    const headerX = 52;
+    const headerY = 52;
+    const headerW = W - 104;
+    const headerH = 128;
+    const headerGrad = ctx.createLinearGradient(headerX, headerY, headerX, headerY + headerH);
+    // WCO blue #4274B9 mixed with deep navy — glassmorphic, photo shows through
+    headerGrad.addColorStop(0, "rgba(66, 116, 185, 0.42)");
+    headerGrad.addColorStop(0.55, "rgba(30, 58, 110, 0.32)");
+    headerGrad.addColorStop(1, "rgba(15, 28, 55, 0.26)");
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(headerX, headerY, headerW, headerH);
+
+    // Soft blue edge on header glass
+    ctx.strokeStyle = "rgba(106, 163, 224, 0.45)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(headerX + 0.5, headerY + 0.5, headerW - 1, headerH - 1);
+    // Gold hairline accent at bottom of header
+    ctx.strokeStyle = "rgba(212, 168, 67, 0.55)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(headerX + 12, headerY + headerH - 1);
+    ctx.lineTo(headerX + headerW - 12, headerY + headerH - 1);
+    ctx.stroke();
 
     // Small fist brand on left
     if (fist && fist.complete) {
       ctx.drawImage(fist, 70, 64, 78, 78);
     }
 
+    // Header text — full opacity + light shadow for legibility over glass
+    const textShadow = () => {
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 1;
+    };
+    const clearShadow = () => {
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    };
+
     // WCO small
-    ctx.fillStyle = COLORS.gold;
+    textShadow();
+    ctx.fillStyle = COLORS.gold; // solid gold, 100% opaque
     ctx.font = `700 22px Orbitron, sans-serif`;
     ctx.fillText("WCO", 162, 88);
 
-    // Main difficulty header (BEGINNER / INTERMEDIATE / ADVANCED) - 2026 sports card style
+    // Main difficulty header (BEGINNER / INTERMEDIATE / ADVANCED)
     const levelLabel = getLevelLabel(proof.level);
     ctx.fillStyle = COLORS.gold;
     ctx.font = `900 46px Orbitron, sans-serif`;
@@ -614,15 +650,20 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.fillStyle = COLORS.white;
     ctx.font = `700 22px Orbitron, sans-serif`;
     ctx.fillText(`LEVEL ${proof.level}  •  COMPLETE`, 162, 156);
+    clearShadow();
 
-    // Bottom premium stats panel — professional, translucent, with soft glow
+    // Bottom stats panel — more translucent glass (blue-navy tint), text stays solid
     const panelTop = H - 355;
     const panelH = 318;
-    ctx.fillStyle = "rgba(11, 17, 32, 0.82)";
+    const panelGrad = ctx.createLinearGradient(48, panelTop, 48, panelTop + panelH);
+    panelGrad.addColorStop(0, "rgba(25, 48, 95, 0.48)");
+    panelGrad.addColorStop(0.4, "rgba(15, 28, 55, 0.52)");
+    panelGrad.addColorStop(1, "rgba(11, 17, 32, 0.58)");
+    ctx.fillStyle = panelGrad;
     ctx.fillRect(48, panelTop, W - 96, panelH);
 
-    // Subtle tactical grid texture inside panel (matching pure receipt)
-    ctx.strokeStyle = "rgba(212,168,67,0.045)";
+    // Subtle tactical grid texture (lighter so glass stays airy)
+    ctx.strokeStyle = "rgba(106, 163, 224, 0.06)";
     ctx.lineWidth = 1;
     for (let x = 56; x < W - 56; x += 40) {
       ctx.beginPath();
@@ -639,8 +680,8 @@ export function CaliShareProof({ open, onClose, data }: Props) {
 
     // Soft gold outer glow border
     ctx.save();
-    ctx.shadowColor = "rgba(212, 168, 67, 0.45)";
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = "rgba(212, 168, 67, 0.4)";
+    ctx.shadowBlur = 14;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     ctx.strokeStyle = COLORS.gold;
@@ -648,23 +689,26 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.strokeRect(48, panelTop, W - 96, panelH);
     ctx.restore();
 
-    // Subtle inner line
-    ctx.strokeStyle = "rgba(212,168,67,0.22)";
+    // Subtle inner line (blue-gold hybrid glass edge)
+    ctx.strokeStyle = "rgba(106, 163, 224, 0.28)";
     ctx.lineWidth = 1;
     ctx.strokeRect(56, panelTop + 8, W - 112, panelH - 16);
 
     const padX = 68;
     let curY = panelTop + 24;
 
-    // Panel header — cleaner
+    // Panel header — solid opaque text over glass
+    textShadow();
     ctx.fillStyle = COLORS.gold;
     ctx.font = `700 15px Orbitron, sans-serif`;
     ctx.fillText("Athlete routine stats", padX, curY);
 
     curY += 20;
-    ctx.fillStyle = COLORS.slate;
+    ctx.fillStyle = COLORS.white;
+    ctx.globalAlpha = 1;
     ctx.font = `500 12px 'DM Sans', sans-serif`;
     ctx.fillText(formatDate(proof.completedAt), padX, curY);
+    clearShadow();
 
     // Divider
     curY += 13;
@@ -711,31 +755,32 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       const sx = padX + col * (colW + colGap);
       const sy = curY + row * (rowH + 9);
 
-      // translucent container
-      ctx.fillStyle = "rgba(15, 23, 42, 0.58)";
+      // glass mini-container (more translucent; photo peeks through)
+      ctx.fillStyle = "rgba(20, 40, 78, 0.38)";
       drawRounded(sx, sy, colW, rowH, 8);
       ctx.fill();
 
-      // soft gold glow border
+      // soft gold + blue glass border
       ctx.save();
-      ctx.shadowColor = "rgba(212, 168, 67, 0.35)";
-      ctx.shadowBlur = 6;
+      ctx.shadowColor = "rgba(212, 168, 67, 0.28)";
+      ctx.shadowBlur = 5;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
-      ctx.strokeStyle = "rgba(212,168,67,0.55)";
+      ctx.strokeStyle = "rgba(212,168,67,0.5)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.restore();
 
-      // label (cleaner)
+      // label + value — 100% opaque
+      textShadow();
       ctx.fillStyle = stats[i].clr;
       ctx.font = `600 11px 'DM Sans', sans-serif`;
       ctx.fillText(stats[i].label, sx + 14, sy + 18);
 
-      // value (cleaner, stronger)
       ctx.fillStyle = COLORS.white;
       ctx.font = `700 22px Orbitron, sans-serif`;
       ctx.fillText(stats[i].val, sx + 14, sy + 44);
+      clearShadow();
     }
 
     // Tier row — elegant translucent bar with glow
@@ -744,22 +789,23 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     const tierWidth = W - 136;
 
     ctx.save();
-    ctx.shadowColor = "rgba(212,168,67,0.4)";
+    ctx.shadowColor = "rgba(212,168,67,0.35)";
     ctx.shadowBlur = 7;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-    ctx.fillStyle = "rgba(212,168,67,0.09)";
+    ctx.fillStyle = "rgba(66, 116, 185, 0.22)";
     ctx.fillRect(padX, curY, tierWidth, tierH);
     ctx.strokeStyle = COLORS.gold;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(padX, curY, tierWidth, tierH);
     ctx.restore();
 
+    textShadow();
     ctx.fillStyle = COLORS.gold;
     ctx.font = `600 10px 'DM Sans', sans-serif`;
     ctx.fillText("ATHLETE TIER", padX + 12, curY + 13);
 
-    // Center the tier value
+    // Center the tier value — solid white
     const tierValue = (proof.athleteTier || "UNRANKED").toUpperCase();
     const tierCenterX = padX + tierWidth / 2;
 
@@ -768,33 +814,40 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.font = `700 17px Orbitron, sans-serif`;
     ctx.fillText(tierValue, tierCenterX, curY + 21);
     ctx.textAlign = "left";
+    clearShadow();
 
-    // Moves line — cleaner
+    // Moves line — solid labels
     curY += tierH + 18;
     const moves = (proof.topMoves || []).slice(0, 3);
     if (moves.length > 0) {
+      textShadow();
       ctx.fillStyle = COLORS.gold;
       ctx.font = `600 12px 'DM Sans', sans-serif`;
       ctx.fillText("MOVES", padX, curY);
-      ctx.fillStyle = COLORS.slate;
+      ctx.fillStyle = COLORS.white;
       ctx.font = `500 14px 'DM Sans', sans-serif`;
       ctx.fillText(moves.join("  •  "), padX + 58, curY);
+      clearShadow();
     }
 
     // Optional caption (selfie only)
     const cap = customCaption.trim();
     if (cap) {
       curY += 15;
-      ctx.fillStyle = COLORS.slate;
+      textShadow();
+      ctx.fillStyle = COLORS.white;
       ctx.font = `400 10px 'DM Sans', sans-serif`;
       const dcap = cap.length > 52 ? cap.slice(0, 49) + "..." : cap;
       ctx.fillText(`“${dcap}”`, padX, curY);
+      clearShadow();
     }
 
-    // Footer text - no leading semicolon
+    // Footer text — solid gold
+    textShadow();
     ctx.fillStyle = COLORS.gold;
     ctx.font = `500 10px 'DM Sans', sans-serif`;
     ctx.fillText("Powered by Hedera", padX, H - 42);
+    clearShadow();
   }
 
   async function handleDownload() {
