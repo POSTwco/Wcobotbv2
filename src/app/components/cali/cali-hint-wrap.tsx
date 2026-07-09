@@ -110,7 +110,7 @@ export function CaliHintWrap({
   const isTouchUi = useCoarsePointer();
   const [open, setOpen] = useState(false);
 
-  const rowClass = `${block ? "flex w-full" : "inline-flex"} items-start gap-1 ${className}`;
+  const rowClass = `${block ? "flex w-full" : "inline-flex"} items-start gap-0.5 ${className}`;
 
   // ── Mobile / touch: Popover stays open until dismissed ──────────────
   if (isTouchUi) {
@@ -122,12 +122,12 @@ export function CaliHintWrap({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="shrink-0 mt-0.5 p-2 -mr-1 rounded-lg text-[#D4A843] bg-[#D4A843]/10 border border-[#D4A843]/25 active:bg-[#D4A843]/20 touch-manipulation min-w-[36px] min-h-[36px] flex items-center justify-center"
+                className="shrink-0 self-start mt-0.5 p-1.5 -mr-0.5 rounded-md text-[#8494A7]/55 hover:text-[#8494A7] active:text-[#D4A843]/80 active:bg-white/[0.04] touch-manipulation flex items-center justify-center border-0 bg-transparent"
                 aria-label={`About ${title}`}
                 aria-expanded={open}
                 onClick={(e) => e.stopPropagation()}
               >
-                <Info className="w-3.5 h-3.5" />
+                <Info className="w-2.5 h-2.5 stroke-[1.5]" />
               </button>
             </PopoverTrigger>
             <PopoverContent
@@ -161,7 +161,7 @@ export function CaliHintWrap({
           <span className={block ? "min-w-0 flex-1 w-full" : "min-w-0"}>{children}</span>
           {showIcon && (
             <Info
-              className="w-3.5 h-3.5 text-[#D4A843]/70 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200"
+              className="w-2.5 h-2.5 text-[#8494A7]/45 flex-shrink-0 opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70 transition-opacity duration-200 stroke-[1.5]"
               aria-hidden
             />
           )}
