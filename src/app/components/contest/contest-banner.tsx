@@ -4,13 +4,16 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { Gift, Info, Sparkles, Trophy, Zap, Crown } from "lucide-react";
+import { Gift, Info, Sparkles, Trophy, Zap, Crown, Download } from "lucide-react";
 import { api } from "../../lib/api";
 import type { ContestPublicStats } from "../../lib/contest-types";
 import { ContestDetailsModal } from "./contest-details-modal";
 
 const orbitron = { fontFamily: "Orbitron, sans-serif" } as const;
 const dmSans = { fontFamily: "'DM Sans', sans-serif" } as const;
+
+/** Official HashPack wallet install page (browser extension + mobile) */
+const HASHPACK_DOWNLOAD_URL = "https://www.hashpack.app/download";
 
 const PRIZE_CHIPS = [
   { place: "1ST", amount: "$150", accent: "#F0D78C", glow: "rgba(240,215,140,0.35)" },
@@ -283,6 +286,24 @@ export function ContestBanner() {
                 <Info className="w-3.5 h-3.5" />
                 Contest details
               </button>
+
+              <a
+                href={HASHPACK_DOWNLOAD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 min-h-[34px] px-3 py-1.5 rounded-lg text-[0.65rem] sm:text-[0.7rem] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.98]"
+                style={{
+                  ...orbitron,
+                  color: "#E8F0FA",
+                  background: "rgba(66,116,185,0.22)",
+                  border: "1px solid rgba(106,163,224,0.45)",
+                  boxShadow: "0 2px 12px rgba(66,116,185,0.2)",
+                }}
+                title="Get HashPack wallet to connect and enter"
+              >
+                <Download className="w-3.5 h-3.5 text-[#6AA3E0]" />
+                Download HashPack
+              </a>
 
               <div
                 className="inline-flex items-center gap-1.5 min-h-[34px] px-2.5 py-1.5 rounded-lg text-[0.62rem] sm:text-[0.68rem]"
