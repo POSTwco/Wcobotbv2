@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Zap, ArrowRight, Trophy, Users, Coins, Swords, Shield, TrendingUp, Download, Vote, Flame, Sparkles, ChevronRight, ExternalLink, Dumbbell } from "lucide-react";
@@ -8,6 +9,8 @@ import { RateAthletesSection } from "../components/rate-athletes";
 import { SponsorShowcase, TitleSponsorBanner } from "../components/sponsor-showcase";
 import { ContestBanner } from "../components/contest/contest-banner";
 import { useConfig, useBattles, useAthletes } from "../lib/hooks";
+import { api } from "../lib/api";
+import type { ContestPublicStats } from "../lib/contest-types";
 import { AnimatedCounter, StaggerText, FadeInWhenVisible, TiltCard } from "../components/ui-enhancements";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
@@ -55,6 +58,31 @@ export function HomePage() {
   const { data: config } = useConfig();
   const { data: battles } = useBattles();
   const { data: athletes } = useAthletes();
+  const [contestStats, setContestStats] = useState<ContestPublicStats | null>(null);
+
+  // Hide Hedera badge while Connect-to-Enter is running (open / full / drawing)
+  const contestActive =
+    !!contestStats &&
+    (contestStats.status === "open" ||
+      contestStats.status === "full" ||
+      contestStats.status === "drawing");
+
+  const loadContest = useCallback(async () => {
+    try {
+      const res = await api.contest.publicStats();
+      if (res.success && res.data) setContestStats(res.data);
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadContest();
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") loadContest();
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [loadContest]);
 
   // Compute live stats from config + actual counts
   const tokenStats = config.tokenStats;
@@ -63,8 +91,8 @@ export function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative min-h-[70vh] sm:min-h-[90vh] flex items-center overflow-hidden">
+      {/* Hero Section — items-start so tall contest column doesn't collide with absolute title sponsor */}
+      <section className="relative min-h-[70vh] sm:min-h-[90vh] flex items-start sm:items-center overflow-hidden">
         {/* Background - athlete image, very subtle */}
         <div className="absolute inset-0">
           <img
@@ -85,22 +113,28 @@ export function HomePage() {
         {/* Title Sponsor Banner — absolutely positioned in the gap between header and hero content */}
         <TitleSponsorBanner />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-8 sm:py-20">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+        {/* Extra top padding clears absolute NiBrew/title-sponsor strip (logos up to ~120px) */}
+        <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 lg:pt-36 pb-10 sm:pb-16">
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-start">
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
             >
-              {/* WCO Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#4274B9]/10 border border-[#4274B9]/20 mb-6">
-                <img src={wcoLogoWhite} alt="WCO" className="h-4 w-auto" />
-                <span className="text-[#4274B9] text-xs tracking-wider font-semibold" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  LIVE ON HEDERA HASHGRAPH
-                </span>
-              </div>
+              {/* WCO Badge — hidden during Connect-to-Enter competition to free space for title sponsor */}
+              {!contestActive && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#4274B9]/10 border border-[#4274B9]/20 mb-6">
+                  <img src={wcoLogoWhite} alt="WCO" className="h-4 w-auto" />
+                  <span className="text-[#4274B9] text-xs tracking-wider font-semibold" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                    LIVE ON HEDERA HASHGRAPH
+                  </span>
+                </div>
+              )}
 
-              <h1 className="text-2xl sm:text-5xl lg:text-6xl mb-4 sm:mb-6" style={{ fontFamily: "Orbitron, sans-serif", lineHeight: 1.1 }}>
+              <h1
+                className={`text-2xl sm:text-5xl lg:text-6xl mb-4 sm:mb-6 ${contestActive ? "mt-1 sm:mt-0" : ""}`}
+                style={{ fontFamily: "Orbitron, sans-serif", lineHeight: 1.1 }}
+              >
                 <span className="text-white">BATTLE</span>
                 <br />
                 <span className="text-white">OF THE</span>
@@ -108,7 +142,7 @@ export function HomePage() {
                 <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">BARS</span>
               </h1>
 
-              <p className="text-[#8494A7] text-sm sm:text-lg mb-6 sm:mb-8 max-w-xl" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+              <p className="text-[#8494A7] text-sm sm:text-lg mb-5 sm:mb-6 max-w-xl" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                 The world's first decentralized calisthenics competition platform. 
                 Vote on IRL battles, stake tokens, earn rewards. 
                 <span className="text-[#4274B9] font-semibold"> No loss. Only Gains.</span>

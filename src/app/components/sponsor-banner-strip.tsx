@@ -96,7 +96,7 @@ export function SponsorBannerStrip({
                       alt={sponsor.name}
                       className={
                         isHero
-                          ? "h-[40px] sm:h-[100px] lg:h-[120px] w-auto object-contain max-w-[120px] sm:max-w-[380px] lg:max-w-[480px] drop-shadow-[0_0_20px_rgba(212,168,67,0.12)] sponsor-logo-primary"
+                          ? "h-[36px] sm:h-[64px] lg:h-[72px] w-auto object-contain max-w-[110px] sm:max-w-[280px] lg:max-w-[340px] drop-shadow-[0_0_20px_rgba(212,168,67,0.12)] sponsor-logo-primary"
                           : "h-8 sm:h-12 w-auto object-contain max-w-[72px] sm:max-w-[140px] drop-shadow-[0_0_12px_rgba(212,168,67,0.1)] sponsor-routine-logo"
                       }
                     />
@@ -115,7 +115,7 @@ export function SponsorBannerStrip({
                     <ImageWithFallback
                       src={sponsor.secondaryLogoUrl}
                       alt={`${sponsor.name} product`}
-                      className="h-[50px] sm:h-[75px] lg:h-[90px] w-auto object-contain max-w-[180px] sm:max-w-[280px] lg:max-w-[360px] drop-shadow-[0_0_20px_rgba(212,168,67,0.10)] sponsor-logo-secondary"
+                      className="h-[40px] sm:h-[56px] lg:h-[64px] w-auto object-contain max-w-[140px] sm:max-w-[220px] lg:max-w-[280px] drop-shadow-[0_0_20px_rgba(212,168,67,0.10)] sponsor-logo-secondary"
                     />
                   </motion.div>
                 </motion.div>
@@ -179,7 +179,7 @@ export function SponsorBannerStrip({
                       alt=""
                       className={
                         isHero
-                          ? "h-[70px] sm:h-[100px] lg:h-[120px] w-auto object-contain max-w-[150px] sm:max-w-[220px] lg:max-w-[280px] drop-shadow-[0_4px_24px_rgba(212,168,67,0.12)] sponsor-product-img"
+                          ? "h-[48px] sm:h-[64px] lg:h-[72px] w-auto object-contain max-w-[100px] sm:max-w-[160px] lg:max-w-[200px] drop-shadow-[0_4px_24px_rgba(212,168,67,0.12)] sponsor-product-img"
                           : "h-10 sm:h-14 w-auto object-contain max-w-[48px] sm:max-w-[80px] drop-shadow-[0_2px_12px_rgba(212,168,67,0.1)] sponsor-routine-product"
                       }
                     />
@@ -243,13 +243,20 @@ export function SponsorBannerStrip({
     return (
       <div
         ref={ref}
-        className="absolute top-0 left-0 right-0 z-20 flex items-start sm:items-center cursor-pointer sponsor-banner-compact"
-        style={{ height: "calc((100% - 500px) / 2 + 20px)", minHeight: "56px", paddingTop: "4px" }}
+        className="absolute top-0 left-0 right-0 z-20 flex items-start sm:items-center cursor-pointer sponsor-banner-compact pointer-events-none sm:pointer-events-auto"
+        style={{
+          /* Fixed compact band under nav — content below uses matching pt-* on home hero */
+          height: "auto",
+          minHeight: "72px",
+          maxHeight: "140px",
+          paddingTop: "8px",
+          paddingBottom: "4px",
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onClick={() => openSponsor(sponsor)}
       >
-        {content}
+        <div className="pointer-events-auto w-full">{content}</div>
       </div>
     );
   }

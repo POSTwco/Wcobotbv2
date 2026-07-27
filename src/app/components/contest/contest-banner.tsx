@@ -56,7 +56,7 @@ export function ContestBanner() {
 
   return (
     <>
-      <div className="mt-4 sm:mt-5 max-w-xl w-full">
+      <div className="mt-6 sm:mt-8 max-w-xl w-full">
         <div
           className="group relative rounded-2xl overflow-hidden transition-transform duration-300 hover:scale-[1.01]"
           style={{
