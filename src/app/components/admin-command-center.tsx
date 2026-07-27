@@ -17,9 +17,10 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Users, Dumbbell, Anchor, TrendingUp, TrendingDown, Target, Shield, Clock, RefreshCw, Loader2, Megaphone, ChevronDown } from "lucide-react";
+import { Activity, Users, Dumbbell, Anchor, TrendingUp, TrendingDown, Target, Shield, Clock, RefreshCw, Loader2, Megaphone, ChevronDown, Gift } from "lucide-react";
 import { api } from "../lib/api";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
+import type { ContestAdminOverview } from "../lib/contest-types";
 
 interface VisitData {
   today: number;
@@ -72,6 +73,7 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
   const [cali, setCali] = useState<CaliData | null>(null);
   const [sponsorStats, setSponsorStats] = useState<SponsorStats | null>(null);
   const [tierCounts, setTierCounts] = useState<SponsorTierCounts>({ title: 0, premium: 0, standard: 0, routine: 0 });
+  const [contest, setContest] = useState<ContestAdminOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isInvestorOpen, setIsInvestorOpen] = useState(false);
@@ -79,12 +81,17 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [vRes, cRes, dashRes, sponsorsRes] = await Promise.all([
+      const [vRes, cRes, dashRes, sponsorsRes, contestRes] = await Promise.all([
         api.admin.getVisitStats(wallet, sessionToken),
         api.admin.getCaliStats(wallet, sessionToken),
         api.admin.getDashboard(wallet, sessionToken).catch(() => ({ success: false })),
         api.admin.getSponsors(wallet, sessionToken).catch(() => ({ success: false, data: [] })),
+        api.admin.getContest(wallet, sessionToken).catch(() => ({ success: false })),
       ]);
+
+      if (contestRes && (contestRes as any).success && (contestRes as any).data) {
+        setContest((contestRes as any).data as ContestAdminOverview);
+      }
 
       if (vRes.success && vRes.data) {
         const d = vRes.data;
@@ -291,6 +298,28 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
             <div className="text-[#6AA3E0] text-[0.55rem] uppercase tracking-widest font-bold flex items-center gap-1"><Anchor className="w-3 h-3" /> ANCHORED</div>
             <div className="mt-1 text-xl font-bold text-white tabular-nums" style={{ fontFamily: "Orbitron, sans-serif" }}>{fmt(master.anchored)}</div>
             <div className="text-[0.55rem] text-[#8494A7]">ON HEDERA</div>
+          </div>
+
+          {/* Connect-to-Enter contest */}
+          <div className="rounded-lg border border-[#D4A843]/35 bg-[#D4A843]/8 p-2.5">
+            <div className="text-[#D4A843] text-[0.55rem] uppercase tracking-widest font-bold flex items-center gap-1">
+              <Gift className="w-3 h-3" /> CONTEST
+            </div>
+            <div className="mt-1 text-xl font-bold text-white tabular-nums" style={{ fontFamily: "Orbitron, sans-serif" }}>
+              {fmt(contest?.metrics.entryCount || 0)}
+              <span className="text-[0.65rem] text-[#8494A7] font-normal">
+                /{fmt(contest?.metrics.entryCap || 5000)}
+              </span>
+            </div>
+            <div className="text-[0.55rem] text-[#8494A7]">
+              {(contest?.config.status || "draft").toUpperCase()} · social {fmt(contest?.metrics.socialQualifiedCount || 0)}
+            </div>
+            <div className="mt-1 h-1 rounded-full bg-[#0B1120] overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#D4A843] to-[#4274B9]"
+                style={{ width: `${contest?.metrics.progressPercent || 0}%` }}
+              />
+            </div>
           </div>
         </div>
 

@@ -166,6 +166,7 @@ import {
 } from "./scaling.tsx";
 import { mountCaliRoutes } from "./cali.tsx";
 import { mountEliteRoutes } from "./elite.tsx";
+import { mountContestRoutes } from "./contest.tsx";
 
 const app = new Hono();
 
@@ -6120,6 +6121,7 @@ app.post(`${PREFIX}/admin/test/clear-ip-flags`, requireAdminSession, async (c) =
 // if cali code has a startup error.
 mountCaliRoutes(app, PREFIX);
 mountEliteRoutes(app, PREFIX);
+mountContestRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);

@@ -167,6 +167,7 @@ import {
 } from "./scaling.tsx";
 import { mountCaliRoutes } from "./cali.tsx";
 import { mountEliteRoutes } from "./elite.tsx";
+import { mountContestRoutes } from "./contest.tsx";
 
 const app = new Hono();
 
@@ -6117,10 +6118,11 @@ app.post(`${PREFIX}/admin/test/clear-ip-flags`, requireAdminSession, async (c) =
 // END PHASE 2 TEST TOOLS — Delete entire block above when going fully live
 // ===========================================================================
 
-// Mount cali routes LAST so core functionality (admin auth, etc.) is not affected
-// if cali code has a startup error.
+// Mount cali / elite / contest routes LAST so core functionality (admin auth, etc.)
+// is not affected if a satellite module has a startup error.
 mountCaliRoutes(app, PREFIX);
 mountEliteRoutes(app, PREFIX);
+mountContestRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);

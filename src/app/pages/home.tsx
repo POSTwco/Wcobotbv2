@@ -6,6 +6,7 @@ import { useVIP } from "../components/vip/vip-context";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { RateAthletesSection } from "../components/rate-athletes";
 import { SponsorShowcase, TitleSponsorBanner } from "../components/sponsor-showcase";
+import { ContestBanner } from "../components/contest/contest-banner";
 import { useConfig, useBattles, useAthletes } from "../lib/hooks";
 import { AnimatedCounter, StaggerText, FadeInWhenVisible, TiltCard } from "../components/ui-enhancements";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
@@ -126,7 +127,7 @@ export function HomePage() {
                     style={{ fontFamily: "Orbitron, sans-serif", fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)" }}
                   >
                     <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="truncate">{isConnecting ? "CONNECTING..." : "CONNECT & PLAY"}</span>
+                    <span className="truncate">{isConnecting ? "CONNECTING..." : "CONNECT TO ENTER"}</span>
                   </button>
                 ) : (
                   <Link
@@ -171,6 +172,9 @@ export function HomePage() {
                   </span>
                 </Link>
               </div>
+
+              {/* Connect-to-Enter contest banner */}
+              <ContestBanner />
             </motion.div>
 
             {/* Video Player with Glowing Frame */}

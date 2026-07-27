@@ -56,6 +56,7 @@ import {
   type MirrorNFT,
 } from "../lib/hedera-mirror";
 import { api } from "../lib/api";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -383,6 +384,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!accountId || !connected || !session) {
       setWalletSessionToken(null);
       walletSessionTokenRef.current = null;
+      try {
+        sessionStorage.removeItem("wcoWalletSessionToken");
+      } catch {
+        /* ignore */
+      }
       return;
     }
 
@@ -400,7 +406,41 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (res.success && res.data?.token) {
           setWalletSessionToken(res.data.token);
           walletSessionTokenRef.current = res.data.token;
+          try {
+            sessionStorage.setItem("wcoWalletSessionToken", res.data.token);
+          } catch {
+            /* ignore */
+          }
           console.log(`[BOTB Wallet Context] Wallet session registered ✓ (TTL: ${Math.round((res.data.ttlMs || 0) / 3600000)}h)`);
+
+          // Connect-to-Enter contest: auto-enter + login ping (non-blocking)
+          try {
+            const enterRes = await api.contest.enter(res.data.token);
+            if (enterRes.success && enterRes.data) {
+              const d = enterRes.data as {
+                alreadyEntered?: boolean;
+                entryNumber?: number;
+                message?: string;
+              };
+              if (!d.alreadyEntered && d.entryNumber) {
+                toast.success(d.message || `You're contest entry #${d.entryNumber}`, {
+                  duration: 6000,
+                });
+              }
+            } else if (enterRes.code === "INSUFFICIENT_HBAR") {
+              toast.message("Hold ≥1 HBAR to enter the Connect-to-Enter contest", {
+                duration: 5000,
+              });
+            } else if (enterRes.code === "CONTEST_FULL") {
+              toast.message("Connect-to-Enter contest is full (5,000 wallets)", {
+                duration: 4000,
+              });
+            }
+            // Login ping for claim tracking (ignore errors)
+            api.contest.loginPing(res.data.token).catch(() => {});
+          } catch (contestErr) {
+            console.log("[BOTB Wallet Context] Contest enter skipped:", contestErr);
+          }
         } else {
           console.error(`[BOTB Wallet Context] Wallet session registration failed:`, res.error);
           // Don't block the user — they can still browse, just can't vote/chat
@@ -540,6 +580,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
     setWalletSessionToken(null);
     walletSessionTokenRef.current = null;
+    try {
+      sessionStorage.removeItem("wcoWalletSessionToken");
+    } catch {
+      /* ignore */
+    }
     clearConnectedState();
     setError(null);
   }, [clearConnectedState, accountId, walletSessionToken]);

@@ -11,6 +11,7 @@ import {
   Grid3x3, Timer, Flashlight, FlipHorizontal2, ZoomIn, RotateCcw,
 } from "lucide-react";
 import fistLogo from "../../../assets/brand/fist-wco.jpg";
+import { api } from "../../lib/api";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -877,7 +878,26 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       return customCaption.trim();
     }
     const moves = (proof.topMoves || []).slice(0, 3).join(", ");
-    return `Just crushed my WCO Level ${proof.level} workout — ${proof.totalSets} sets across ${proof.uniqueExercises} moves${moves ? ` (${moves})` : ""}. ${proof.prCount} PRs. ${proof.streak}-day streak. Real proof on Hedera. #WCO #Cali #HederaWeb3`;
+    return `Just crushed my WCO Level ${proof.level} workout — ${proof.totalSets} sets across ${proof.uniqueExercises} moves${moves ? ` (${moves})` : ""}. ${proof.prCount} PRs. ${proof.streak}-day streak. Real proof on Hedera. #WCO #Cali #HederaWeb3 #ConnectToEnter #BattleOfTheBars`;
+  }
+
+  async function recordContestShare(platform: "x" | "native" | "other") {
+    try {
+      let sessionToken: string | null = null;
+      try {
+        sessionToken = sessionStorage.getItem("wcoWalletSessionToken");
+      } catch {
+        sessionToken = null;
+      }
+      if (!sessionToken) return;
+      const res = await api.contest.share(sessionToken, platform);
+      if (res.success && res.data?.socialQualified && !res.data.alreadyQualified) {
+        setShareFeedback("✨ Social prize lane unlocked!");
+        setTimeout(() => setShareFeedback(null), 4500);
+      }
+    } catch {
+      /* non-fatal */
+    }
   }
 
   // Centralized proof file + text generator
@@ -929,6 +949,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
             await navigator.share({ files: [file], text, title: "WCO Workout Proof" });
             setShareFeedback("✅ Photo + caption shared!");
             setTimeout(() => setShareFeedback(null), 3000);
+            void recordContestShare("native");
             return;
           } catch (e: any) {
             if (e.name === "AbortError") return;
@@ -937,6 +958,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
         doDownloadAndCopy();
         setShareFeedback("✅ PNG downloaded + caption copied. Use share sheet or attach the file.");
         setTimeout(() => setShareFeedback(null), 4000);
+        void recordContestShare("native");
         return;
       }
 
@@ -948,6 +970,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       if (platform === "x") {
         window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
         setShareFeedback("✅ PNG downloaded + caption copied. X opened with your text — attach the PNG.");
+        void recordContestShare("x");
       } else if (platform === "fb") {
         window.open(
           `https://www.facebook.com/sharer/sharer.php?u=https://wcorg.io/calisthenics&quote=${encodeURIComponent(text)}`,

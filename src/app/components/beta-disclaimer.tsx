@@ -12,7 +12,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Shield, AlertTriangle, ExternalLink, ChevronDown } from "lucide-react";
 
 const STORAGE_KEY = "botb-beta-agreement-v1";
-const AGREEMENT_VERSION = "1.0.0";
+/** Bumped for Connect-to-Enter contest terms — forces re-accept. */
+const AGREEMENT_VERSION = "1.1.0";
 
 interface BetaAgreement {
   version: string;
@@ -157,6 +158,52 @@ export function BetaDisclaimer() {
             you consent to the collection of anonymized usage data for platform improvement purposes.
           </Section>
 
+          <Section title="9. Connect-to-Enter Contest">
+            From time to time WCO may run promotional contests, including the{" "}
+            <strong className="text-[#E8ECF0]">Connect-to-Enter giveaway</strong> described on the platform.
+            By connecting a wallet while a contest is open you may be automatically entered if you meet
+            eligibility rules published in-app (including, where applicable, holding at least{" "}
+            <strong className="text-[#E8ECF0]">1 HBAR</strong> for server-side verification). Key terms:
+            <ul className="mt-2 ml-4 space-y-1 list-disc marker:text-[#4274B9]/50">
+              <li>
+                Main prizes may total <strong className="text-[#E8ECF0]">$250 USD</strong> (e.g. $150 / $75 / $25)
+                among eligible entrants; a separate social prize (e.g.{" "}
+                <strong className="text-[#E8ECF0]">$100 USD</strong>) may apply for sharing a workout on X
+                using the platform share tool.
+              </li>
+              <li>
+                Entry caps (e.g. first <strong className="text-[#E8ECF0]">5,000</strong> unique wallets),
+                deadlines, and status (open / full / closed) are controlled by WCO and shown in the contest UI.
+              </li>
+              <li>
+                No purchase of BOTB tokens is required to enter. Holding HBAR solely for network/eligibility
+                verification does not constitute a purchase of a contest ticket from WCO.
+              </li>
+              <li>
+                Winners are selected using a documented fair method (e.g. admin export + external random
+                picker). Main-prize winners may need to log in with the winning wallet during a claim window.
+              </li>
+              <li>
+                <strong className="text-[#E8ECF0]">Winner wallet addresses are not published publicly.</strong>{" "}
+                Entrant lists are available only to authenticated administrators for prize administration.
+                Public announcements describe prizes and selection — not full wallet IDs.
+              </li>
+              <li>
+                You must be of legal age of majority in your jurisdiction. Void where prohibited. Taxes on
+                prizes are the winner's responsibility. WCO may require reasonable verification before payout
+                and may disqualify fraud, bots, or multi-accounting abuse.
+              </li>
+              <li>
+                Prize payment method (USDC, HBAR, fiat, or other) is at WCO's reasonable discretion after
+                verification. Platform decisions are final to the fullest extent permitted by law.
+              </li>
+              <li>
+                This contest is a promotional activity, not financial advice, and does not constitute an
+                offer of securities or investment contracts.
+              </li>
+            </ul>
+          </Section>
+
           <div className="pt-2 pb-1 border-t border-[#4274B9]/10">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#8494A7]">
               <ExternalLink className="w-3 h-3 shrink-0" />
@@ -212,7 +259,7 @@ export function BetaDisclaimer() {
           </div>
 
           <p className="text-center text-[0.65rem] text-[#8494A7]/60 leading-tight">
-            Version {AGREEMENT_VERSION} &middot; Last updated March 2026 &middot; World Calisthenics Organization
+            Version {AGREEMENT_VERSION} &middot; Last updated July 2026 &middot; World Calisthenics Organization
           </p>
         </div>
       </div>

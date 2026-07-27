@@ -388,6 +388,157 @@ export const api = {
         privacyNote: string;
       }>("/admin/visit-stats", { adminWallet, sessionToken }),
 
+    // Connect-to-Enter Contest (admin-only — full wallets never public)
+    getContest: (adminWallet: string, sessionToken?: string) =>
+      request<import("./contest-types").ContestAdminOverview>("/admin/contest", {
+        adminWallet,
+        sessionToken,
+      }),
+
+    setContestStatus: (
+      status: import("./contest-types").ContestStatus,
+      adminWallet: string,
+      sessionToken?: string,
+      reason?: string,
+    ) =>
+      request<{ config: import("./contest-types").ContestConfig }>("/admin/contest/status", {
+        method: "POST",
+        body: { status, reason },
+        adminWallet,
+        sessionToken,
+      }),
+
+    updateContestConfig: (
+      data: Partial<{
+        entryCap: number;
+        endsAt: string | null;
+        requireCaliSession: boolean;
+        title: string;
+        claimWindowDays: number;
+      }>,
+      adminWallet: string,
+      sessionToken?: string,
+    ) =>
+      request<{ config: import("./contest-types").ContestConfig }>("/admin/contest/config", {
+        method: "POST",
+        body: data,
+        adminWallet,
+        sessionToken,
+      }),
+
+    getContestEntries: (
+      adminWallet: string,
+      sessionToken: string | undefined,
+      params?: { page?: number; pageSize?: number; q?: string; social?: boolean },
+    ) => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+      if (params?.q) qs.set("q", params.q);
+      if (params?.social) qs.set("social", "1");
+      const suffix = qs.toString() ? `?${qs}` : "";
+      return request<import("./contest-types").ContestEntriesPage>(
+        `/admin/contest/entries${suffix}`,
+        { adminWallet, sessionToken },
+      );
+    },
+
+    exportContestEntries: (
+      format: "csv" | "json",
+      adminWallet: string,
+      sessionToken?: string,
+      socialOnly?: boolean,
+    ) => {
+      const qs = new URLSearchParams({ format });
+      if (socialOnly) qs.set("social", "1");
+      const url = `${BASE_URL}/admin/contest/entries/export?${qs}`;
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${publicAnonKey}`,
+        "X-Admin-Wallet": adminWallet,
+      };
+      if (sessionToken) headers["X-Admin-Session"] = sessionToken;
+      return { url, headers };
+    },
+
+    getContestAudit: (
+      adminWallet: string,
+      sessionToken?: string,
+      params?: { page?: number; pageSize?: number; action?: string },
+    ) => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+      if (params?.action) qs.set("action", params.action);
+      const suffix = qs.toString() ? `?${qs}` : "";
+      return request<{
+        items: import("./contest-types").ContestAuditEvent[];
+        total: number;
+        page: number;
+        pageSize: number;
+        hasMore: boolean;
+      }>(`/admin/contest/audit${suffix}`, { adminWallet, sessionToken });
+    },
+
+    setContestWinners: (
+      data: {
+        main: Array<{
+          place: 1 | 2 | 3;
+          accountId: string;
+          amountUsd: number;
+          status?: string;
+        }>;
+        social?: { accountId: string; amountUsd?: number; status?: string } | null;
+        method?: "external_picker" | "admin_manual";
+        seedNote?: string;
+        publicAnnouncement?: { copy: string };
+      },
+      adminWallet: string,
+      sessionToken?: string,
+    ) =>
+      request<{ winners: import("./contest-types").ContestWinners }>("/admin/contest/winners", {
+        method: "POST",
+        body: data,
+        adminWallet,
+        sessionToken,
+      }),
+
+    setContestWinnerStatus: (
+      data: {
+        lane: "main" | "social";
+        place?: number;
+        status: import("./contest-types").ContestWinnerStatus;
+        payoutRef?: string;
+      },
+      adminWallet: string,
+      sessionToken?: string,
+    ) =>
+      request<{ winners: import("./contest-types").ContestWinners }>(
+        "/admin/contest/winners/status",
+        { method: "POST", body: data, adminWallet, sessionToken },
+      ),
+
+    verifyContestSocial: (
+      accountId: string,
+      url: string | undefined,
+      adminWallet: string,
+      sessionToken?: string,
+    ) =>
+      request<{ entry: import("./contest-types").ContestEntry }>(
+        "/admin/contest/social/verify",
+        { method: "POST", body: { accountId, url }, adminWallet, sessionToken },
+      ),
+
+    getContestMetrics: (adminWallet: string, sessionToken?: string) =>
+      request<{
+        entryCount: number;
+        entryCap: number;
+        remaining: number;
+        status: import("./contest-types").ContestStatus;
+        startedAt: string | null;
+        socialQualifiedCount: number;
+        dailySeries: Array<{ date: string; count: number }>;
+      }>("/admin/contest/metrics", { adminWallet, sessionToken }),
+
     /** Batch-update multiple battles' status at once (e.g., open voting on all R1 battles) */
     batchBattleStatus: (battleIds: string[], status: string, adminWallet: string, sessionToken?: string) =>
       request<{ results: { id: string; success: boolean; prev?: string; error?: string }[]; updated: number; total: number }>(
@@ -994,6 +1145,39 @@ export const api = {
 
     getFeaturedAthlete: () =>
       request<{ featured: import("./types").EliteFeaturedAthlete | null }>("/elite/featured-athlete"),
+  },
+
+  // ---------------------------------------------------------------------------
+  // Connect-to-Enter Contest
+  // ---------------------------------------------------------------------------
+  contest: {
+    publicStats: () =>
+      request<import("./contest-types").ContestPublicStats>("/contest/public-stats"),
+
+    enter: (walletSessionToken: string) =>
+      request<import("./contest-types").ContestEnterResult>("/contest/enter", {
+        method: "POST",
+        body: {},
+        walletSessionToken,
+      }),
+
+    me: (walletSessionToken: string) =>
+      request<import("./contest-types").ContestMeStatus>("/contest/me", {
+        walletSessionToken,
+      }),
+
+    loginPing: (walletSessionToken: string) =>
+      request<{ entered: boolean; lastLoginAt?: string; loginCount?: number }>(
+        "/contest/me/login-ping",
+        { method: "POST", body: {}, walletSessionToken },
+      ),
+
+    share: (walletSessionToken: string, platform: "x" | "native" | "other" = "x") =>
+      request<import("./contest-types").ContestShareResult>("/contest/share", {
+        method: "POST",
+        body: { platform },
+        walletSessionToken,
+      }),
   },
 };
 
