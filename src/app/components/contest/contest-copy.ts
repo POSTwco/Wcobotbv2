@@ -17,7 +17,40 @@ export const CONTEST_BANNER_SUB =
 export const CONTEST_SOCIAL_PROMO =
   "We're running a Connect-to-Enter giveaway on WCO — first 5,000 eligible Hedera wallets with ≥1 HBAR are in for $250. Crush a workout, share your proof, and you could take the $100 social prize. Connect at wcorg.io — winners announced without publishing wallet addresses. #Hedera #Calisthenics #WCO #ConnectToEnter";
 
-export const CONTEST_SHARE_HASHTAGS = "#WCO #BattleOfTheBars #ConnectToEnter #HederaWeb3";
+/** Core brand tags (always safe on posts) */
+export const CONTEST_SHARE_HASHTAGS = "#WCO #BattleOfTheBars #HederaWeb3";
+
+/**
+ * Unique campaign tracking hashtag for Connect-to-Enter social monitoring.
+ * Use this to find contest-related shares on X / social search.
+ */
+export const CONTEST_TRACKING_HASHTAG = "#WCOCTE250";
+
+/** Short contest blurb for workout share captions */
+export const CONTEST_SHARE_SENTENCE =
+  "Also in for the WCO $250 Connect-to-Enter giveaway — first 5,000 wallets with ≥1 HBAR auto-enter, plus a $100 share prize lane.";
+
+/**
+ * Full default workout-share caption (proof stats + contest + tracking tag).
+ */
+export function buildWorkoutShareCaption(args: {
+  level: number;
+  totalSets: number;
+  uniqueExercises: number;
+  topMoves?: string[];
+  prCount: number;
+  streak: number;
+  entryNumber?: number | null;
+}): string {
+  const moves = (args.topMoves || []).slice(0, 3).join(", ");
+  const workoutLine = `Just crushed my WCO Level ${args.level} workout — ${args.totalSets} sets across ${args.uniqueExercises} moves${moves ? ` (${moves})` : ""}. ${args.prCount} PRs. ${args.streak}-day streak. Real proof on Hedera.`;
+  const entryLine =
+    args.entryNumber && args.entryNumber > 0
+      ? ` Contest entry #${args.entryNumber} — ${CONTEST_SHARE_SENTENCE}`
+      : ` ${CONTEST_SHARE_SENTENCE}`;
+  const tags = `${CONTEST_TRACKING_HASHTAG} #ConnectToEnter ${CONTEST_SHARE_HASHTAGS} #Cali`;
+  return `${workoutLine}${entryLine} Connect at wcorg.io ${tags}`;
+}
 
 export function contestEnteredToast(entryNumber: number): string {
   return `You're entry #${entryNumber}. Hold ≥1 HBAR, stay eligible, and watch for winner claims. Share a workout proof on X for the $100 bonus lane.`;

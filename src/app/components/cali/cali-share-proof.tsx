@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import fistLogo from "../../../assets/brand/fist-wco.jpg";
 import { api } from "../../lib/api";
+import { buildWorkoutShareCaption, CONTEST_TRACKING_HASHTAG } from "../contest/contest-copy";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -119,6 +120,8 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const [copied, setCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  /** Contest entry # for auto-caption (loaded when modal opens) */
+  const [contestEntryNumber, setContestEntryNumber] = useState<number | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   // Ultimate selfie studio
@@ -322,9 +325,32 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       setPhotoZoom(1);
       setPhotoPan({ x: 0, y: 0 });
       setCountdown(null);
+      setContestEntryNumber(null);
       if (isCameraOpen) stopCamera();
     }
   }, [open, isCameraOpen]);  // stopCamera is stable, no need in deps
+
+  // Load contest entry # for auto social caption (tracking + personalization)
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = sessionStorage.getItem("wcoWalletSessionToken");
+        if (!token) return;
+        const res = await api.contest.me(token);
+        if (cancelled) return;
+        if (res.success && res.data?.entered && res.data.entryNumber) {
+          setContestEntryNumber(res.data.entryNumber);
+        }
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Cleanup camera on unmount
   useEffect(() => {
@@ -875,10 +901,22 @@ export function CaliShareProof({ open, onClose, data }: Props) {
 
   function getShareText(): string {
     if (customCaption.trim()) {
-      return customCaption.trim();
+      // If user customized but forgot the tracking tag, soft-append it once
+      const base = customCaption.trim();
+      if (!base.includes(CONTEST_TRACKING_HASHTAG)) {
+        return `${base} ${CONTEST_TRACKING_HASHTAG}`;
+      }
+      return base;
     }
-    const moves = (proof.topMoves || []).slice(0, 3).join(", ");
-    return `Just crushed my WCO Level ${proof.level} workout — ${proof.totalSets} sets across ${proof.uniqueExercises} moves${moves ? ` (${moves})` : ""}. ${proof.prCount} PRs. ${proof.streak}-day streak. Real proof on Hedera. #WCO #Cali #HederaWeb3 #ConnectToEnter #BattleOfTheBars`;
+    return buildWorkoutShareCaption({
+      level: proof.level,
+      totalSets: proof.totalSets,
+      uniqueExercises: proof.uniqueExercises,
+      topMoves: proof.topMoves,
+      prCount: proof.prCount,
+      streak: proof.streak,
+      entryNumber: contestEntryNumber,
+    });
   }
 
   async function recordContestShare(platform: "x" | "native" | "other") {
