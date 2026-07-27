@@ -9,10 +9,10 @@ export const CONTEST_TITLE = "Connect to Enter — $250 Giveaway";
 export const CONTEST_HERO_LINE =
   "Connect to Enter. First 5,000 wallets with ≥1 HBAR auto-join a $250 giveaway. Share a workout on X for a shot at +$100. No loss. Only gains.";
 
-export const CONTEST_BANNER_HEADLINE = "$250 Connect-to-Enter Contest";
+export const CONTEST_BANNER_HEADLINE = "$250 CONNECT-TO-ENTER";
 
 export const CONTEST_BANNER_SUB =
-  "1st $150 · 2nd $75 · 3rd $25 · +$100 share bonus · ≥1 HBAR required · first 5,000 unique wallets";
+  "First 5,000 wallets · ≥1 HBAR · auto-enter on connect · share on X for +$100";
 
 export const CONTEST_SOCIAL_PROMO =
   "We're running a Connect-to-Enter giveaway on WCO — first 5,000 eligible Hedera wallets with ≥1 HBAR are in for $250. Crush a workout, share your proof, and you could take the $100 social prize. Connect at wcorg.io — winners announced without publishing wallet addresses. #Hedera #Calisthenics #WCO #ConnectToEnter";
