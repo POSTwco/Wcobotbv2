@@ -137,6 +137,9 @@ const DEFAULT_CONFIG: SiteConfig & { isAdmin: boolean } = {
   votingEnabled: true,
   mintingEnabled: false,
   stakingEnabled: false,
+  heroVideoUrl: null,
+  heroVideoUpdatedAt: null,
+  heroVideoUpdatedBy: null,
   isAdmin: false,
 };
 

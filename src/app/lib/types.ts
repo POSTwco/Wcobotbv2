@@ -332,6 +332,14 @@ export interface SiteConfig {
   votingEnabled: boolean;
   mintingEnabled: boolean;
   stakingEnabled: boolean;
+  /**
+   * Homepage hero title video — public Supabase Storage URL only.
+   * Writable solely via POST /admin/hero-video (requireAdminSession).
+   * When null/empty, frontend falls back to DEFAULT_HERO_VIDEO_URL.
+   */
+  heroVideoUrl?: string | null;
+  heroVideoUpdatedAt?: string | null;
+  heroVideoUpdatedBy?: string | null;
 }
 
 // ---------------------------------------------------------------------------

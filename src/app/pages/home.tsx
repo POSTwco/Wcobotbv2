@@ -12,11 +12,11 @@ import { useConfig, useBattles, useAthletes } from "../lib/hooks";
 import { api } from "../lib/api";
 import type { ContestPublicStats } from "../lib/contest-types";
 import { AnimatedCounter, StaggerText, FadeInWhenVisible, TiltCard } from "../components/ui-enhancements";
+import { resolveHeroVideoUrl } from "../lib/site-media";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
 
 const ATHLETE_BG = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/athlete1.jpg";
-const WCO_VIDEO = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCOVID.M4V";
 
 function StatCard({ label, value, icon: Icon, color, animatedValue, prefix, suffix, decimals }: { label: string; value: string; icon: any; color: string; animatedValue?: number; prefix?: string; suffix?: string; decimals?: number }) {
   const { vipActive } = useVIP();
@@ -88,6 +88,8 @@ export function HomePage() {
   const tokenStats = config.tokenStats;
   const totalBattles = battles.length || tokenStats.totalBattles;
   const totalAthletes = athletes.length;
+  // Admin-editable hero video (Supabase Storage URL) with safe default fallback
+  const heroVideoSrc = resolveHeroVideoUrl(config.heroVideoUrl);
 
   return (
     <div className="min-h-screen">
@@ -235,7 +237,8 @@ export function HomePage() {
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#6AA3E0] to-transparent z-10" />
                 
                 <video
-                  src={WCO_VIDEO}
+                  key={heroVideoSrc}
+                  src={heroVideoSrc}
                   autoPlay
                   loop
                   muted

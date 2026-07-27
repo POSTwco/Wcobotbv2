@@ -72,6 +72,7 @@
  *   POST   /admin/proposals          Create or update proposal
  *   POST   /admin/proposals/:id/status  Update proposal status
  *   POST   /admin/config             Update site configuration
+ *   POST   /admin/hero-video         Set/reset homepage hero title video (allowlisted Storage URL)
  *
  * SPONSOR routes:
  *   GET    /sponsors                 List active sponsors (public)
@@ -3051,7 +3052,14 @@ app.post(`${PREFIX}/admin/config`, requireAdminSession, async (c) => {
     const existing = (await kv.get("config:site")) || {};
 
     // Strip any attempt to inject adminWallets via config update body
-    const { adminWallets: _stripped, ...safeBody } = body;
+    // Also strip hero video fields — use dedicated /admin/hero-video (validated allowlist)
+    const {
+      adminWallets: _stripped,
+      heroVideoUrl: _hv,
+      heroVideoUpdatedAt: _hva,
+      heroVideoUpdatedBy: _hvb,
+      ...safeBody
+    } = body;
     const config = {
       ...existing,
       ...safeBody,
@@ -3063,6 +3071,89 @@ app.post(`${PREFIX}/admin/config`, requireAdminSession, async (c) => {
   } catch (error) {
     console.log(`[ADMIN] Error updating config: ${error}`);
     return c.json({ success: false, error: safeErrorMsg("Failed to update config") }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/hero-video — Set or reset homepage hero title video
+// SECURITY: requireAdminSession + HTTPS Supabase Storage public URL allowlist only.
+// Body: { url: string } | { reset: true }
+// ---------------------------------------------------------------------------
+const HERO_VIDEO_DEFAULT_URL =
+  "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/WCOVID.M4V";
+const HERO_VIDEO_ALLOWED_HOST = "wotsoauebnoyvegcvouo.supabase.co";
+const HERO_VIDEO_ALLOWED_PATH = "/storage/v1/object/public/";
+
+function isAllowedHeroVideoUrl(raw: unknown): raw is string {
+  if (typeof raw !== "string" || raw.length < 20 || raw.length > 2000) return false;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "https:") return false;
+    if (u.hostname !== HERO_VIDEO_ALLOWED_HOST) return false;
+    if (!u.pathname.startsWith(HERO_VIDEO_ALLOWED_PATH)) return false;
+    if (u.username || u.password) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+app.post(`${PREFIX}/admin/hero-video`, requireAdminSession, async (c) => {
+  try {
+    const adminWallet = c.get("adminWallet") as string;
+    const body = await c.req.json().catch(() => ({}));
+    const existing: any = (await kv.get("config:site")) || {};
+
+    if (body?.reset === true) {
+      const config = {
+        ...existing,
+        heroVideoUrl: null,
+        heroVideoUpdatedAt: new Date().toISOString(),
+        heroVideoUpdatedBy: adminWallet,
+      };
+      // Preserve non-enumerable safety: never reintroduce adminWallets from body
+      delete (config as any).adminWallets;
+      await kv.set("config:site", config);
+      console.log(`[ADMIN] Hero video RESET to default. Admin: ${adminWallet}`);
+      return c.json({
+        success: true,
+        data: {
+          ...config,
+          // Echo effective URL for admin UI preview
+          effectiveHeroVideoUrl: HERO_VIDEO_DEFAULT_URL,
+        },
+      });
+    }
+
+    const url = typeof body?.url === "string" ? body.url.trim() : "";
+    if (!isAllowedHeroVideoUrl(url)) {
+      return c.json({
+        success: false,
+        error:
+          "Invalid video URL. Use an HTTPS public Supabase Storage object URL from this project's bucket (…/storage/v1/object/public/…).",
+        code: "INVALID_HERO_VIDEO_URL",
+      }, 400);
+    }
+
+    const config = {
+      ...existing,
+      heroVideoUrl: url,
+      heroVideoUpdatedAt: new Date().toISOString(),
+      heroVideoUpdatedBy: adminWallet,
+    };
+    delete (config as any).adminWallets;
+    await kv.set("config:site", config);
+    console.log(`[ADMIN] Hero video updated → ${url.slice(0, 80)}… Admin: ${adminWallet}`);
+    return c.json({
+      success: true,
+      data: {
+        ...config,
+        effectiveHeroVideoUrl: url,
+      },
+    });
+  } catch (error) {
+    console.log(`[ADMIN] Error updating hero video: ${error}`);
+    return c.json({ success: false, error: safeErrorMsg("Failed to update hero video") }, 500);
   }
 });
 

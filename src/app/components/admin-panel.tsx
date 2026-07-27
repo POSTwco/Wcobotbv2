@@ -42,7 +42,7 @@ import {
   Vote, Camera, BookOpen, AlertTriangle, CheckCircle, Loader2,
   ChevronDown, Database, Fingerprint, Timer, X,
   ClipboardList, ExternalLink, Youtube, Download,
-  Megaphone, Rocket, Activity, Dumbbell, Gift,
+  Megaphone, Rocket, Activity, Dumbbell, Gift, Film,
 } from "lucide-react";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 import { useWallet } from "./wallet-context";
@@ -67,12 +67,13 @@ import { SnapshotsTab } from "./snapshots-tab";
 import { AdminCommandCenter } from "./admin-command-center";
 import { AdminAuthEnvelope } from "./admin-auth-envelope";
 import { ContestTab } from "./contest/contest-tab";
+import { SiteMediaTab } from "./site-media-tab";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type AdminTab = "athletes" | "brackets" | "battles" | "proposals" | "sponsors" | "snapshots" | "manual" | "test-tools" | "launch" | "cali-editor" | "contest";
+type AdminTab = "athletes" | "brackets" | "battles" | "proposals" | "sponsors" | "snapshots" | "manual" | "test-tools" | "launch" | "cali-editor" | "contest" | "site-media";
 
 interface AdminSession {
   token: string;
@@ -96,6 +97,7 @@ const TABS: { id: AdminTab; label: string; icon: React.ReactNode; description: s
   { id: "launch", label: "Launch", icon: <Rocket className="w-4 h-4" />, description: "BOTB token launch guide" },
   { id: "cali-editor", label: "Cali Editor", icon: <Dumbbell className="w-4 h-4" />, description: "Edit calisthenics exercises and custom images" },
   { id: "contest", label: "Contest", icon: <Gift className="w-4 h-4" />, description: "Connect-to-Enter giveaway ops, export, audit" },
+  { id: "site-media", label: "Site Media", icon: <Film className="w-4 h-4" />, description: "Hero title video URL and branding media" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -400,6 +402,9 @@ export function AdminPanel() {
               {activeTab === "launch" && <LaunchGuideTab />}
               {activeTab === "contest" && (
                 <ContestTab wallet={session.wallet} sessionToken={session.token} />
+              )}
+              {activeTab === "site-media" && (
+                <SiteMediaTab wallet={session.wallet} sessionToken={session.token} />
               )}
               {activeTab === "cali-editor" && (
                 <CalisthenicsAdminPage sessionToken={session.token} wallet={session.wallet} />

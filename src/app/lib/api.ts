@@ -659,6 +659,24 @@ export const api = {
     updateConfig: (data: Partial<SiteConfig>, adminWallet: string, sessionToken?: string) =>
       request<SiteConfig>("/admin/config", { method: "POST", body: data, adminWallet, sessionToken }),
 
+    /** Set homepage hero title video (Supabase Storage public URL only). Admin session required. */
+    setHeroVideo: (url: string, adminWallet: string, sessionToken?: string) =>
+      request<SiteConfig>("/admin/hero-video", {
+        method: "POST",
+        body: { url },
+        adminWallet,
+        sessionToken,
+      }),
+
+    /** Reset hero title video to platform default. Admin session required. */
+    resetHeroVideo: (adminWallet: string, sessionToken?: string) =>
+      request<SiteConfig>("/admin/hero-video", {
+        method: "POST",
+        body: { reset: true },
+        adminWallet,
+        sessionToken,
+      }),
+
     seedInitialData: (adminWallet: string, sessionToken?: string) =>
       request<{ message: string; seeded: boolean; athletes?: { id: string; name: string }[] }>(
         "/admin/seed",
