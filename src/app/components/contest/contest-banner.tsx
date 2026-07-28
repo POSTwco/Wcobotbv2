@@ -164,7 +164,7 @@ export function ContestBanner() {
                   style={dmSans}
                 >
                   First{" "}
-                  <span className="text-[#F0D78C] font-semibold">5,000</span> wallets · ≥1 HBAR ·
+                  <span className="text-[#F0D78C] font-semibold">5,000</span> wallets ·
                   auto-enter on connect
                 </p>
               </div>

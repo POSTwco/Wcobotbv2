@@ -7,15 +7,15 @@ export const CONTEST_TERMS_VERSION = "1.1.0";
 export const CONTEST_TITLE = "Connect to Enter — $250 Giveaway";
 
 export const CONTEST_HERO_LINE =
-  "Connect to Enter. First 5,000 wallets with ≥1 HBAR auto-join a $250 giveaway. Share a workout on X for a shot at +$100. No loss. Only gains.";
+  "Connect to Enter. First 5,000 wallets auto-join a $250 giveaway. Share a workout on X for a shot at +$100. No loss. Only gains.";
 
 export const CONTEST_BANNER_HEADLINE = "$250 CONNECT-TO-ENTER";
 
 export const CONTEST_BANNER_SUB =
-  "First 5,000 wallets · ≥1 HBAR · auto-enter on connect · share on X for +$100";
+  "First 5,000 wallets · auto-enter on connect · share on X for +$100";
 
 export const CONTEST_SOCIAL_PROMO =
-  "We're running a Connect-to-Enter giveaway on WCO — first 5,000 eligible Hedera wallets with ≥1 HBAR are in for $250. Crush a workout, share your proof, and you could take the $100 social prize. Connect at wcorg.io — winners announced without publishing wallet addresses. #Hedera #Calisthenics #WCO #ConnectToEnter";
+  "We're running a Connect-to-Enter giveaway on WCO — first 5,000 unique Hedera wallets that connect are in for $250. Crush a workout, share your proof, and you could take the $100 social prize. Connect at wcorg.io — winners announced without publishing wallet addresses. #Hedera #Calisthenics #WCO #ConnectToEnter";
 
 /** Core brand tags (always safe on posts) */
 export const CONTEST_SHARE_HASHTAGS = "#WCO #BattleOfTheBars #HederaWeb3";
@@ -28,7 +28,7 @@ export const CONTEST_TRACKING_HASHTAG = "#WCOCTE250";
 
 /** Short contest blurb for workout share captions */
 export const CONTEST_SHARE_SENTENCE =
-  "Also in for the WCO $250 Connect-to-Enter giveaway — first 5,000 wallets with ≥1 HBAR auto-enter, plus a $100 share prize lane.";
+  "Also in for the WCO $250 Connect-to-Enter giveaway — first 5,000 wallets auto-enter on connect, plus a $100 share prize lane.";
 
 /**
  * Full default workout-share caption (proof stats + contest + tracking tag).
@@ -53,7 +53,7 @@ export function buildWorkoutShareCaption(args: {
 }
 
 export function contestEnteredToast(entryNumber: number): string {
-  return `You're entry #${entryNumber}. Hold ≥1 HBAR, stay eligible, and watch for winner claims. Share a workout proof on X for the $100 bonus lane.`;
+  return `You're entry #${entryNumber}. You're in the Connect-to-Enter giveaway — share a workout proof on X for the $100 bonus lane.`;
 }
 
 export function contestSpotsLabel(entryCount: number, entryCap: number): string {
@@ -65,7 +65,7 @@ export const CONTEST_DETAILS_SECTIONS = [
   {
     title: "How to enter",
     body:
-      "Connect your Hedera wallet (e.g. HashPack) on wcorg.io. If the contest is open and your wallet holds at least 1 HBAR, you are automatically entered — first 5,000 unique wallets only. One entry per account ID.",
+      "Connect your Hedera wallet (e.g. HashPack) on wcorg.io. If the contest is open, you are automatically entered when your wallet connects — first 5,000 unique wallets only. One entry per account ID. No HBAR balance is required for contest entry.",
   },
   {
     title: "Prizes",
@@ -75,7 +75,7 @@ export const CONTEST_DETAILS_SECTIONS = [
   {
     title: "Eligibility",
     body:
-      "You must be of legal age of majority in your jurisdiction. Wallet must exist on Hedera mainnet with ≥1 HBAR at the time of eligibility verification. Void where prohibited. WCO may disqualify bots, multi-accounting abuse, or fraudulent activity.",
+      "You must be of legal age of majority in your jurisdiction. A valid Hedera wallet connection is required. Contest entry does not require holding HBAR (the free workout tab may still require ≥1 HBAR separately). Void where prohibited. WCO may disqualify bots, multi-accounting abuse, or fraudulent activity.",
   },
   {
     title: "How winners are chosen",

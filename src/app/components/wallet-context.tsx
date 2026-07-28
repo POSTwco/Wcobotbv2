@@ -427,10 +427,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                   duration: 6000,
                 });
               }
-            } else if (enterRes.code === "INSUFFICIENT_HBAR") {
-              toast.message("Hold ≥1 HBAR to enter the Connect-to-Enter contest", {
-                duration: 5000,
-              });
             } else if (enterRes.code === "CONTEST_FULL") {
               toast.message("Connect-to-Enter contest is full (5,000 wallets)", {
                 duration: 4000,

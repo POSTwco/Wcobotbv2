@@ -162,8 +162,9 @@ export function BetaDisclaimer() {
             From time to time WCO may run promotional contests, including the{" "}
             <strong className="text-[#E8ECF0]">Connect-to-Enter giveaway</strong> described on the platform.
             By connecting a wallet while a contest is open you may be automatically entered if you meet
-            eligibility rules published in-app (including, where applicable, holding at least{" "}
-            <strong className="text-[#E8ECF0]">1 HBAR</strong> for server-side verification). Key terms:
+            eligibility rules published in-app (typically a unique Hedera wallet connection —{" "}
+            <strong className="text-[#E8ECF0]">no HBAR balance is required for contest entry</strong>).
+            Separate features such as free calisthenics workouts may still require ≥1 HBAR. Key terms:
             <ul className="mt-2 ml-4 space-y-1 list-disc marker:text-[#4274B9]/50">
               <li>
                 Main prizes may total <strong className="text-[#E8ECF0]">$250 USD</strong> (e.g. $150 / $75 / $25)

@@ -197,7 +197,8 @@ function defaultConfig(): ContestConfig {
     title: "Connect to Enter — $250 Giveaway",
     entryCap: DEFAULT_CAP,
     entryCount: 0,
-    minHbarTinybars: MIN_HBAR_TINYBARS,
+    // 0 = no HBAR required for contest entry (workout engine gate is separate)
+    minHbarTinybars: 0,
     requireCaliSession: false,
     startedAt: null,
     endsAt: null,
@@ -223,7 +224,8 @@ async function loadConfig(): Promise<ContestConfig> {
     const raw: any = await kv.get(CONFIG_KEY);
     if (raw && raw.id) {
       const count = Number(await kv.get(COUNT_KEY)) || raw.entryCount || 0;
-      return { ...defaultConfig(), ...raw, entryCount: count };
+      // Contest no longer requires HBAR — force min gate off even if old config stored 1 HBAR
+      return { ...defaultConfig(), ...raw, entryCount: count, minHbarTinybars: 0 };
     }
   } catch (err) {
     console.log(`[CONTEST] config load error: ${err}`);
@@ -442,41 +444,15 @@ async function tryEnter(
       };
     }
 
-    let tinybars: number;
+    // Contest entry: any connected wallet qualifies (no HBAR gate).
+    // Calisthenics workout engine keeps its own ≥1 HBAR gate in cali.tsx.
+    // Optional balance snapshot for ops analytics only — never blocks entry.
+    let tinybars = 0;
     try {
       tinybars = await getAccountBalanceTinybars(accountId);
     } catch (err) {
-      console.log(`[CONTEST] balance check failed for ${accountId}: ${err}`);
-      return {
-        ok: false,
-        status: 502,
-        body: {
-          success: false,
-          error: "Eligibility check temporarily unavailable. Please try again.",
-          code: "MIRROR_UNAVAILABLE",
-        },
-      };
-    }
-
-    if (tinybars < cfg.minHbarTinybars) {
-      await writeAudit(accountId, "entry_rejected", {
-        reason: "insufficient_hbar",
-        tinybars,
-        required: cfg.minHbarTinybars,
-      }, ipHash);
-      return {
-        ok: false,
-        status: 403,
-        body: {
-          success: false,
-          error: "Hold at least 1 HBAR in your wallet to enter the contest.",
-          code: "INSUFFICIENT_HBAR",
-          data: {
-            tinybars,
-            requiredTinybars: cfg.minHbarTinybars,
-          },
-        },
-      };
+      console.log(`[CONTEST] balance snapshot skipped for ${accountId}: ${err}`);
+      tinybars = 0;
     }
 
     const entryNumber = cfg.entryCount + 1;
@@ -714,7 +690,7 @@ export function mountContestRoutes(app: Hono, PREFIX: string) {
               success: false,
               error:
                 (outcome.body as any).error ||
-                "Could not enter contest. Connect with ≥1 HBAR while the contest is open.",
+                "Could not enter contest. Connect your wallet while the contest is open.",
               code: (outcome.body as any).code || "NOT_ENTERED",
               data: {
                 socialQualified: false,
