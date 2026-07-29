@@ -42,7 +42,7 @@ export function SponsorBannerStrip({
 
   const content = (
     <>
-      <div className={`relative ${isHero ? "w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" : "px-3 sm:px-4 py-3 sm:py-3.5"}`}>
+      <div className={`relative ${isHero ? "w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8" : "px-3 sm:px-4 py-3 sm:py-3.5"}`}>
         <div className="absolute inset-0 pointer-events-none">
           <div
             className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-[50px] bg-[#D4A843]/[0.02] ${
@@ -52,23 +52,98 @@ export function SponsorBannerStrip({
         </div>
 
         <AnimatePresence mode="wait">
+          {/* ── MOBILE HERO: full ad row — logo + product + CTA (no clip) ── */}
+          {isHero ? (
+            <motion.div
+              key={`m-${sponsor.id}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="relative sm:hidden"
+            >
+              <div className="flex items-center justify-between gap-2.5 min-h-[72px] py-1.5">
+                {/* Brand mark + name */}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="shrink-0 flex flex-col items-center w-7">
+                    <Icon className="w-3 h-3 text-[#D4A843]/60 mb-0.5" />
+                    <span
+                      className="text-[0.32rem] text-[#D4A843]/45 tracking-[0.12em] leading-none text-center"
+                      style={{ fontFamily: "Orbitron, sans-serif" }}
+                    >
+                      TITLE
+                    </span>
+                  </div>
+                  {sponsor.logoUrl && (
+                    <ImageWithFallback
+                      src={sponsor.logoUrl}
+                      alt={sponsor.name}
+                      className="h-11 w-auto max-w-[42vw] object-contain object-left drop-shadow-[0_0_14px_rgba(212,168,67,0.18)] sponsor-logo-primary"
+                    />
+                  )}
+                </div>
+
+                {/* Product can + Shop */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {sponsor.productImageUrl && (
+                    <ImageWithFallback
+                      src={sponsor.productImageUrl}
+                      alt={`${sponsor.name} product`}
+                      className="h-14 w-auto max-w-[72px] object-contain drop-shadow-[0_4px_16px_rgba(212,168,67,0.2)] sponsor-product-img"
+                    />
+                  )}
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span
+                      className="text-[0.55rem] text-[#D4A843] tracking-[0.12em] font-bold whitespace-nowrap flex items-center gap-0.5"
+                      style={{ fontFamily: "Orbitron, sans-serif" }}
+                    >
+                      {sponsor.ctaLabel || "SHOP NOW"}
+                      <ExternalLink className="w-2.5 h-2.5 text-[#D4A843]/70" />
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {sponsors.length > 1 && (
+                <div className="flex items-center justify-center gap-1.5 pb-1">
+                  {sponsors.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setIdx(i); }}
+                      className={`rounded-full transition-all duration-400 ${
+                        i === idx % sponsors.length
+                          ? "w-4 h-[2px] bg-[#D4A843]/50"
+                          : "w-[3px] h-[2px] bg-[#D4A843]/15"
+                      }`}
+                      aria-label={`Show sponsor ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="h-[1px] bg-gradient-to-r from-transparent via-[#D4A843]/15 to-transparent" />
+            </motion.div>
+          ) : null}
+
+          {/* ── DESKTOP / SM+ HERO + routine layout ── */}
           <motion.div
             key={sponsor.id}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className={`relative flex items-center justify-between max-w-full overflow-hidden ${
-              isHero ? "gap-2 sm:gap-6 lg:gap-8" : "gap-2 sm:gap-4 min-h-[44px]"
+            className={`relative items-center justify-between max-w-full ${
+              isHero
+                ? "hidden sm:flex gap-4 lg:gap-8 overflow-visible"
+                : "flex gap-2 sm:gap-4 min-h-[44px] overflow-hidden"
             }`}
           >
             {/* Left: label + logo + text */}
-            <div className={`flex items-center min-w-0 flex-1 overflow-hidden ${isHero ? "gap-2 sm:gap-5" : "gap-2 sm:gap-3"}`}>
+            <div className={`flex items-center min-w-0 flex-1 ${isHero ? "gap-3 lg:gap-5 overflow-visible" : "gap-2 sm:gap-3 overflow-hidden"}`}>
               <motion.div
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1, duration: 0.5 }}
-                className={`shrink-0 flex flex-col items-center ${isHero ? "hidden sm:flex" : "flex"}`}
+                className="shrink-0 flex flex-col items-center"
               >
                 <Icon className={`text-[#D4A843]/50 mb-0.5 ${isHero ? "w-4 h-4" : "w-3.5 h-3.5"}`} />
                 <span
@@ -81,7 +156,7 @@ export function SponsorBannerStrip({
                 </span>
               </motion.div>
 
-              <div className={`hidden sm:block w-[1px] bg-gradient-to-b from-transparent via-[#D4A843]/20 to-transparent shrink-0 ${isHero ? "h-10" : "h-8"}`} />
+              <div className={`w-[1px] bg-gradient-to-b from-transparent via-[#D4A843]/20 to-transparent shrink-0 ${isHero ? "h-10" : "h-8"}`} />
 
               {sponsor.logoUrl && (
                 <motion.div
@@ -96,7 +171,7 @@ export function SponsorBannerStrip({
                       alt={sponsor.name}
                       className={
                         isHero
-                          ? "h-[36px] sm:h-[64px] lg:h-[72px] w-auto object-contain max-w-[110px] sm:max-w-[280px] lg:max-w-[340px] drop-shadow-[0_0_20px_rgba(212,168,67,0.12)] sponsor-logo-primary"
+                          ? "h-[56px] md:h-[64px] lg:h-[72px] w-auto object-contain max-w-[200px] md:max-w-[280px] lg:max-w-[340px] drop-shadow-[0_0_20px_rgba(212,168,67,0.12)] sponsor-logo-primary"
                           : "h-8 sm:h-12 w-auto object-contain max-w-[72px] sm:max-w-[140px] drop-shadow-[0_0_12px_rgba(212,168,67,0.1)] sponsor-routine-logo"
                       }
                     />
@@ -109,13 +184,13 @@ export function SponsorBannerStrip({
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 200 }}
-                  className="shrink-0 hidden sm:block"
+                  className="shrink-0 hidden md:block"
                 >
                   <motion.div animate={{ y: hovered ? -3 : 0 }} transition={{ duration: 0.3 }}>
                     <ImageWithFallback
                       src={sponsor.secondaryLogoUrl}
                       alt={`${sponsor.name} product`}
-                      className="h-[40px] sm:h-[56px] lg:h-[64px] w-auto object-contain max-w-[140px] sm:max-w-[220px] lg:max-w-[280px] drop-shadow-[0_0_20px_rgba(212,168,67,0.10)] sponsor-logo-secondary"
+                      className="h-[48px] md:h-[56px] lg:h-[64px] w-auto object-contain max-w-[180px] md:max-w-[220px] lg:max-w-[280px] drop-shadow-[0_0_20px_rgba(212,168,67,0.10)] sponsor-logo-secondary"
                     />
                   </motion.div>
                 </motion.div>
@@ -156,13 +231,13 @@ export function SponsorBannerStrip({
             </div>
 
             {/* Right: product + CTA */}
-            <div className={`flex items-center shrink-0 ${isHero ? "gap-2 sm:gap-5" : "gap-1.5 sm:gap-3"}`}>
+            <div className={`flex items-center shrink-0 ${isHero ? "gap-3 lg:gap-5" : "gap-1.5 sm:gap-3"}`}>
               {sponsor.productImageUrl && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9, x: 12 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 200 }}
-                  className={isHero ? "hidden sm:block" : "block"}
+                  className="block"
                 >
                   <motion.div
                     animate={isHero ? { rotate: [0, 10, 0, -10, 0] } : { y: hovered ? -2 : 0 }}
@@ -176,10 +251,10 @@ export function SponsorBannerStrip({
                   >
                     <ImageWithFallback
                       src={sponsor.productImageUrl}
-                      alt=""
+                      alt={`${sponsor.name} product`}
                       className={
                         isHero
-                          ? "h-[48px] sm:h-[64px] lg:h-[72px] w-auto object-contain max-w-[100px] sm:max-w-[160px] lg:max-w-[200px] drop-shadow-[0_4px_24px_rgba(212,168,67,0.12)] sponsor-product-img"
+                          ? "h-[56px] md:h-[64px] lg:h-[72px] w-auto object-contain max-w-[120px] md:max-w-[160px] lg:max-w-[200px] drop-shadow-[0_4px_24px_rgba(212,168,67,0.12)] sponsor-product-img"
                           : "h-10 sm:h-14 w-auto object-contain max-w-[48px] sm:max-w-[80px] drop-shadow-[0_2px_12px_rgba(212,168,67,0.1)] sponsor-routine-product"
                       }
                     />
@@ -198,14 +273,14 @@ export function SponsorBannerStrip({
               >
                 <span
                   className={`text-[#D4A843]/60 tracking-[0.1em] group-hover/cta:text-[#D4A843] transition-colors duration-300 whitespace-nowrap ${
-                    isHero ? "text-[0.5rem] sm:text-[0.7rem] sm:tracking-[0.15em]" : "text-[0.45rem] sm:text-[0.6rem]"
+                    isHero ? "text-[0.65rem] lg:text-[0.7rem] tracking-[0.15em]" : "text-[0.45rem] sm:text-[0.6rem]"
                   }`}
                   style={{ fontFamily: "Orbitron, sans-serif" }}
                 >
                   {sponsor.ctaLabel || "VISIT"}
                 </span>
                 <motion.div animate={{ x: hovered ? 3 : 0 }} transition={{ duration: 0.25, type: "spring", stiffness: 300 }}>
-                  <ExternalLink className={`text-[#D4A843]/40 group-hover/cta:text-[#D4A843] transition-colors duration-300 ${isHero ? "w-3 h-3 sm:w-4 sm:h-4" : "w-3 h-3"}`} />
+                  <ExternalLink className={`text-[#D4A843]/40 group-hover/cta:text-[#D4A843] transition-colors duration-300 ${isHero ? "w-3.5 h-3.5 lg:w-4 lg:h-4" : "w-3 h-3"}`} />
                 </motion.div>
               </motion.div>
             </div>
@@ -213,7 +288,7 @@ export function SponsorBannerStrip({
         </AnimatePresence>
 
         {sponsors.length > 1 && (
-          <div className={`flex items-center justify-center gap-1.5 ${isHero ? "mt-1" : "mt-2"}`}>
+          <div className={`items-center justify-center gap-1.5 ${isHero ? "hidden sm:flex mt-1" : "flex mt-2"}`}>
             {sponsors.map((_, i) => (
               <button
                 key={i}
@@ -231,7 +306,7 @@ export function SponsorBannerStrip({
         )}
 
         {isHero ? (
-          <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#D4A843]/10 to-transparent" />
+          <div className="hidden sm:block absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#D4A843]/10 to-transparent" />
         ) : (
           <div className="absolute bottom-0 left-3 right-3 sm:left-4 sm:right-4 h-[1px] bg-gradient-to-r from-transparent via-[#D4A843]/15 to-transparent" />
         )}
@@ -243,20 +318,19 @@ export function SponsorBannerStrip({
     return (
       <div
         ref={ref}
-        className="absolute top-0 left-0 right-0 z-20 flex items-start sm:items-center cursor-pointer sponsor-banner-compact pointer-events-none sm:pointer-events-auto"
+        className="absolute top-0 left-0 right-0 z-20 flex items-start sm:items-center cursor-pointer sponsor-banner-compact pointer-events-auto"
         style={{
-          /* Fixed compact band under nav — content below uses matching pt-* on home hero */
+          /* Mobile: auto height so full logo+product show. Desktop: compact band. */
           height: "auto",
-          minHeight: "72px",
-          maxHeight: "140px",
-          paddingTop: "8px",
+          minHeight: "76px",
+          paddingTop: "6px",
           paddingBottom: "4px",
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onClick={() => openSponsor(sponsor)}
       >
-        <div className="pointer-events-auto w-full">{content}</div>
+        <div className="pointer-events-auto w-full overflow-visible">{content}</div>
       </div>
     );
   }

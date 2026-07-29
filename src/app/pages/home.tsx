@@ -115,8 +115,8 @@ export function HomePage() {
         {/* Title Sponsor Banner — absolutely positioned in the gap between header and hero content */}
         <TitleSponsorBanner />
 
-        {/* Extra top padding clears absolute NiBrew/title-sponsor strip (logos up to ~120px) */}
-        <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 lg:pt-36 pb-10 sm:pb-16">
+        {/* Top padding clears absolute title-sponsor strip (mobile full ad row ~80px + breathing room) */}
+        <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 sm:pt-36 lg:pt-40 pb-10 sm:pb-16">
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-start">
             <motion.div
               initial={{ opacity: 0, x: -50 }}
