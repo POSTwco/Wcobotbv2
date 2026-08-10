@@ -92,7 +92,7 @@ export function AthletesPage() {
               className="shrink-0 self-start sm:self-center inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all text-xs sm:text-sm font-semibold tracking-wide"
               style={{ fontFamily: "Orbitron, sans-serif" }}
             >
-              Become a Pro Athlete
+              Pro Card Application
             </Link>
           </div>
         </div>
