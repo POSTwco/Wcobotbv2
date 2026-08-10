@@ -496,7 +496,7 @@ export function HomePage() {
                 className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all"
                 style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
               >
-                <Swords className="w-5 h-5" /> ENTER THE ARENA
+                <Swords className="w-5 h-5" /> PRO CARD APPLICATION
               </Link>
               <Link
                 to="/battles"

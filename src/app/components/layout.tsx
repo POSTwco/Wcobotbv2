@@ -119,6 +119,7 @@ export function Layout() {
                   <Link to="/governance" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Governors Hub</Link>
                   <Link to="/calisthenics" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Calisthenics</Link>
                   <button onClick={() => setShowSponsorModal(true)} className={`block cursor-pointer transition-colors text-left ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Become a Sponsor</button>
+                  <Link to="/apply" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Become a Pro Athlete</Link>
                 </div>
               </div>
               <div>
