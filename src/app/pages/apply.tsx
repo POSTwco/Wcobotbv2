@@ -22,17 +22,8 @@ import { toast } from "sonner";
 import { sanitizeErrorMessage } from "../components/error-boundary";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
-
-// ---------------------------------------------------------------------------
-// Country list
-// ---------------------------------------------------------------------------
-const COUNTRIES = [
-  "USA", "Mexico", "Russia", "Brazil", "Germany", "France", "Japan",
-  "South Korea", "UK", "Spain", "Italy", "Nigeria", "Australia",
-  "Canada", "Ukraine", "Poland", "Sweden", "Netherlands", "India",
-  "Colombia", "Argentina", "Chile", "South Africa", "Kenya", "Egypt",
-  "Philippines", "Thailand", "Indonesia", "China", "Other",
-];
+import { COUNTRY_OPTIONS } from "../lib/country-flags";
+import { InlineFlag } from "../components/country-flag";
 
 const DISCLAIMER_VERSION = "1.0.0";
 
@@ -253,16 +244,23 @@ export function ApplyPage() {
                 />
                 <div>
                   <label className="text-[#8494A7] text-[0.6rem] block mb-1">Country *</label>
-                  <select
-                    value={form.country}
-                    onChange={(e) => updateField("country", e.target.value)}
-                    className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#4274B9]/60"
-                  >
-                    <option value="">Select country...</option>
-                    {COUNTRIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    {form.country ? (
+                      <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#162033] border border-[#4274B9]/20">
+                        <InlineFlag country={form.country} />
+                      </span>
+                    ) : null}
+                    <select
+                      value={form.country}
+                      onChange={(e) => updateField("country", e.target.value)}
+                      className="w-full min-w-0 bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#4274B9]/60"
+                    >
+                      <option value="">Select country...</option>
+                      {COUNTRY_OPTIONS.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="text-[#8494A7] text-[0.6rem] flex items-center gap-1 mb-1">

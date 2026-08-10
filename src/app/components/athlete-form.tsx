@@ -24,6 +24,8 @@ import {
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { WCO_WEIGHT_CLASSES } from "../lib/types";
 import { Checkbox } from "./ui/checkbox";
+import { COUNTRY_OPTIONS } from "../lib/country-flags";
+import { InlineFlag } from "./country-flag";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,13 +104,6 @@ const SKILL_LABELS: Record<string, string> = {
 
 const RARITY_OPTIONS = ["", "Common", "Rare", "Epic", "Legendary"];
 
-const COUNTRIES = [
-  "USA", "Mexico", "Russia", "Brazil", "Germany", "France", "Japan",
-  "South Korea", "UK", "Spain", "Italy", "Nigeria", "Australia",
-  "Canada", "Ukraine", "Poland", "Sweden", "Netherlands", "India",
-  "Colombia", "Argentina", "Chile", "Other",
-];
-
 // ---------------------------------------------------------------------------
 // Athlete Form Component
 // ---------------------------------------------------------------------------
@@ -172,16 +167,23 @@ export function AthleteForm({
               <Field label="Nickname" value={form.nickname} onChange={(v) => updateField("nickname", v)} placeholder="e.g. The Mexican Monster" />
               <div>
                 <label className="text-[#8494A7] text-[0.6rem] block mb-1">Country *</label>
-                <select
-                  value={form.country}
-                  onChange={(e) => updateField("country", e.target.value)}
-                  className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
-                >
-                  <option value="">Select country...</option>
-                  {COUNTRIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  {form.country ? (
+                    <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-[#162033] border border-[#4274B9]/20">
+                      <InlineFlag country={form.country} />
+                    </span>
+                  ) : null}
+                  <select
+                    value={form.country}
+                    onChange={(e) => updateField("country", e.target.value)}
+                    className="w-full min-w-0 bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
+                  >
+                    <option value="">Select country...</option>
+                    {COUNTRY_OPTIONS.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <Field label="Special Move" value={form.specialMove} onChange={(v) => updateField("specialMove", v)} placeholder="e.g. 360 Muscle-Up to Planche" />
               <div>
