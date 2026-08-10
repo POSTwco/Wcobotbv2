@@ -73,7 +73,7 @@ export interface Athlete {
   secondaryColor?: string;       // Hex color e.g. "#FFB347" — secondary accent
 
   // Weight class — official WCO divisions
-  weightClass?: string;          // Official WCO division, e.g. "Lightweight (135+ lbs / 61 kg)" — see WCO_WEIGHT_CLASSES
+  weightClass?: string;          // Official WCO division, e.g. "Lightweight (125–135 lbs / 57–61 kg)" — see WCO_WEIGHT_CLASSES
 
   // Verified Hedera wallet (admin-set, for Arena Chat athlete badge)
   wallet?: string;               // Hedera account ID e.g. "0.0.XXXXXXX"
@@ -483,22 +483,20 @@ export interface EventFormData {
 }
 
 // ---------------------------------------------------------------------------
-// Official WCO Weight Classes — single source of truth
+// Official WCO Weight Classes — single source of truth (frontend)
 // ---------------------------------------------------------------------------
-// Used by both the admin athlete-form and the public athlete application
-// form so any future class changes only need a single edit here.
-// Server-side validation (POST /applications, POST /admin/athletes) accepts
-// any non-empty string for forward-compat with admin-only special divisions
-// (e.g. "Open Weight").
+// Used by admin athlete-form and public /apply so class changes are one edit.
+// Server mirrors this list in make-server-57fcb0ee + server (validate applications).
+// Super Middleweight has no upper limit (165+).
 // ---------------------------------------------------------------------------
 export const WCO_WEIGHT_CLASSES = [
-  "Strawweight (105–115 lbs / 52 kg)",
-  "Featherweight (115–125 lbs / 56 kg)",
-  "Lightweight (135+ lbs / 61 kg)",
-  "Super Lightweight (145+ lbs / 65 kg)",
-  "Welterweight (155+ lbs / 70 kg)",
-  "Middleweight (165+ lbs / 74 kg)",
-  "Super Middleweight (175–190 lbs / 79 kg)",
+  "Strawweight (105–115 lbs / 48–52 kg)",
+  "Featherweight (115–125 lbs / 52–57 kg)",
+  "Lightweight (125–135 lbs / 57–61 kg)",
+  "Super Lightweight (135–145 lbs / 61–66 kg)",
+  "Welterweight (145–155 lbs / 66–70 kg)",
+  "Middleweight (155–165 lbs / 70–75 kg)",
+  "Super Middleweight (165+ lbs / 75 kg)",
 ] as const;
 
 export type WCOWeightClass = (typeof WCO_WEIGHT_CLASSES)[number];

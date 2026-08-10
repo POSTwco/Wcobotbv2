@@ -410,9 +410,14 @@ export function AthleteForm({
                       <option key={wc} value={wc}>{wc}</option>
                     ))}
                   </optgroup>
-                  <optgroup label="Special Divisions">
-                    <option value="Open Weight">Open Weight (No limit)</option>
-                  </optgroup>
+                  {/* Preserve legacy stored values (old division labels) until admin reassigns */}
+                  {form.weightClass &&
+                    form.weightClass !== "Open Weight" &&
+                    !(WCO_WEIGHT_CLASSES as readonly string[]).includes(form.weightClass) && (
+                    <optgroup label="Current (legacy — reassign to official)">
+                      <option value={form.weightClass}>{form.weightClass}</option>
+                    </optgroup>
+                  )}
                 </select>
               </div>
               {form.weightClass && (

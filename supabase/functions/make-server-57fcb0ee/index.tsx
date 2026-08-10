@@ -368,6 +368,21 @@ app.use(`/*`, rateLimit({
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Official WCO weight divisions — keep in sync with src/app/lib/types.ts */
+const WCO_WEIGHT_CLASSES = [
+  "Strawweight (105–115 lbs / 48–52 kg)",
+  "Featherweight (115–125 lbs / 52–57 kg)",
+  "Lightweight (125–135 lbs / 57–61 kg)",
+  "Super Lightweight (135–145 lbs / 61–66 kg)",
+  "Welterweight (145–155 lbs / 66–70 kg)",
+  "Middleweight (155–165 lbs / 70–75 kg)",
+  "Super Middleweight (165+ lbs / 75 kg)",
+] as const;
+
+function isValidWeightClass(wc: string): boolean {
+  return (WCO_WEIGHT_CLASSES as readonly string[]).includes(wc);
+}
+
 function generateId(prefix: string): string {
   const timestamp = Date.now().toString(36);
   const random = Math.random().toString(36).substring(2, 8);
@@ -2017,6 +2032,24 @@ app.post(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
       rank = allAthletes.length + 1;
     }
 
+    // Weight class: empty ok; new values must be official WCO divisions; legacy labels may be kept as-is
+    const weightClass = sanitizeString(
+      body.weightClass !== undefined && body.weightClass !== null
+        ? body.weightClass
+        : (existing?.weightClass || ""),
+      80,
+    );
+    if (
+      weightClass &&
+      !isValidWeightClass(weightClass) &&
+      weightClass !== (existing?.weightClass || "")
+    ) {
+      return c.json({
+        success: false,
+        error: "Invalid weight class. Select an official WCO division.",
+      }, 400);
+    }
+
     // Sanitize all text inputs
     const athlete = {
       ...(existing || {}),
@@ -2055,7 +2088,7 @@ app.post(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
       primaryColor: sanitizeString(body.primaryColor || existing?.primaryColor || "", 20),
       secondaryColor: sanitizeString(body.secondaryColor || existing?.secondaryColor || "", 20),
       // Weight class (official WCO divisions)
-      weightClass: sanitizeString(body.weightClass || existing?.weightClass || "", 60),
+      weightClass,
       // Verified Hedera wallet for Arena Chat athlete badge + admin profile
       wallet: (body.wallet && isValidHederaAccountId(body.wallet))
         ? body.wallet
@@ -3582,7 +3615,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#FFD700] via-[#22C55E] to-[#FFD700]",
         primaryColor: "#FFD700",
         secondaryColor: "#B8860B",
-        weightClass: "Middleweight (165+ lbs / 74 kg)",
+        weightClass: "Super Middleweight (165+ lbs / 75 kg)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -3613,7 +3646,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#6AA3E0] via-[#8B5CF6] to-[#6AA3E0]",
         primaryColor: "#6AA3E0",
         secondaryColor: "#4A7FB8",
-        weightClass: "Lightweight (135+ lbs / 61 kg)",
+        weightClass: "Super Lightweight (135–145 lbs / 61–66 kg)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -3644,7 +3677,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#22C55E] via-[#FFD700] to-[#22C55E]",
         primaryColor: "#22C55E",
         secondaryColor: "#16A34A",
-        weightClass: "Welterweight (155+ lbs / 70 kg)",
+        weightClass: "Middleweight (155–165 lbs / 70–75 kg)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -4861,11 +4894,20 @@ app.post(`${PREFIX}/applications`, async (c) => {
     }
 
     // Validate required fields
-    const required = ["name", "fullName", "country", "bio", "youtubeRoutine"];
+    const required = ["name", "fullName", "country", "bio", "youtubeRoutine", "weightClass"];
     for (const field of required) {
       if (!body[field] || !body[field].trim()) {
         return c.json({ success: false, error: `Missing required field: ${field}` }, 400);
       }
+    }
+
+    // Official WCO weight divisions only (prevents free-form / spoofed class labels)
+    const weightClass = sanitizeString(body.weightClass, 80);
+    if (!isValidWeightClass(weightClass)) {
+      return c.json({
+        success: false,
+        error: "Invalid weight class. Select an official WCO division.",
+      }, 400);
     }
 
     // Require at least 1 social account (besides YouTube routine)
@@ -4901,7 +4943,7 @@ app.post(`${PREFIX}/applications`, async (c) => {
       pfpUrl: "", // legacy field — actual image lives in private storage; admin gets signed URL on read
 
       specialMove: sanitizeString(body.specialMove, 200),
-      weightClass: sanitizeString(body.weightClass, 80),
+      weightClass,
       email: sanitizeString(body.email, 200),
       phone: sanitizeString(body.phone, 50),
       socials: {

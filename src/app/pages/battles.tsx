@@ -63,14 +63,13 @@ function generateNonce(): string {
 const ORBITRON = { fontFamily: "Orbitron, sans-serif" } as const;
 
 /**
- * Official WCO Weight Classes
- * Abbreviations for the compact battle card badge display.
+ * Official WCO Weight Classes — abbreviations for battle card badges.
+ * Ranges: Straw 105–115, Feather 115–125, Light 125–135, Super Light 135–145,
+ * Welter 145–155, Middle 155–165, Super Middle 165+ (no upper limit).
  */
 function getWeightClassAbbr(wc: string): string {
   const lower = wc.toLowerCase();
   // Order matters — most specific patterns first.
-  // Official WCO divisions: Strawweight, Featherweight, Lightweight,
-  // Super Lightweight, Welterweight, Middleweight, Super Middleweight.
   if (lower.includes("straw")) return "STW";
   if (lower.includes("feather")) return "FTW";
   if (lower.includes("super") && lower.includes("middle")) return "SMW";
