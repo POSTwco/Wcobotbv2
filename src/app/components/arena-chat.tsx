@@ -491,12 +491,18 @@ export function ArenaChat() {
   const emotePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const seenEmoteIdsRef = useRef<Set<string>>(new Set());
   const governorEntrancePlayed = useRef(false);
+  /** First paint should land on the newest message (bottom), not the oldest (top). */
+  const initialScrollDoneRef = useRef(false);
+  /** Keep following new messages only while the user is near the bottom. */
+  const pinnedToBottomRef = useRef(true);
 
   const wallet = accountId || "";
 
   // ── Restore persisted cooldown on mount / wallet change ─────────────
   useEffect(() => {
     if (!wallet) return;
+    initialScrollDoneRef.current = false;
+    pinnedToBottomRef.current = true;
     const persisted = getPersistedCooldown(wallet);
     if (persisted > 0) {
       setCooldownEnd(persisted);
@@ -627,25 +633,58 @@ export function ArenaChat() {
     };
   }, [connected, wallet, soundEnabled]);
 
-  // ── Auto-scroll (within the chat container only — never the page) ───
+  // ── Auto-scroll (chat container only — never the page) ───────────────
+  // Open on the newest message (bottom). Users scroll UP for history.
   useEffect(() => {
     const container = chatContainerRef.current;
-    if (!container) return;
-    // Only auto-scroll if the user is already near the bottom (within 150px)
-    // or this is the initial message load. This prevents hijacking the page
-    // scroll position when the component mounts or polls for new messages.
-    const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distFromBottom < 150) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    }
-  }, [messages.length]);
+    if (!container || loading || messages.length === 0) return;
+
+    const snapToBottom = (behavior: ScrollBehavior) => {
+      // Prefer direct scrollTop for reliable first paint; smooth for follow-ups
+      if (behavior === "auto") {
+        container.scrollTop = container.scrollHeight;
+      } else {
+        container.scrollTo({ top: container.scrollHeight, behavior });
+      }
+    };
+
+    const run = () => {
+      if (!initialScrollDoneRef.current) {
+        snapToBottom("auto");
+        initialScrollDoneRef.current = true;
+        pinnedToBottomRef.current = true;
+        setShowScrollDown(false);
+        return;
+      }
+      if (pinnedToBottomRef.current) {
+        snapToBottom("smooth");
+      }
+    };
+
+    // Double rAF: wait until message bubbles have laid out height
+    const id = requestAnimationFrame(() => requestAnimationFrame(run));
+    return () => cancelAnimationFrame(id);
+  }, [messages.length, loading]);
 
   // ── Scroll detection ────────────────────────────────────────────────
   const handleScroll = useCallback(() => {
     const container = chatContainerRef.current;
     if (!container) return;
     const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    setShowScrollDown(distFromBottom > 100);
+    const nearBottom = distFromBottom < 120;
+    pinnedToBottomRef.current = nearBottom;
+    setShowScrollDown(!nearBottom);
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    pinnedToBottomRef.current = true;
+    const container = chatContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+    setShowScrollDown(false);
   }, []);
 
   // ── Send message ────────────────────────────────────────────────────
@@ -654,6 +693,8 @@ export function ArenaChat() {
     if (!text || !wallet || sending || cooldownSeconds > 0) return;
     if (text.length > MAX_CHARS) return;
 
+    // Own messages should always land in view at the bottom
+    pinnedToBottomRef.current = true;
     setSending(true);
     setError(null);
     try {
@@ -1021,7 +1062,7 @@ export function ArenaChat() {
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
-                    onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })}
+                    onClick={jumpToLatest}
                     className={`sticky bottom-2 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full text-white flex items-center justify-center shadow-lg transition-colors z-20 ${
                       isGovernor
                         ? "bg-[#D4A843] shadow-[#D4A843]/30 hover:bg-[#B8902E]"
