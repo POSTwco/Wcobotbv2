@@ -1,7 +1,7 @@
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router";
-import { Wallet, ChevronDown, Loader2, RefreshCw, Shield, Crown } from "lucide-react";
+import { Wallet, ChevronDown, Loader2, RefreshCw, Shield, Crown, MessageCircle } from "lucide-react";
 import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
 import { VIPBadge } from "./vip/vip-badge";
@@ -405,6 +405,28 @@ export function Navbar() {
             >
               View on HashScan ↗
             </a>
+
+            {/* Desktop-only: Arena Chat quick link (mobile uses bottom Chat tab) */}
+            <Link
+              to="/athletes#arena-chat"
+              onClick={() => {
+                setWalletDropdown(false);
+                requestAnimationFrame(() => {
+                  document.getElementById("arena-chat")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                });
+              }}
+              className={`w-full flex items-center justify-center gap-2 py-2 text-sm rounded-lg transition-all border ${
+                vipActive
+                  ? "text-[#F0D078] bg-[#D4A843]/10 border-[#D4A843]/25 hover:bg-[#D4A843]/18"
+                  : "text-[#E8ECF0] bg-[#4274B9]/10 border-[#4274B9]/25 hover:bg-[#4274B9]/18"
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              Arena Chat
+            </Link>
 
             <button
               onClick={() => {
