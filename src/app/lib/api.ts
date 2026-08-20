@@ -181,6 +181,23 @@ export const api = {
       body: { wallet, wcTopic },
     }),
 
+  /** Magic Create Account — provision Hedera account (sponsored AccountCreate) */
+  magicEnsureAccount: (didToken: string, publicKeyDer: string) =>
+    request<{ accountId: string; created: boolean; network: string }>("/wallet/magic/ensure-account", {
+      method: "POST",
+      body: { didToken, publicKeyDer },
+    }),
+
+  /** Magic session — issues X-Wallet-Session after DID validation (no WC topic) */
+  registerMagicWalletSession: (wallet: string, didToken: string) =>
+    request<{ token: string; expiresAt: number; ttlMs: number; authProvider: string }>(
+      "/wallet/magic/register",
+      {
+        method: "POST",
+        body: { wallet, didToken },
+      },
+    ),
+
   disconnectWalletSession: (wallet: string, walletSessionToken?: string) =>
     request<{ message: string }>("/wallet/disconnect", {
       method: "POST",

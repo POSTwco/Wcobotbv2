@@ -169,6 +169,7 @@ import {
 import { mountCaliRoutes } from "./cali.tsx";
 import { mountEliteRoutes } from "./elite.tsx";
 import { mountContestRoutes } from "./contest.tsx";
+import { mountMagicRoutes } from "./magic-accounts.tsx";
 
 const app = new Hono();
 
@@ -6250,6 +6251,9 @@ app.post(`${PREFIX}/admin/test/clear-ip-flags`, requireAdminSession, async (c) =
 // ===========================================================================
 // END PHASE 2 TEST TOOLS — Delete entire block above when going fully live
 // ===========================================================================
+
+// Magic Create Account routes (additive — HashPack /wallet/register unchanged)
+mountMagicRoutes(app, PREFIX);
 
 // Mount cali / elite / contest routes LAST so core functionality (admin auth, etc.)
 // is not affected if a satellite module has a startup error.

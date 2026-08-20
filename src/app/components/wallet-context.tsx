@@ -57,6 +57,23 @@ import {
 } from "../lib/hedera-mirror";
 import { api } from "../lib/api";
 import { toast } from "sonner";
+import { ConnectWalletModal } from "./connect-wallet-modal";
+import {
+  canUseMagic,
+  getMagic,
+} from "../lib/magic-client";
+import {
+  magicGetDidToken,
+  magicGetPublicKeyDer,
+  magicIsLoggedIn,
+  magicLogout,
+  magicSignMessage,
+} from "../lib/magic-wallet";
+import {
+  MAGIC_STORAGE,
+  type MagicLoginMethod,
+  type WalletProviderKind,
+} from "../lib/wallet-types";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -94,18 +111,30 @@ export interface WalletState {
   /** Raw NFT array from mirror node */
   rawNfts: MirrorNFT[];
 
-  connect: () => Promise<string | null>;
   disconnect: () => void;
   clearError: () => void;
   refreshBalances: () => void;
 
-  /** Server-side wallet session token (proof of WalletConnect ownership) */
+  /** Server-side wallet session token (proof of WalletConnect or Magic ownership) */
   walletSessionToken: string | null;
+
+  /** Which connector established the session */
+  walletProvider: WalletProviderKind | null;
 
   /** Wait for async wallet session registration (used before gate verify). */
   waitForWalletSession: (timeoutMs?: number) => Promise<string | null>;
 
-  /** Sign an arbitrary message via WalletConnect (HIP-820). Returns base64 signature or null. */
+  /**
+   * Opens dual-path chooser when Magic is enabled; otherwise HashPack WC only.
+   * Prefer this from UI (navbar, gates, etc.).
+   */
+  connect: () => Promise<string | null>;
+  /** Explicit HashPack WalletConnect path (unchanged internals). */
+  connectExistingWallet: () => Promise<string | null>;
+  /** Magic Create Account (email / Google / Apple). */
+  createAccountWithMagic: (method: MagicLoginMethod, email?: string) => Promise<string | null>;
+
+  /** Sign an arbitrary message (HashPack WC or Magic). Returns base64 signature or null. */
   signMessage: (message: string) => Promise<string | null>;
   signTransaction: (transactionBytes: Uint8Array) => Promise<Uint8Array | null>;
   signAndExecuteTransaction: (transactionBytes: Uint8Array) => Promise<Uint8Array | null>;
@@ -133,8 +162,11 @@ const defaultState: WalletState = {
   nftCategories: null,
   rawNfts: [],
   walletSessionToken: null,
+  walletProvider: null,
   waitForWalletSession: async () => null,
   connect: async () => null,
+  connectExistingWallet: async () => null,
+  createAccountWithMagic: async () => null,
   disconnect: () => {},
   clearError: () => {},
   refreshBalances: () => {},
@@ -179,14 +211,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [nftCategories, setNftCategories] = useState<CategorizedNFTs | null>(null);
   const [rawNfts, setRawNfts] = useState<MirrorNFT[]>([]);
 
-  /** Server-side wallet session token — proof of WalletConnect ownership */
+  /** Server-side wallet session token — proof of WalletConnect / Magic ownership */
   const [walletSessionToken, setWalletSessionToken] = useState<string | null>(null);
   const walletSessionTokenRef = useRef<string | null>(null);
+  const [walletProvider, setWalletProvider] = useState<WalletProviderKind | null>(null);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
 
   const initRef = useRef(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const connectCancelledRef = useRef(false);
   const cancelApprovalRef = useRef<((reason: Error) => void) | null>(null);
+  const connectResolverRef = useRef<((accountId: string | null) => void) | null>(null);
 
   // ------------------------------------------------------------------
   // Balance Fetching
@@ -243,6 +278,31 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setAccountId(acctId);
       setNetwork(net);
       setConnected(true);
+      setWalletProvider("hashpack");
+      try {
+        sessionStorage.setItem(MAGIC_STORAGE.provider, "hashpack");
+        sessionStorage.removeItem(MAGIC_STORAGE.accountId);
+      } catch { /* ignore */ }
+      doFetchBalances(acctId, net, true);
+      startBalancePolling(acctId, net);
+    },
+    [doFetchBalances, startBalancePolling]
+  );
+
+  const setMagicConnectedState = useCallback(
+    (acctId: string, net: HederaNetwork, token: string) => {
+      setSession(null);
+      setAccountId(acctId);
+      setNetwork(net);
+      setConnected(true);
+      setWalletProvider("magic");
+      setWalletSessionToken(token);
+      walletSessionTokenRef.current = token;
+      try {
+        sessionStorage.setItem(MAGIC_STORAGE.provider, "magic");
+        sessionStorage.setItem(MAGIC_STORAGE.accountId, acctId);
+        sessionStorage.setItem(MAGIC_STORAGE.sessionToken, token);
+      } catch { /* ignore */ }
       doFetchBalances(acctId, net, true);
       startBalancePolling(acctId, net);
     },
@@ -254,12 +314,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setAccountId(null);
     setNetwork(null);
     setConnected(false);
+    setWalletProvider(null);
     setBalances(ZERO_BALANCES);
     setIsLoadingBalances(false);
     setIsAdminWallet(false);
     setNftCategories(null);
     setRawNfts([]);
     stopBalancePolling();
+    try {
+      sessionStorage.removeItem(MAGIC_STORAGE.provider);
+      sessionStorage.removeItem(MAGIC_STORAGE.accountId);
+    } catch { /* ignore */ }
   }, [stopBalancePolling]);
 
   // ------------------------------------------------------------------
@@ -292,14 +357,42 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         });
         if (cancelled) return;
 
-        if (existingSession) {
+        // Prefer Magic restore when flagged (mutual exclusivity with WC)
+        let restoredMagic = false;
+        try {
+          const storedProvider = sessionStorage.getItem(MAGIC_STORAGE.provider);
+          const storedMagicAcct = sessionStorage.getItem(MAGIC_STORAGE.accountId);
+          if (canUseMagic() && storedProvider === "magic" && storedMagicAcct) {
+            const loggedIn = await magicIsLoggedIn();
+            if (loggedIn) {
+              const didToken = await magicGetDidToken();
+              const publicKeyDer = await magicGetPublicKeyDer();
+              if (didToken && publicKeyDer) {
+                const ensure = await api.magicEnsureAccount(didToken, publicKeyDer);
+                if (ensure.success && ensure.data?.accountId) {
+                  const reg = await api.registerMagicWalletSession(ensure.data.accountId, didToken);
+                  if (reg.success && reg.data?.token) {
+                    const net = (ensure.data.network === "testnet" ? "testnet" : "mainnet") as HederaNetwork;
+                    setMagicConnectedState(ensure.data.accountId, net, reg.data.token);
+                    restoredMagic = true;
+                    console.log(`[BOTB Wallet Context] Magic auto-restore | Account: ${ensure.data.accountId}`);
+                  }
+                }
+              }
+            }
+          }
+        } catch (magicErr) {
+          console.warn("[BOTB Wallet Context] Magic restore skipped:", magicErr);
+        }
+
+        if (!restoredMagic && existingSession) {
           const restoredAccountId = extractAccountId(existingSession);
           const restoredNetwork = extractNetwork(existingSession);
           if (restoredAccountId) {
             console.log(`[BOTB Wallet Context] Auto-reconnect | Account: ${restoredAccountId}`);
             setConnectedState(existingSession, restoredAccountId, restoredNetwork);
           }
-        } else {
+        } else if (!restoredMagic) {
           console.log("[BOTB Wallet Context] No session to restore");
         }
       } catch (err: any) {
@@ -309,7 +402,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     initAndReconnect();
     return () => { cancelled = true; };
-  }, [setConnectedState]);
+  }, [setConnectedState, setMagicConnectedState]);
 
   // ------------------------------------------------------------------
   // Subscribe to Wallet Events
@@ -381,11 +474,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // Runs in parallel with admin check / balance fetch (non-blocking).
   // ------------------------------------------------------------------
   useEffect(() => {
+    // Magic sessions register via createAccountWithMagic — do not clear their token here
+    if (walletProvider === "magic") {
+      return;
+    }
+
     if (!accountId || !connected || !session) {
       setWalletSessionToken(null);
       walletSessionTokenRef.current = null;
       try {
         sessionStorage.removeItem("wcoWalletSessionToken");
+        sessionStorage.removeItem(MAGIC_STORAGE.sessionToken);
       } catch {
         /* ignore */
       }
@@ -453,7 +552,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     registerSession();
     return () => { cancelled = true; };
-  }, [accountId, connected, session]);
+  }, [accountId, connected, session, walletProvider]);
 
   useEffect(() => {
     walletSessionTokenRef.current = walletSessionToken;
@@ -471,18 +570,24 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ------------------------------------------------------------------
-  // Connect — Official WalletConnect Modal
+  // Connect Existing — Official WalletConnect Modal (HashPack path)
   // ------------------------------------------------------------------
-  const connect = useCallback(async (): Promise<string | null> => {
-    if (connected && accountId) return accountId;
+  const connectExistingWallet = useCallback(async (): Promise<string | null> => {
+    if (connected && accountId && walletProvider === "hashpack") return accountId;
     if (isConnecting) return null;
+
+    // If Magic session is active, clear it first (mutual exclusivity)
+    if (walletProvider === "magic") {
+      await magicLogout();
+      clearConnectedState();
+    }
 
     setIsConnecting(true);
     setError(null);
     connectCancelledRef.current = false;
 
     try {
-      console.log("[BOTB Wallet Context] Starting connect flow...");
+      console.log("[BOTB Wallet Context] Starting HashPack / WC connect flow...");
 
       const proposal = await createSessionProposal();
 
@@ -557,7 +662,131 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       cancelApprovalRef.current = null;
     }
     return null;
-  }, [isConnecting, connected, accountId, setConnectedState]);
+  }, [isConnecting, connected, accountId, walletProvider, setConnectedState, clearConnectedState]);
+
+  // ------------------------------------------------------------------
+  // Create Account — Magic (email / Google / Apple)
+  // ------------------------------------------------------------------
+  const createAccountWithMagic = useCallback(
+    async (method: MagicLoginMethod, email?: string): Promise<string | null> => {
+      if (!canUseMagic()) {
+        toast.error("Magic Create Account is not enabled on this environment.");
+        return null;
+      }
+      if (isConnecting) return null;
+
+      // Drop HashPack session if switching
+      if (walletProvider === "hashpack") {
+        try { await disconnectWallet(); } catch { /* ignore */ }
+        clearConnectedState();
+      }
+
+      setIsConnecting(true);
+      setError(null);
+
+      try {
+        const magic = getMagic();
+        if (!magic) throw new Error("Magic SDK failed to initialize");
+
+        if (method === "email") {
+          if (!email || !email.includes("@")) {
+            throw new Error("Enter a valid email address");
+          }
+          await magic.auth.loginWithEmailOTP({ email });
+        } else if (method === "google" || method === "apple") {
+          // Requires Magic dashboard social providers + @magic-ext/oauth when using redirect.
+          // Prefer popup when available so the user stays on WCO.
+          const oauth = (magic as any).oauth || (magic as any).oauth2;
+          if (oauth?.loginWithPopup) {
+            await oauth.loginWithPopup({ provider: method });
+          } else if (oauth?.loginWithRedirect) {
+            await oauth.loginWithRedirect({
+              provider: method,
+              redirectURI: window.location.href.split("#")[0],
+            });
+            return null; // page navigates away
+          } else {
+            throw new Error(
+              `${method === "google" ? "Google" : "Apple"} login needs Magic OAuth enabled in the dashboard. Use email for now.`,
+            );
+          }
+        }
+
+        const didToken = await magicGetDidToken();
+        const publicKeyDer = await magicGetPublicKeyDer();
+        if (!didToken || !publicKeyDer) {
+          throw new Error("Magic login succeeded but wallet keys were unavailable. Try again.");
+        }
+
+        const ensure = await api.magicEnsureAccount(didToken, publicKeyDer);
+        if (!ensure.success || !ensure.data?.accountId) {
+          throw new Error(ensure.error || "Could not create Hedera account");
+        }
+
+        const acctId = ensure.data.accountId;
+        const reg = await api.registerMagicWalletSession(acctId, didToken);
+        if (!reg.success || !reg.data?.token) {
+          throw new Error(reg.error || "Could not register Magic wallet session");
+        }
+
+        const net = (ensure.data.network === "testnet" ? "testnet" : "mainnet") as HederaNetwork;
+        setMagicConnectedState(acctId, net, reg.data.token);
+
+        if (ensure.data.created) {
+          toast.success("Hedera account created — you're in!", { duration: 5000 });
+        } else {
+          toast.success("Welcome back!", { duration: 3000 });
+        }
+
+        // Contest enter (same as HashPack post-register)
+        try {
+          const enterRes = await api.contest.enter(reg.data.token);
+          if (enterRes.success && enterRes.data) {
+            const d = enterRes.data as { alreadyEntered?: boolean; entryNumber?: number; message?: string };
+            if (!d.alreadyEntered && d.entryNumber) {
+              toast.success(d.message || `You're contest entry #${d.entryNumber}`, { duration: 6000 });
+            }
+          }
+          api.contest.loginPing(reg.data.token).catch(() => {});
+        } catch { /* non-blocking */ }
+
+        return acctId;
+      } catch (err: any) {
+        const message = err?.message || "Magic Create Account failed";
+        console.error("[BOTB Wallet Context] Magic create error:", err);
+        if (!/cancel|closed|dismiss/i.test(message)) {
+          setError(message);
+          toast.error(message);
+        }
+        return null;
+      } finally {
+        setIsConnecting(false);
+      }
+    },
+    [isConnecting, walletProvider, clearConnectedState, setMagicConnectedState],
+  );
+
+  // ------------------------------------------------------------------
+  // connect() — chooser when Magic enabled, else HashPack only
+  // ------------------------------------------------------------------
+  const connect = useCallback(async (): Promise<string | null> => {
+    if (connected && accountId) return accountId;
+    if (!canUseMagic()) {
+      return connectExistingWallet();
+    }
+    return new Promise<string | null>((resolve) => {
+      connectResolverRef.current = resolve;
+      setConnectModalOpen(true);
+    });
+  }, [connected, accountId, connectExistingWallet]);
+
+  const closeConnectModal = useCallback(() => {
+    setConnectModalOpen(false);
+    if (connectResolverRef.current) {
+      connectResolverRef.current(accountId);
+      connectResolverRef.current = null;
+    }
+  }, [accountId]);
 
   // ------------------------------------------------------------------
   // Disconnect
@@ -570,20 +799,25 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (accountId) {
         api.disconnectWalletSession(accountId, walletSessionToken || undefined).catch(() => {});
       }
-      await disconnectWallet();
+      if (walletProvider === "magic") {
+        await magicLogout();
+      } else {
+        await disconnectWallet();
+      }
     } catch (err) {
       console.error("[BOTB Wallet Context] Disconnect error:", err);
     }
     setWalletSessionToken(null);
     walletSessionTokenRef.current = null;
     try {
+      sessionStorage.removeItem(MAGIC_STORAGE.sessionToken);
       sessionStorage.removeItem("wcoWalletSessionToken");
     } catch {
       /* ignore */
     }
     clearConnectedState();
     setError(null);
-  }, [clearConnectedState, accountId, walletSessionToken]);
+  }, [clearConnectedState, accountId, walletSessionToken, walletProvider]);
 
   // ------------------------------------------------------------------
   // Manual Refresh
@@ -666,9 +900,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         console.warn("[BOTB Wallet Context] signMessage: not connected");
         return null;
       }
+      if (walletProvider === "magic") {
+        return magicSignMessage(message);
+      }
       return wcSignMessage(message);
     },
-    [connected]
+    [connected, walletProvider]
   );
 
   // ------------------------------------------------------------------
@@ -697,9 +934,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     nftCategories,
     rawNfts,
     walletSessionToken,
+    walletProvider,
     waitForWalletSession,
 
     connect,
+    connectExistingWallet,
+    createAccountWithMagic,
     disconnect,
     clearError,
     refreshBalances,
@@ -711,6 +951,31 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
     <WalletContext.Provider value={value}>
       {children}
+      {canUseMagic() && (
+        <ConnectWalletModal
+          open={connectModalOpen}
+          onClose={closeConnectModal}
+          onConnectExisting={async () => {
+            const id = await connectExistingWallet();
+            if (connectResolverRef.current) {
+              connectResolverRef.current(id);
+              connectResolverRef.current = null;
+            }
+            if (id) setConnectModalOpen(false);
+            return id;
+          }}
+          onCreateWithMagic={async (method, email) => {
+            const id = await createAccountWithMagic(method, email);
+            if (connectResolverRef.current) {
+              connectResolverRef.current(id);
+              connectResolverRef.current = null;
+            }
+            if (id) setConnectModalOpen(false);
+            return id;
+          }}
+          isConnecting={isConnecting}
+        />
+      )}
     </WalletContext.Provider>
   );
 }

@@ -22,7 +22,12 @@
     "build": "node scripts/generate-favicons.mjs && node scripts/generate-og-images.mjs && vite build && node scripts/generate-seo-html.mjs && node scripts/generate-sitemap.mjs",
     "preview": "vite preview",
     "seo:assets": "node scripts/generate-favicons.mjs && node scripts/generate-og-images.mjs",
-    "deploy:edge": "supabase functions deploy make-server-57fcb0ee"
+    "deploy:edge": "supabase functions deploy make-server-57fcb0ee",
+    "hedera:admin-nft": "node scripts/hedera/01-create-admin-nft.mjs",
+    "hedera:gov-topic": "node scripts/hedera/02-create-gov-topic.mjs",
+    "hedera:audit-topic": "node scripts/hedera/03-create-audit-topic.mjs",
+    "hedera:verify-mirror": "node scripts/hedera/04-verify-mirror.mjs",
+    "hedera:smoke-submit": "node scripts/hedera/05-submit-test-message.mjs"
   },
   "dependencies": {
     "@hashgraph/hedera-wallet-connect": "^2.0.6",
@@ -64,7 +69,9 @@
     "date-fns": "3.6.0",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
+    "@magic-ext/hedera": "^2.7.0",
     "lucide-react": "0.487.0",
+    "magic-sdk": "^28.21.1",
     "motion": "12.23.24",
     "next-themes": "0.4.6",
     "react": "18.3.1",

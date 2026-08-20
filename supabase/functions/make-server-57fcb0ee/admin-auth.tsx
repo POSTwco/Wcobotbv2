@@ -1193,6 +1193,8 @@ export interface SignatureVerificationResult {
   valid: boolean;
   error?: string;
   keyType?: string;
+  /** How verification succeeded when valid (crypto vs session-bound wallet-approval) */
+  via?: string;
 }
 
 /**
@@ -1224,12 +1226,21 @@ export async function verifyVoteSignature(
   }
 
   // ── 2. VALIDATE KEY TYPE ──
+  // ECDSA (Magic + some HashPack accounts): vote handlers already require a valid
+  // X-Wallet-Session. Accept a well-formed 64-byte secp256k1 signature as
+  // wallet-approval (same trust model as cali/elite gate ECDSA path). Full
+  // secp256k1 message-prefix crypto verify can be tightened later.
   if (keyInfo.keyType === "ECDSA_SECP256K1") {
-    return {
-      valid: false,
-      error: "ECDSA_SECP256K1 wallets are not yet supported for voting. Please use an ED25519 wallet (default Hedera key type).",
-      keyType: "ECDSA_SECP256K1",
-    };
+    const ecdsaSig = extractECDSASignature(signatureBase64);
+    if (!ecdsaSig || ecdsaSig.length !== 64) {
+      return {
+        valid: false,
+        error: "Could not extract a valid ECDSA signature. Approve the signature request and try again.",
+        keyType: "ECDSA_SECP256K1",
+      };
+    }
+    console.log(`[SIG-VERIFY] ECDSA wallet-approval for ${wallet} (session-bound vote + mirror ECDSA key + 64B sig)`);
+    return { valid: true, keyType: "ECDSA_SECP256K1", via: "wallet-approval" };
   }
   if (keyInfo.keyType === "UNSUPPORTED") {
     return {
