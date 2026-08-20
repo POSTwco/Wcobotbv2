@@ -757,12 +757,40 @@ export function ArenaChat() {
     return () => clearInterval(id);
   }, [cooldownEnd]);
 
-  // ── Gate: wallet required ───────────────────────────────────────────
-  if (!connected) return null;
+  // ── Gate: wallet required — keep anchor so Chat tab can scroll here ─
+  if (!connected) {
+    return (
+      <section id="arena-chat" className="py-12 sm:py-16 relative scroll-mt-24">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div
+            className="rounded-2xl border px-5 py-8 text-center"
+            style={{
+              background:
+                "linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(17,24,39,0.85) 100%)",
+              borderColor: "rgba(212,168,67,0.22)",
+              boxShadow: "0 0 40px rgba(212,168,67,0.06), inset 0 1px 0 rgba(255,255,255,0.08)",
+              backdropFilter: "blur(16px)",
+            }}
+          >
+            <MessageSquare className="w-8 h-8 text-[#F0D078] mx-auto mb-3" />
+            <h3
+              className="text-white text-sm font-bold tracking-wide mb-2"
+              style={{ fontFamily: "Orbitron, sans-serif" }}
+            >
+              ARENA CHAT
+            </h3>
+            <p className="text-[#8494A7] text-xs max-w-sm mx-auto">
+              Connect your Hedera wallet to read and send messages in the community arena.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
-    <section className="py-12 sm:py-16 relative">
+    <section id="arena-chat" className="py-12 sm:py-16 relative scroll-mt-24">
       {/* Background ambient glow */}
       <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] rounded-full blur-[100px] pointer-events-none ${
         isGovernor ? "bg-[#D4A843]/[0.03]" : "bg-[#4274B9]/[0.02]"

@@ -12,7 +12,7 @@ import {
   Trophy, Flame, Target, TrendingUp, Loader2,
   Instagram, Twitter, Youtube, Link2, Zap, User, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useVIP } from "../components/vip/vip-context";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
@@ -52,6 +52,7 @@ export function AthletesPage() {
   const [selectedAthlete, setSelectedAthlete] = useState<string | null>(null);
   const [showAllAthletes, setShowAllAthletes] = useState(false);
   const { vipActive } = useVIP();
+  const location = useLocation();
 
   const loadAthletes = useCallback(async () => {
     setLoading(true);
@@ -72,6 +73,22 @@ export function AthletesPage() {
   }, []);
 
   useEffect(() => { loadAthletes(); }, [loadAthletes]);
+
+  // Chat tab / deep-link: scroll to Arena Chat once page content is ready
+  useEffect(() => {
+    if (location.hash !== "#arena-chat") return;
+    const scrollToChat = () => {
+      const el = document.getElementById("arena-chat");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    // Wait a beat for roster/chat to mount (esp. after loading spinner)
+    const t1 = window.setTimeout(scrollToChat, 80);
+    const t2 = window.setTimeout(scrollToChat, 450);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [location.hash, loading]);
 
   return (
     <div className="min-h-screen py-6 sm:py-8">

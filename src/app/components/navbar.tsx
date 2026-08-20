@@ -14,7 +14,7 @@ const NAV_LINKS = [
   { to: "/nfts", label: "NFTs" },
   { to: "/governance", label: "Governors" },
   { to: "/leaderboard", label: "Leaderboard" },
-  { to: "/calisthenics", label: "Calisthenics" },
+  { to: "/calisthenics", label: "Workout" },
 ];
 
 function BalanceSkeleton({ gold = false }: { gold?: boolean }) {

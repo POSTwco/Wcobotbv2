@@ -117,7 +117,8 @@ export function Layout() {
                   <Link to="/athletes" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Athletes</Link>
                   <Link to="/nfts" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>NFT Collection</Link>
                   <Link to="/governance" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Governors Hub</Link>
-                  <Link to="/calisthenics" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Calisthenics</Link>
+                  <Link to="/calisthenics" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Workout</Link>
+                  <Link to="/athletes#arena-chat" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Arena Chat</Link>
                   <button onClick={() => setShowSponsorModal(true)} className={`block cursor-pointer transition-colors text-left ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Become a Sponsor</button>
                   <Link to="/apply" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Become a Pro Athlete</Link>
                 </div>
