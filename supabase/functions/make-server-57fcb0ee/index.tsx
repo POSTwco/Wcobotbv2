@@ -368,15 +368,15 @@ app.use(`/*`, rateLimit({
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Official WCO weight divisions — keep in sync with src/app/lib/types.ts */
+/** Official WCO weight divisions — keep in sync with src/app/lib/types.ts (lbs only) */
 const WCO_WEIGHT_CLASSES = [
-  "Strawweight (105–115 lbs / 48–52 kg)",
-  "Featherweight (115–125 lbs / 52–57 kg)",
-  "Lightweight (125–135 lbs / 57–61 kg)",
-  "Super Lightweight (135–145 lbs / 61–66 kg)",
-  "Welterweight (145–155 lbs / 66–70 kg)",
-  "Middleweight (155–165 lbs / 70–75 kg)",
-  "Super Middleweight (165+ lbs / 75 kg)",
+  "Strawweight (105–115 lbs)",
+  "Featherweight (115–125 lbs)",
+  "Lightweight (125–135 lbs)",
+  "Super Lightweight (135–145 lbs)",
+  "Welterweight (145–155 lbs)",
+  "Middleweight (155–165 lbs)",
+  "Super Middleweight (165+ lbs)",
 ] as const;
 
 function isValidWeightClass(wc: string): boolean {
@@ -3615,7 +3615,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#FFD700] via-[#22C55E] to-[#FFD700]",
         primaryColor: "#FFD700",
         secondaryColor: "#B8860B",
-        weightClass: "Super Middleweight (165+ lbs / 75 kg)",
+        weightClass: "Super Middleweight (165+ lbs)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -3646,7 +3646,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#6AA3E0] via-[#8B5CF6] to-[#6AA3E0]",
         primaryColor: "#6AA3E0",
         secondaryColor: "#4A7FB8",
-        weightClass: "Super Lightweight (135–145 lbs / 61–66 kg)",
+        weightClass: "Super Lightweight (135–145 lbs)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),
@@ -3677,7 +3677,7 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         nftCardGlowGradient: "from-[#22C55E] via-[#FFD700] to-[#22C55E]",
         primaryColor: "#22C55E",
         secondaryColor: "#16A34A",
-        weightClass: "Middleweight (155–165 lbs / 70–75 kg)",
+        weightClass: "Middleweight (155–165 lbs)",
         totalVotes: 0,
         tokensStaked: 0,
         createdAt: now(),

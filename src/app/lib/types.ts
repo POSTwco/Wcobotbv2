@@ -73,7 +73,7 @@ export interface Athlete {
   secondaryColor?: string;       // Hex color e.g. "#FFB347" — secondary accent
 
   // Weight class — official WCO divisions
-  weightClass?: string;          // Official WCO division, e.g. "Lightweight (125–135 lbs / 57–61 kg)" — see WCO_WEIGHT_CLASSES
+  weightClass?: string;          // Official WCO division, e.g. "Lightweight (125–135 lbs)" — see WCO_WEIGHT_CLASSES
 
   // Verified Hedera wallet (admin-set, for Arena Chat athlete badge)
   wallet?: string;               // Hedera account ID e.g. "0.0.XXXXXXX"
@@ -487,16 +487,16 @@ export interface EventFormData {
 // ---------------------------------------------------------------------------
 // Used by admin athlete-form and public /apply so class changes are one edit.
 // Server mirrors this list in make-server-57fcb0ee + server (validate applications).
-// Super Middleweight has no upper limit (165+).
+// Super Middleweight has no upper limit (165+). Labels are lbs-only (no kg).
 // ---------------------------------------------------------------------------
 export const WCO_WEIGHT_CLASSES = [
-  "Strawweight (105–115 lbs / 48–52 kg)",
-  "Featherweight (115–125 lbs / 52–57 kg)",
-  "Lightweight (125–135 lbs / 57–61 kg)",
-  "Super Lightweight (135–145 lbs / 61–66 kg)",
-  "Welterweight (145–155 lbs / 66–70 kg)",
-  "Middleweight (155–165 lbs / 70–75 kg)",
-  "Super Middleweight (165+ lbs / 75 kg)",
+  "Strawweight (105–115 lbs)",
+  "Featherweight (115–125 lbs)",
+  "Lightweight (125–135 lbs)",
+  "Super Lightweight (135–145 lbs)",
+  "Welterweight (145–155 lbs)",
+  "Middleweight (155–165 lbs)",
+  "Super Middleweight (165+ lbs)",
 ] as const;
 
 export type WCOWeightClass = (typeof WCO_WEIGHT_CLASSES)[number];

@@ -278,7 +278,7 @@ export function ApplyPage() {
                     ))}
                   </select>
                   <p className="text-[#8494A7]/50 text-[0.5rem] mt-0.5">
-                    Official WCO division. You must make weight at the competition (within 1 lb of class limit).
+                    Official WCO division (lbs). You must make weight at the competition (within 1 lb of class limit).
                   </p>
                 </div>
                 <Field
