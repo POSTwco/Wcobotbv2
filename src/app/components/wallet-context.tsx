@@ -729,7 +729,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const acctId = ensure.data.accountId;
         const reg = await api.registerMagicWalletSession(acctId, didToken);
         if (!reg.success || !reg.data?.token) {
-          throw new Error(`Session register (Edge): ${reg.error || "unknown error"}`);
+          // Account may already exist on Hedera — don't hide that from the user
+          const hint =
+            /404|not found|unexpected response/i.test(String(reg.error || ""))
+              ? " Edge /wallet/magic/register is missing — redeploy Supabase function make-server-57fcb0ee, then use Create account again (Welcome back)."
+              : "";
+          throw new Error(
+            `Session register (Edge): ${reg.error || "unknown error"}.${hint} Hedera account ${acctId} may already exist.`,
+          );
         }
 
         const net = (ensure.data.network === "testnet" ? "testnet" : "mainnet") as HederaNetwork;
