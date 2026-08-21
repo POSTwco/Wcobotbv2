@@ -24,7 +24,6 @@ import {
   PublicKey,
   AccountCreateTransaction,
   Hbar,
-  TransactionId,
 } from "@hashgraph/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
@@ -389,9 +388,16 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
 
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
   client.setOperator(operatorAccountId, operatorKey);
+  // Critical: allow SDK to mint a new tx id when a node returns TRANSACTION_EXPIRED.
+  // Manually setTransactionId() LOCKS the start time and produces:
+  // "TRANSACTION_EXPIRED for previous transaction with locked start time"
+  if (typeof (client as any).setDefaultRegenerateTransactionId === "function") {
+    (client as any).setDefaultRegenerateTransactionId(true);
+  }
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const buildTx = () => {
+    // Do NOT call setTransactionId() — that locks validStart and breaks SDK retries.
     const proto = AccountCreateTransaction.prototype as any;
     let tx: AccountCreateTransaction;
     if (typeof proto.setECDSAKeyWithAlias === "function") {
@@ -405,11 +411,10 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
         .setInitialBalance(new Hbar(0))
         .setMaxAutomaticTokenAssociations(16);
     }
-    // Fresh transaction id each attempt — avoids TRANSACTION_EXPIRED / locked start time on retry
-    tx = tx
-      .setTransactionId(TransactionId.generate(operatorAccountId))
-      .setTransactionValidDuration(180)
-      .setMaxTransactionFee(new Hbar(2));
+    tx = tx.setMaxTransactionFee(new Hbar(2));
+    if (typeof (tx as any).setRegenerateTransactionId === "function") {
+      (tx as any).setRegenerateTransactionId(true);
+    }
     return tx;
   };
 
@@ -417,6 +422,7 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
+        // Brand-new unsigned tx each outer attempt (no locked id)
         const tx = buildTx();
         const resp = await tx.execute(client);
         const receipt = await resp.getReceipt(client);
@@ -430,12 +436,13 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
       } catch (err: any) {
         lastErr = err;
         const msg = String(err?.message || err);
-        console.error(`[MAGIC-VERCEL] AccountCreate attempt ${attempt} failed:`, msg.slice(0, 200));
-        const retryable = /TRANSACTION_EXPIRED|BUSY|PLATFORM_TRANSACTION_NOT_CREATED|timeout|ECONNRESET|ETIMEDOUT/i.test(
-          msg,
-        );
+        console.error(`[MAGIC-VERCEL] AccountCreate attempt ${attempt} failed:`, msg.slice(0, 240));
+        const retryable =
+          /TRANSACTION_EXPIRED|BUSY|PLATFORM_TRANSACTION_NOT_CREATED|PLATFORM_NOT_ACTIVE|INVALID_NODE|timeout|ECONNRESET|ETIMEDOUT|UNAVAILABLE/i.test(
+            msg,
+          );
         if (!retryable || attempt === 3) break;
-        await sleep(400 * attempt);
+        await sleep(600 * attempt);
       }
     }
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
