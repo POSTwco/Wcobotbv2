@@ -129,14 +129,65 @@ async function validateMagicDidToken(didToken: string): Promise<{ issuer: string
 }
 
 function parseOperatorKey(raw: string): PrivateKey {
-  const key = raw.trim();
-  try {
-    return PrivateKey.fromStringECDSA(key);
-  } catch { /* try ED25519 */ }
-  try {
-    return PrivateKey.fromStringED25519(key);
-  } catch { /* try DER / generic */ }
-  return PrivateKey.fromString(key);
+  const key = raw.trim().replace(/^["']|["']$/g, "");
+  // Strip common PEM headers if pasted from explorer exports
+  const cleaned = key
+    .replace(/-----BEGIN[^-]+-----/g, "")
+    .replace(/-----END[^-]+-----/g, "")
+    .replace(/\s+/g, "");
+
+  const attempts: Array<() => PrivateKey> = [
+    () => PrivateKey.fromStringECDSA(cleaned),
+    () => PrivateKey.fromStringED25519(cleaned),
+    () => PrivateKey.fromStringDer(cleaned),
+    () => PrivateKey.fromString(cleaned),
+    () => PrivateKey.fromStringECDSA(key),
+    () => PrivateKey.fromStringED25519(key),
+    () => PrivateKey.fromString(key),
+  ];
+
+  let lastErr: unknown;
+  for (const attempt of attempts) {
+    try {
+      return attempt();
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(
+    `Could not parse HEDERA_OPERATOR_KEY (tried ECDSA/ED25519/DER). Last error: ${(lastErr as Error)?.message || lastErr}`,
+  );
+}
+
+/** Magic returns DER hex for an ECDSA secp256k1 public key — try ECDSA parsers first. */
+function parseUserPublicKey(publicKeyDer: string): PublicKey {
+  const raw = publicKeyDer.trim().replace(/^0x/i, "");
+  const attempts: Array<() => PublicKey> = [
+    () => PublicKey.fromStringECDSA(raw),
+    () => PublicKey.fromString(raw),
+    () => {
+      // hex DER → bytes
+      const hex = raw.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(raw) ? raw : null;
+      if (!hex) throw new Error("not hex");
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      }
+      return (PublicKey as any).fromBytesECDSA?.(bytes) ?? PublicKey.fromBytes(bytes);
+    },
+  ];
+
+  let lastErr: unknown;
+  for (const attempt of attempts) {
+    try {
+      return attempt();
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(
+    `Could not parse Magic publicKeyDer as ECDSA PublicKey. Last error: ${(lastErr as Error)?.message || lastErr}`,
+  );
 }
 
 async function createHederaAccount(publicKeyDer: string): Promise<string> {
@@ -145,40 +196,61 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
   if (!opId || !opKeyRaw) {
     throw new Error("Hedera operator credentials not configured");
   }
+  if (!isValidHederaAccountId(opId)) {
+    throw new Error(`Invalid HEDERA_OPERATOR_ID format: ${opId}`);
+  }
 
-  const userKey = PublicKey.fromString(publicKeyDer);
+  const userKey = parseUserPublicKey(publicKeyDer);
   const operatorKey = parseOperatorKey(opKeyRaw);
   const network = hederaNetwork();
+  console.log(
+    `[MAGIC] AccountCreate start | network=${network} | operator=${opId} | userKeyType=${(userKey as any)._type || userKey.constructor?.name || "unknown"}`,
+  );
+
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
   client.setOperator(AccountId.fromString(opId), operatorKey);
 
   try {
-    // Magic Hedera keys are typically ECDSA secp256k1.
-    // Prefer alias helper when present; otherwise setKey / setKeyWithoutAlias.
-    const anyTx = new AccountCreateTransaction() as any;
+    // Magic keys are ECDSA — prefer setECDSAKeyWithAlias (Hedera docs recommended).
+    const proto = AccountCreateTransaction.prototype as any;
     let tx: AccountCreateTransaction;
-    if (typeof anyTx.setECDSAKeyWithAlias === "function") {
-      tx = anyTx
+
+    if (typeof proto.setECDSAKeyWithAlias === "function") {
+      tx = new AccountCreateTransaction()
         .setECDSAKeyWithAlias(userKey)
         .setInitialBalance(new Hbar(0))
-        .setMaxAutomaticTokenAssociations(10);
-    } else if (typeof (AccountCreateTransaction.prototype as any).setKeyWithoutAlias === "function") {
+        .setMaxAutomaticTokenAssociations(16);
+    } else if (typeof proto.setKeyWithoutAlias === "function") {
       tx = new AccountCreateTransaction()
         .setKeyWithoutAlias(userKey)
         .setInitialBalance(new Hbar(0))
-        .setMaxAutomaticTokenAssociations(10);
+        .setMaxAutomaticTokenAssociations(16);
     } else {
       tx = new AccountCreateTransaction()
         .setKey(userKey)
         .setInitialBalance(new Hbar(0))
-        .setMaxAutomaticTokenAssociations(10);
+        .setMaxAutomaticTokenAssociations(16);
     }
+
+    // Explicit max fee so underfunded operator fails with a clear receipt status
+    tx = tx.setMaxTransactionFee(new Hbar(2));
 
     const resp = await tx.execute(client);
     const receipt = await resp.getReceipt(client);
+    const status = receipt.status?.toString?.() || String(receipt.status);
+    if (status && status !== "SUCCESS") {
+      throw new Error(`AccountCreate receipt status: ${status}`);
+    }
     const newId = receipt.accountId;
-    if (!newId) throw new Error("AccountCreate succeeded but no accountId in receipt");
+    if (!newId) throw new Error(`AccountCreate status=${status} but no accountId in receipt`);
+    console.log(`[MAGIC] AccountCreate SUCCESS → ${newId.toString()} | tx=${resp.transactionId?.toString?.()}`);
     return newId.toString();
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    const status = err?.status?.toString?.() || err?.statusPrecheck?.toString?.() || "";
+    console.log(`[MAGIC] AccountCreate FAILED | status=${status} | msg=${msg}`);
+    // Re-throw with status baked in so the HTTP handler can surface a useful hint
+    throw new Error(status ? `${msg} (${status})` : msg);
   } finally {
     try { client.close(); } catch { /* ignore */ }
   }
@@ -256,11 +328,28 @@ export function mountMagicRoutes(app: Hono, PREFIX: string) {
       try {
         accountId = await createHederaAccount(publicKeyDer);
       } catch (err: any) {
-        console.log(`[MAGIC] AccountCreate failed for ${issuer}: ${err?.message || err}`);
+        const detail = String(err?.message || err).slice(0, 240);
+        console.log(`[MAGIC] AccountCreate failed for ${issuer}: ${detail}`);
+        // Surface a short, non-sensitive hint so smoke tests can diagnose
+        // (balances, key parse, network) without leaking private keys.
+        let hint = "Please try again shortly.";
+        const d = detail.toLowerCase();
+        if (d.includes("insufficient") || d.includes("payer") || d.includes("balance")) {
+          hint = "Operator account may need more HBAR to pay AccountCreate fees.";
+        } else if (d.includes("parse") && d.includes("operator")) {
+          hint = "HEDERA_OPERATOR_KEY could not be parsed — check key format in Edge secrets.";
+        } else if (d.includes("publickey") || d.includes("public key") || d.includes("publickeyder")) {
+          hint = "Magic public key could not be parsed as ECDSA.";
+        } else if (d.includes("grpc") || d.includes("connect") || d.includes("fetch failed") || d.includes("network")) {
+          hint = "Could not reach Hedera from Edge (network/gRPC). Check HEDERA_NETWORK and redeploy.";
+        } else if (d.includes("receipt status")) {
+          hint = detail;
+        }
         return c.json({
           success: false,
-          error: "Could not create Hedera account right now. Please try again shortly.",
+          error: `Could not create Hedera account. ${hint}`,
           code: "ACCOUNT_CREATE_FAILED",
+          detail: detail,
         }, 502);
       }
 
