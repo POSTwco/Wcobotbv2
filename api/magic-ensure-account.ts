@@ -5,13 +5,15 @@
  * Body: { didToken: string, publicKeyDer: string }
  *
  * Server env on Vercel (Production, NO VITE_ prefix):
- *   MAGIC_SECRET_KEY
+ *   MAGIC_SECRET_KEY          — sk_live from SAME Magic app as VITE_MAGIC_PUBLISHABLE_KEY
+ *   MAGIC_CLIENT_ID           — optional; Hedera app Client ID (e.g. bJlBCakg…) for aud checks
  *   MAGIC_ACCOUNT_CREATE_ENABLED=true
- *   HEDERA_OPERATOR_ID
- *   HEDERA_OPERATOR_KEY
- *   HEDERA_NETWORK=mainnet|testnet
- *   SUPABASE_URL=https://wotsoauebnoyvegcvouo.supabase.co
- *   SUPABASE_SERVICE_ROLE_KEY=...
+ *   HEDERA_OPERATOR_ID / HEDERA_OPERATOR_KEY / HEDERA_NETWORK
+ *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
+ *
+ * Hedera Mainnet Magic app (canonical for wcorg.io):
+ *   pk_live_B25ED40A258321DC
+ *   Client ID: bJlBCakg7wjIBuWLer0g4F8I3tw
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -24,6 +26,7 @@ import {
   Hbar,
 } from "@hashgraph/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { Magic } from "@magic-sdk/admin";
 
 const KV_TABLE = "kv_store_f75faf6c";
 const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
@@ -141,8 +144,9 @@ function decodeMagicDidIssuer(didToken: string): string | null {
 }
 
 /**
- * Validate Magic DID via Admin REST (same approach as Edge).
- * Returns issuer or a typed failure reason for clearer client errors.
+ * Validate Magic DID.
+ * Primary: @magic-sdk/admin local crypto validate (no Admin REST dependency).
+ * Fallback: Admin REST user/get + token/validate.
  */
 async function validateMagicDidToken(
   didToken: string,
@@ -150,7 +154,8 @@ async function validateMagicDidToken(
   const secret = env("MAGIC_SECRET_KEY");
   if (!secret) {
     return {
-      error: "MAGIC_SECRET_KEY missing on Vercel. Set sk_live_… from the same Magic app as VITE_MAGIC_PUBLISHABLE_KEY.",
+      error:
+        "MAGIC_SECRET_KEY missing on Vercel. Copy sk_live from Hedera Mainnet Magic app (pk_live_B25ED… / Client ID bJlBCakg…).",
       code: "MAGIC_SECRET_MISSING",
     };
   }
@@ -158,8 +163,47 @@ async function validateMagicDidToken(
     return { error: "Magic DID token missing or too short.", code: "MAGIC_DID_MISSING" };
   }
 
+  const claim = decodeMagicDidClaim(didToken);
+  const expectedClientId = env("MAGIC_CLIENT_ID") || "bJlBCakg7wjIBuWLer0g4F8I3tw";
+
+  // 1) Local Admin SDK validation (signature + expiry + audience)
   try {
-    // 1) Preferred: user metadata by Bearer DID (Admin API)
+    const magic = await Magic.init(secret);
+    if (magic.clientId && claim?.aud && magic.clientId !== claim.aud) {
+      return {
+        error:
+          `MAGIC_SECRET_KEY belongs to Client ID ${magic.clientId}, but this login DID is for ${claim.aud}. ` +
+          `Use the sk_live from the Hedera Mainnet app (Client ID ${expectedClientId}, pk_live_B25ED…).`,
+        code: "MAGIC_SECRET_MISMATCH",
+      };
+    }
+    // If init did not populate clientId, set expected so aud check still runs
+    if (!magic.clientId && expectedClientId) {
+      magic.clientId = expectedClientId;
+    }
+    magic.token.validate(didToken);
+    const issuer = magic.token.getIssuer(didToken);
+    if (issuer) {
+      console.log(`[MAGIC-VERCEL] DID ok via Admin SDK issuer=${issuer.slice(0, 24)}…`);
+      return { issuer };
+    }
+  } catch (sdkErr: any) {
+    const msg = String(sdkErr?.message || sdkErr);
+    console.error("[MAGIC-VERCEL] Admin SDK validate failed:", msg.slice(0, 240));
+    // Audience / key mismatch — fail fast with clear guidance
+    if (/audience|client.?id|api.?key|secret|incorrect signer|malformed/i.test(msg)) {
+      return {
+        error:
+          `Magic DID validate failed: ${msg.slice(0, 140)}. ` +
+          `Confirm Vercel MAGIC_SECRET_KEY is sk_live from Hedera app Client ID ${expectedClientId} (pk_live_B25ED…), then Redeploy.`,
+        code: "MAGIC_SECRET_MISMATCH",
+      };
+    }
+    // Expired etc. — still try REST below for older tokens / edge cases
+  }
+
+  // 2) Admin REST fallbacks
+  try {
     const userRes = await fetch("https://api.magic.link/v1/admin/auth/user/get", {
       method: "GET",
       headers: {
@@ -178,7 +222,6 @@ async function validateMagicDidToken(
       console.error(`[MAGIC-VERCEL] user/get failed: ${userRes.status}`);
     }
 
-    // 2) Fallback: token validate endpoint
     const validateRes = await fetch("https://api.magic.link/v2/admin/auth/token/validate", {
       method: "POST",
       headers: {
@@ -191,45 +234,32 @@ async function validateMagicDidToken(
 
     if (validateRes.ok) {
       const v = await validateRes.json();
-      const issuer = v?.data?.issuer || v?.issuer || decodeMagicDidIssuer(didToken);
+      const issuer = v?.data?.issuer || v?.issuer || claim?.iss;
       if (issuer && typeof issuer === "string") return { issuer };
     } else {
       const bodyText = await validateRes.text().catch(() => "");
       console.error(`[MAGIC-VERCEL] token/validate failed: ${validateRes.status} ${bodyText.slice(0, 200)}`);
-      if (validateRes.status === 401 || validateRes.status === 403) {
-        return {
-          error:
-            "Magic secret rejected the DID token. On Vercel, MAGIC_SECRET_KEY must be sk_live_… from the SAME Magic app as VITE_MAGIC_PUBLISHABLE_KEY (pk_live_…). Live↔Test mismatch also fails.",
-          code: "MAGIC_SECRET_MISMATCH",
-        };
-      }
     }
+  } catch (err) {
+    console.error("[MAGIC-VERCEL] REST DID validation error:", err);
+  }
 
-    // 3) Local decode — still reject for AccountCreate (unsafe to trust without Admin API),
-    //    but surface claim.aud so operators can match Magic Dashboard → Client ID.
-    const claim = decodeMagicDidClaim(didToken);
-    if (claim?.iss) {
-      const audHint = claim.aud
-        ? ` DID aud(Client ID)=${claim.aud}. Magic Dashboard Client ID for your Hedera app must match, and MAGIC_SECRET_KEY must be that app's sk_live_. Also VITE_MAGIC_PUBLISHABLE_KEY must be that app's pk_live_ (requires Redeploy).`
-        : "";
-      return {
-        error:
-          `Magic Admin API rejected the DID (token decoded OK).${audHint} Vercel + Supabase MAGIC_SECRET_KEY must both be sk_live from the SAME Hedera Magic app as the publishable key.`,
-        code: "MAGIC_AUTH_FAILED",
-      };
-    }
-
+  if (claim?.iss) {
+    const audHint = claim.aud
+      ? ` DID aud=${claim.aud} (expect ${expectedClientId}).`
+      : "";
     return {
-      error: "Invalid or expired Magic session. Please sign in again.",
+      error:
+        `Magic DID could not be verified with MAGIC_SECRET_KEY.${audHint} ` +
+        `Re-copy sk_live from the Hedera Mainnet Magic app (pk_live_B25ED…), set on Vercel + Supabase, Redeploy Production, hard-refresh.`,
       code: "MAGIC_AUTH_FAILED",
     };
-  } catch (err) {
-    console.error("[MAGIC-VERCEL] DID validation error:", err);
-    return {
-      error: `Magic auth check failed: ${String((err as any)?.message || err).slice(0, 160)}`,
-      code: "MAGIC_AUTH_ERROR",
-    };
   }
+
+  return {
+    error: "Invalid or expired Magic session. Please sign in again.",
+    code: "MAGIC_AUTH_FAILED",
+  };
 }
 
 function parseOperatorKey(raw: string): PrivateKey {
