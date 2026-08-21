@@ -40,7 +40,29 @@ function env(name: string): string {
 }
 
 function hederaNetwork(): "mainnet" | "testnet" {
-  return env("HEDERA_NETWORK").toLowerCase() === "testnet" ? "testnet" : "mainnet";
+  const n = (env("HEDERA_NETWORK") || env("VITE_HEDERA_NETWORK")).toLowerCase();
+  return n === "testnet" ? "testnet" : "mainnet";
+}
+
+/**
+ * Server operator credentials. Prefer names WITHOUT VITE_ (never bake private keys into the browser).
+ * Falls back to VITE_HEDERA_OPERATOR_* if someone only created the Vite-prefixed names on Vercel —
+ * but those VITE_ vars must still be deleted so the next build does not expose the key.
+ */
+function operatorId(): string {
+  return env("HEDERA_OPERATOR_ID") || env("VITE_HEDERA_OPERATOR_ID");
+}
+
+function operatorKeyRaw(): string {
+  const preferred = env("HEDERA_OPERATOR_KEY");
+  if (preferred) return preferred;
+  const vite = env("VITE_HEDERA_OPERATOR_KEY");
+  if (vite) {
+    console.warn(
+      "[MAGIC-VERCEL] Using VITE_HEDERA_OPERATOR_KEY — DELETE that env var after copying its value to HEDERA_OPERATOR_KEY (no VITE_). VITE_ secrets are embedded in public JS.",
+    );
+  }
+  return vite;
 }
 
 function magicEnabled(): boolean {
@@ -320,12 +342,17 @@ function parseUserPublicKey(publicKeyDer: string): PublicKey {
 }
 
 async function createHederaAccount(publicKeyDer: string): Promise<string> {
-  const opId = env("HEDERA_OPERATOR_ID");
-  const opKeyRaw = env("HEDERA_OPERATOR_KEY");
-  if (!opId || !opKeyRaw) throw new Error("HEDERA_OPERATOR_ID / HEDERA_OPERATOR_KEY not set on Vercel");
+  const opId = operatorId();
+  const opKey = operatorKeyRaw();
+  if (!opId || !opKey) {
+    throw new Error(
+      "Operator missing on Vercel. Add HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY (names WITHOUT VITE_). " +
+        "If you only have VITE_HEDERA_OPERATOR_*, copy their values into the non-VITE names, then delete the VITE_ ones.",
+    );
+  }
 
   const userKey = parseUserPublicKey(publicKeyDer);
-  const operatorKey = parseOperatorKey(opKeyRaw);
+  const operatorKey = parseOperatorKey(opKey);
   const network = hederaNetwork();
 
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
