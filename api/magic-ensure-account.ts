@@ -1,21 +1,17 @@
 /**
  * Vercel Node serverless — Magic Hedera AccountCreate
  * ====================================================
- * Supabase Edge cannot reliably reach Hedera consensus (gRPC :50211) or
- * the SDK's mainnet-public mirror bootstrap. This Node runtime can.
- *
  * POST /api/magic-ensure-account
  * Body: { didToken: string, publicKeyDer: string }
- * Returns: { success, data: { accountId, created, network } }
  *
- * Server env (Vercel — NOT VITE_):
+ * Server env on Vercel (Production, NO VITE_ prefix):
  *   MAGIC_SECRET_KEY
  *   MAGIC_ACCOUNT_CREATE_ENABLED=true
  *   HEDERA_OPERATOR_ID
  *   HEDERA_OPERATOR_KEY
  *   HEDERA_NETWORK=mainnet|testnet
- *   SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY
+ *   SUPABASE_URL=https://wotsoauebnoyvegcvouo.supabase.co
+ *   SUPABASE_SERVICE_ROLE_KEY=...
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -30,9 +26,14 @@ import {
 import { createClient } from "@supabase/supabase-js";
 
 const KV_TABLE = "kv_store_f75faf6c";
+const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
 
+/** Strip accidental quotes/whitespace from Vercel dashboard pastes */
 function env(name: string): string {
-  return (process.env[name] || "").trim();
+  return (process.env[name] || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
 }
 
 function hederaNetwork(): "mainnet" | "testnet" {
@@ -43,6 +44,24 @@ function magicEnabled(): boolean {
   return env("MAGIC_ACCOUNT_CREATE_ENABLED").toLowerCase() === "true" && !!env("MAGIC_SECRET_KEY");
 }
 
+function resolveSupabaseUrl(): string {
+  const raw =
+    env("SUPABASE_URL") ||
+    env("NEXT_PUBLIC_SUPABASE_URL") ||
+    DEFAULT_SUPABASE_URL;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" && u.protocol !== "http:") {
+      throw new Error("not http(s)");
+    }
+    return u.origin;
+  } catch {
+    throw new Error(
+      `Invalid SUPABASE_URL on Vercel ("${raw.slice(0, 40)}"). Set SUPABASE_URL=https://wotsoauebnoyvegcvouo.supabase.co`,
+    );
+  }
+}
+
 function cors(res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -50,16 +69,18 @@ function cors(res: VercelResponse) {
 }
 
 function kvClient() {
-  const url = env("SUPABASE_URL") || `https://${env("SUPABASE_PROJECT_ID") || "wotsoauebnoyvegcvouo"}.supabase.co`;
+  const url = resolveSupabaseUrl();
   const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured on Vercel");
+  if (!key) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured on Vercel (server env, not VITE_)");
+  }
   return createClient(url, key);
 }
 
 async function kvGet(key: string): Promise<any> {
   const supabase = kvClient();
   const { data, error } = await supabase.from(KV_TABLE).select("value").eq("key", key).maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`KV get failed: ${error.message}`);
   return data?.value;
 }
 
@@ -68,7 +89,7 @@ async function kvMset(keys: string[], values: any[]): Promise<void> {
   const { error } = await supabase.from(KV_TABLE).upsert(
     keys.map((k, i) => ({ key: k, value: values[i] })),
   );
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`KV write failed: ${error.message}`);
 }
 
 async function validateMagicDidToken(didToken: string): Promise<{ issuer: string } | null> {
@@ -92,7 +113,6 @@ async function validateMagicDidToken(didToken: string): Promise<{ issuer: string
       if (issuer && typeof issuer === "string") return { issuer };
     }
 
-    // Fallback: decode JWT payload for iss
     const parts = didToken.replace(/^["']|["']$/g, "").split(".");
     if (parts.length >= 2) {
       const payload = JSON.parse(
@@ -127,7 +147,7 @@ function parseOperatorKey(raw: string): PrivateKey {
       /* next */
     }
   }
-  throw new Error("Could not parse HEDERA_OPERATOR_KEY");
+  throw new Error("Could not parse HEDERA_OPERATOR_KEY — check format in Vercel env");
 }
 
 function parseUserPublicKey(publicKeyDer: string): PublicKey {
@@ -142,7 +162,7 @@ function parseUserPublicKey(publicKeyDer: string): PublicKey {
 async function createHederaAccount(publicKeyDer: string): Promise<string> {
   const opId = env("HEDERA_OPERATOR_ID");
   const opKeyRaw = env("HEDERA_OPERATOR_KEY");
-  if (!opId || !opKeyRaw) throw new Error("Hedera operator credentials not configured");
+  if (!opId || !opKeyRaw) throw new Error("HEDERA_OPERATOR_ID / HEDERA_OPERATOR_KEY not set on Vercel");
 
   const userKey = parseUserPublicKey(publicKeyDer);
   const operatorKey = parseOperatorKey(opKeyRaw);
@@ -174,7 +194,7 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
       throw new Error(`AccountCreate receipt status: ${status}`);
     }
     if (!receipt.accountId) throw new Error("No accountId in receipt");
-    console.log(`[MAGIC-VERCEL] Created ${receipt.accountId.toString()} tx=${resp.transactionId?.toString?.()}`);
+    console.log(`[MAGIC-VERCEL] Created ${receipt.accountId.toString()}`);
     return receipt.accountId.toString();
   } finally {
     try {
@@ -196,8 +216,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!magicEnabled()) {
       return res.status(503).json({
         success: false,
-        error: "Magic account creation is not enabled.",
+        error: "Magic account creation is not enabled on Vercel (set MAGIC_ACCOUNT_CREATE_ENABLED=true).",
         code: "MAGIC_DISABLED",
+      });
+    }
+
+    // Fail fast with clear message if URL/key env is broken
+    try {
+      resolveSupabaseUrl();
+    } catch (e: any) {
+      return res.status(500).json({ success: false, error: e.message, code: "BAD_SUPABASE_URL" });
+    }
+    if (!env("SUPABASE_SERVICE_ROLE_KEY")) {
+      return res.status(500).json({
+        success: false,
+        error: "SUPABASE_SERVICE_ROLE_KEY missing on Vercel server env.",
+        code: "BAD_SUPABASE_KEY",
       });
     }
 
@@ -257,7 +291,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (err: any) {
-    const detail = String(err?.message || err).slice(0, 240);
+    const detail = String(err?.message || err).slice(0, 280);
     console.error("[MAGIC-VERCEL] ensure-account failed:", detail);
     return res.status(502).json({
       success: false,

@@ -33,13 +33,23 @@ export function getMagic(): MagicWithHedera | null {
   const key = getMagicPublishableKey()!;
   const network = getMagicHederaNetwork();
 
-  magicInstance = new Magic(key, {
-    extensions: [
-      new HederaExtension({
-        network,
-      }),
-    ],
-  }) as MagicWithHedera;
+  if (!key.startsWith("pk_")) {
+    console.error("[Magic] Publishable key looks invalid (expected pk_…)");
+    return null;
+  }
+
+  try {
+    magicInstance = new Magic(key, {
+      extensions: [
+        new HederaExtension({
+          network,
+        }),
+      ],
+    }) as MagicWithHedera;
+  } catch (err) {
+    console.error("[Magic] Failed to initialize SDK:", err);
+    return null;
+  }
 
   return magicInstance;
 }

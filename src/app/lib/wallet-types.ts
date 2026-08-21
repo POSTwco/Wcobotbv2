@@ -18,7 +18,10 @@ export function isMagicEnabled(): boolean {
 
 export function getMagicPublishableKey(): string | null {
   try {
-    const key = String(import.meta.env.VITE_MAGIC_PUBLISHABLE_KEY || "").trim();
+    const key = String(import.meta.env.VITE_MAGIC_PUBLISHABLE_KEY || "")
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .trim();
     return key || null;
   } catch {
     return null;
