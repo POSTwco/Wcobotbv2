@@ -24,6 +24,7 @@ import {
   PublicKey,
   AccountCreateTransaction,
   Hbar,
+  TransactionId,
 } from "@hashgraph/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
@@ -384,13 +385,15 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
   const userKey = parseUserPublicKey(publicKeyDer);
   const operatorKey = parseOperatorKey(opKey);
   const network = hederaNetwork();
+  const operatorAccountId = AccountId.fromString(opId);
 
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
-  client.setOperator(AccountId.fromString(opId), operatorKey);
+  client.setOperator(operatorAccountId, operatorKey);
 
-  try {
-    let tx: AccountCreateTransaction;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const buildTx = () => {
     const proto = AccountCreateTransaction.prototype as any;
+    let tx: AccountCreateTransaction;
     if (typeof proto.setECDSAKeyWithAlias === "function") {
       tx = new AccountCreateTransaction()
         .setECDSAKeyWithAlias(userKey)
@@ -402,17 +405,40 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
         .setInitialBalance(new Hbar(0))
         .setMaxAutomaticTokenAssociations(16);
     }
-    tx = tx.setMaxTransactionFee(new Hbar(2));
+    // Fresh transaction id each attempt — avoids TRANSACTION_EXPIRED / locked start time on retry
+    tx = tx
+      .setTransactionId(TransactionId.generate(operatorAccountId))
+      .setTransactionValidDuration(180)
+      .setMaxTransactionFee(new Hbar(2));
+    return tx;
+  };
 
-    const resp = await tx.execute(client);
-    const receipt = await resp.getReceipt(client);
-    const status = receipt.status?.toString?.() || String(receipt.status);
-    if (status && status !== "SUCCESS") {
-      throw new Error(`AccountCreate receipt status: ${status}`);
+  try {
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const tx = buildTx();
+        const resp = await tx.execute(client);
+        const receipt = await resp.getReceipt(client);
+        const status = receipt.status?.toString?.() || String(receipt.status);
+        if (status && status !== "SUCCESS") {
+          throw new Error(`AccountCreate receipt status: ${status}`);
+        }
+        if (!receipt.accountId) throw new Error("No accountId in receipt");
+        console.log(`[MAGIC-VERCEL] Created ${receipt.accountId.toString()} (attempt ${attempt})`);
+        return receipt.accountId.toString();
+      } catch (err: any) {
+        lastErr = err;
+        const msg = String(err?.message || err);
+        console.error(`[MAGIC-VERCEL] AccountCreate attempt ${attempt} failed:`, msg.slice(0, 200));
+        const retryable = /TRANSACTION_EXPIRED|BUSY|PLATFORM_TRANSACTION_NOT_CREATED|timeout|ECONNRESET|ETIMEDOUT/i.test(
+          msg,
+        );
+        if (!retryable || attempt === 3) break;
+        await sleep(400 * attempt);
+      }
     }
-    if (!receipt.accountId) throw new Error("No accountId in receipt");
-    console.log(`[MAGIC-VERCEL] Created ${receipt.accountId.toString()}`);
-    return receipt.accountId.toString();
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   } finally {
     try {
       client.close();
