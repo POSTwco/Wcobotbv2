@@ -425,6 +425,38 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   cors(res);
   if (req.method === "OPTIONS") return res.status(204).end();
+
+  // Safe diagnostics — no secrets. Open https://www.wcorg.io/api/magic-ensure-account in a browser.
+  if (req.method === "GET") {
+    const id = operatorId();
+    const key = operatorKeyRaw();
+    const idOk = ACCOUNT_ID_RE.test(id);
+    return res.status(200).json({
+      ok: true,
+      magicEnabled: magicEnabled(),
+      magicSecretConfigured: !!env("MAGIC_SECRET_KEY"),
+      magicSecretLooksLikeSk: /^sk_(live|test)_/i.test(env("MAGIC_SECRET_KEY")),
+      operatorIdConfigured: !!id,
+      operatorIdFormatOk: idOk,
+      /** Safe preview only — e.g. 0.0.1081…841 */
+      operatorIdPreview: id
+        ? idOk
+          ? `${id.slice(0, 8)}…${id.slice(-3)}`
+          : `INVALID(len=${id.length}, starts=${id.slice(0, 6)}…)`
+        : null,
+      operatorKeyConfigured: !!key,
+      operatorKeyLength: key ? key.length : 0,
+      operatorKeyLooksLikeAccountId: ACCOUNT_ID_RE.test(key),
+      operatorKeyLooksLikeHex: /^[0-9a-fA-F]{64}$/.test(key.replace(/^0x/i, "")),
+      hederaNetwork: hederaNetwork(),
+      hasViteOperatorIdLeftover: !!env("VITE_HEDERA_OPERATOR_ID"),
+      hasViteOperatorKeyLeftover: !!env("VITE_HEDERA_OPERATOR_KEY"),
+      tip: idOk
+        ? "Operator ID format looks good. If Create Account still fails, check KEY matches this account and Redeploy after env changes."
+        : "HEDERA_OPERATOR_ID must be exactly like 0.0.10817841 (not the private key hex).",
+    });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ success: false, error: "Method not allowed" });
   }
