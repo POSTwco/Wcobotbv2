@@ -28,9 +28,17 @@ import {
   sanitizeString,
 } from "./admin-auth.tsx";
 
-/** Lazy-load Hedera SDK — top-level import can break Supabase Edge deploys (bundle size / gRPC). */
+/**
+ * Lazy-load Hedera SDK.
+ * Prefer esm.sh for Deno Edge (more reliable than npm: specifier during Supabase deploy).
+ */
 async function loadHederaSdk() {
-  return await import("npm:@hashgraph/sdk");
+  try {
+    return await import("https://esm.sh/@hashgraph/sdk@2.80.0");
+  } catch (esmErr) {
+    console.log(`[MAGIC] esm.sh SDK load failed, falling back to npm: ${esmErr}`);
+    return await import("npm:@hashgraph/sdk@2.80.0");
+  }
 }
 
 const WALLET_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
