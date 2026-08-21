@@ -23,9 +23,8 @@ import {
   PrivateKey,
   PublicKey,
   AccountCreateTransaction,
+  AccountBalanceQuery,
   Hbar,
-  Timestamp,
-  TransactionId,
 } from "@hashgraph/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
@@ -388,52 +387,45 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
   const network = hederaNetwork();
   const operatorAccountId = AccountId.fromString(opId);
 
-  /** Read Hedera consensus time from mirror (used for TransactionId validStart). */
-  async function mirrorConsensusMs(): Promise<number> {
-    const mirror =
-      network === "testnet"
-        ? "https://testnet.mirrornode.hedera.com"
-        : "https://mainnet-public.mirrornode.hedera.com";
-    const res = await fetch(`${mirror}/api/v1/transactions?limit=1&order=desc`, {
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!res.ok) throw new Error(`Mirror time sync HTTP ${res.status}`);
-    const data = await res.json();
-    const cts = data?.transactions?.[0]?.consensus_timestamp;
-    if (!cts) throw new Error("Mirror returned no consensus_timestamp");
-    const networkMs = Math.floor(parseFloat(String(cts)) * 1000);
-    console.log(
-      `[MAGIC-VERCEL] Mirror consensus ms=${networkMs} localDriftSec=${Math.round((networkMs - Date.now()) / 1000)}`,
-    );
-    return networkMs;
-  }
-
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
+  // Explicit ECDSA operator — matches mirror ECDSA_SECP256K1 accounts
   client.setOperator(operatorAccountId, operatorKey);
   if (typeof (client as any).setDefaultRegenerateTransactionId === "function") {
     (client as any).setDefaultRegenerateTransactionId(true);
   }
 
   try {
+    // Preflight: paid query proves operator can sign (catches wrong key early)
+    try {
+      const bal = await new AccountBalanceQuery()
+        .setAccountId(operatorAccountId)
+        .execute(client);
+      console.log(
+        `[MAGIC-VERCEL] Operator preflight OK balance=${bal.hbars.toString()}`,
+      );
+    } catch (preErr: any) {
+      const preMsg = String(preErr?.message || preErr);
+      throw new Error(
+        `Operator cannot sign on Hedera (preflight). Check HEDERA_OPERATOR_KEY is the ECDSA private key for ${opId}. Detail: ${preMsg.slice(0, 180)}`,
+      );
+    }
+
     let lastErr: unknown;
     for (let attempt = 1; attempt <= 4; attempt++) {
       try {
-        const networkMs = await mirrorConsensusMs();
-        // Mirror-based validStart (keep LOCKED — unlocking after setTransactionId caused INVALID_SIGNATURE)
-        const validStart = Timestamp.fromDate(new Date(networkMs + 750));
-        const txId = TransactionId.withValidStart(operatorAccountId, validStart);
-
-        // setKey only — alias path can complicate precheck; Magic ECDSA still works as account key
+        // Let the SDK own TransactionId entirely — manual setTransactionId caused INVALID_SIGNATURE
         const tx = new AccountCreateTransaction()
           .setKey(userKey)
           .setInitialBalance(new Hbar(0))
           .setMaxAutomaticTokenAssociations(16)
           .setMaxTransactionFee(new Hbar(2))
-          .setTransactionValidDuration(180)
-          .setTransactionId(txId)
-          .setRegenerateTransactionId(false);
+          .setTransactionValidDuration(120);
+
+        if (typeof (tx as any).setRegenerateTransactionId === "function") {
+          (tx as any).setRegenerateTransactionId(true);
+        }
 
         const resp = await tx.execute(client);
         const receipt = await resp.getReceipt(client);
@@ -449,11 +441,11 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
         const msg = String(err?.message || err);
         console.error(`[MAGIC-VERCEL] AccountCreate attempt ${attempt} failed:`, msg.slice(0, 280));
         const retryable =
-          /TRANSACTION_EXPIRED|BUSY|PLATFORM_TRANSACTION_NOT_CREATED|PLATFORM_NOT_ACTIVE|INVALID_NODE|timeout|ECONNRESET|ETIMEDOUT|UNAVAILABLE|Mirror time/i.test(
+          /TRANSACTION_EXPIRED|BUSY|PLATFORM_TRANSACTION_NOT_CREATED|PLATFORM_NOT_ACTIVE|INVALID_NODE|timeout|ECONNRESET|ETIMEDOUT|UNAVAILABLE/i.test(
             msg,
           );
         if (!retryable || attempt === 4) break;
-        await sleep(700 * attempt);
+        await sleep(800 * attempt);
       }
     }
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
