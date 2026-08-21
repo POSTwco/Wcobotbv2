@@ -98,10 +98,10 @@ export function ConnectWalletModal({
             <div className="flex items-center justify-between px-5 pt-5 pb-2">
               <div>
                 <p className="text-[0.6rem] tracking-[0.2em] text-[#F0D078] font-bold" style={orbitron}>
-                  EMAIL ACCOUNT
+                  CREATE ACCOUNT
                 </p>
                 <h2 className="text-white text-lg font-bold mt-1" style={orbitron}>
-                  Create or sign in
+                  Create account
                 </h2>
               </div>
               <button

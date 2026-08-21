@@ -263,26 +263,51 @@ async function validateMagicDidToken(
 }
 
 function parseOperatorKey(raw: string): PrivateKey {
-  const key = raw.trim().replace(/^["']|["']$/g, "");
+  const key = raw.trim().replace(/^["']|["']$/g, "").trim();
+  if (!key) {
+    throw new Error("HEDERA_OPERATOR_KEY is empty on Vercel");
+  }
+  // Never accept Magic secrets here (common paste mistake)
+  if (/^sk_(live|test)_/i.test(key) || /^pk_(live|test)_/i.test(key)) {
+    throw new Error(
+      "HEDERA_OPERATOR_KEY looks like a Magic API key. Paste the Hedera account private key (hex/DER/ECDSA), not sk_live/pk_live.",
+    );
+  }
+
   const cleaned = key
     .replace(/-----BEGIN[^-]+-----/g, "")
     .replace(/-----END[^-]+-----/g, "")
     .replace(/\s+/g, "");
+  const no0x = cleaned.replace(/^0x/i, "");
 
-  for (const attempt of [
+  const attempts: Array<() => PrivateKey> = [
+    () => PrivateKey.fromStringECDSA(no0x),
     () => PrivateKey.fromStringECDSA(cleaned),
+    () => PrivateKey.fromStringED25519(no0x),
     () => PrivateKey.fromStringED25519(cleaned),
+    () => PrivateKey.fromStringDer(no0x),
     () => PrivateKey.fromStringDer(cleaned),
+    () => PrivateKey.fromString(no0x),
     () => PrivateKey.fromString(cleaned),
     () => PrivateKey.fromString(key),
-  ]) {
+  ];
+
+  let lastErr: unknown;
+  for (const attempt of attempts) {
     try {
       return attempt();
-    } catch {
-      /* next */
+    } catch (e) {
+      lastErr = e;
     }
   }
-  throw new Error("Could not parse HEDERA_OPERATOR_KEY — check format in Vercel env");
+
+  const hint =
+    `len=${key.length} starts=${key.slice(0, 8)}… ` +
+    `Use the private key for HEDERA_OPERATOR_ID (HashPack export / portal DER hex). ` +
+    `Server env name must be HEDERA_OPERATOR_KEY (NO VITE_ prefix).`;
+  throw new Error(
+    `Could not parse HEDERA_OPERATOR_KEY — check format in Vercel env. ${hint} Last: ${String((lastErr as Error)?.message || lastErr).slice(0, 80)}`,
+  );
 }
 
 function parseUserPublicKey(publicKeyDer: string): PublicKey {

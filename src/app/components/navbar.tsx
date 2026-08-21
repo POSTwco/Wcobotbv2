@@ -265,7 +265,7 @@ export function Navbar() {
                       className="text-[0.65rem] sm:text-[0.7rem] text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline disabled:opacity-50 px-0.5"
                       style={{ fontFamily: "'DM Sans', sans-serif" }}
                     >
-                      Create email account
+                      Create account
                     </button>
                   )}
                   {error && (

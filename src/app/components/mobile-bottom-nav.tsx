@@ -308,7 +308,7 @@ function MoreSheet({
                       className="w-full text-center text-xs text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline py-1"
                       style={dmSans}
                     >
-                      Create email account
+                      Create account
                     </button>
                   )}
                 </div>
