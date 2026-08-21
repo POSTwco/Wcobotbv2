@@ -351,6 +351,16 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     );
   }
 
+  // Catch swapped ID/KEY early — AccountId must be shard.realm.num (e.g. 0.0.1234567)
+  if (!/^0\.0\.\d+$/.test(opId)) {
+    const looksLikeHexKey = /^[0-9a-fA-F]{64}$/.test(opId) || /^0x[0-9a-fA-F]{64}$/i.test(opId);
+    throw new Error(
+      looksLikeHexKey
+        ? `HEDERA_OPERATOR_ID is a hex private key, not an account id. Set HEDERA_OPERATOR_ID=0.0.YOUR_ACCOUNT (e.g. 0.0.1234567) and put the hex in HEDERA_OPERATOR_KEY. Received id len=${opId.length}.`
+        : `HEDERA_OPERATOR_ID must look like 0.0.1234567 — got "${opId.slice(0, 48)}${opId.length > 48 ? "…" : ""}". Check you did not swap ID and KEY.`,
+    );
+  }
+
   const userKey = parseUserPublicKey(publicKeyDer);
   const operatorKey = parseOperatorKey(opKey);
   const network = hederaNetwork();
