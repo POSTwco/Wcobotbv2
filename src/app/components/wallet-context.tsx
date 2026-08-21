@@ -71,7 +71,6 @@ import {
 } from "../lib/magic-wallet";
 import {
   MAGIC_STORAGE,
-  type MagicLoginMethod,
   type WalletProviderKind,
 } from "../lib/wallet-types";
 
@@ -125,14 +124,16 @@ export interface WalletState {
   waitForWalletSession: (timeoutMs?: number) => Promise<string | null>;
 
   /**
-   * Opens dual-path chooser when Magic is enabled; otherwise HashPack WC only.
-   * Prefer this from UI (navbar, gates, etc.).
+   * Fast path for existing clients — HashPack / WalletConnect only.
+   * Magic email create/sign-in is a separate link (openMagicEmailSignIn).
    */
   connect: () => Promise<string | null>;
   /** Explicit HashPack WalletConnect path (unchanged internals). */
   connectExistingWallet: () => Promise<string | null>;
-  /** Magic Create Account (email / Google / Apple). */
-  createAccountWithMagic: (method: MagicLoginMethod, email?: string) => Promise<string | null>;
+  /** Open Magic email Create / Sign-in modal (new + returning users). */
+  openMagicEmailSignIn: () => void;
+  /** Magic email OTP — creates Hedera account or signs returning user back in. */
+  createAccountWithMagic: (email: string) => Promise<string | null>;
 
   /** Sign an arbitrary message (HashPack WC or Magic). Returns base64 signature or null. */
   signMessage: (message: string) => Promise<string | null>;
@@ -166,6 +167,7 @@ const defaultState: WalletState = {
   waitForWalletSession: async () => null,
   connect: async () => null,
   connectExistingWallet: async () => null,
+  openMagicEmailSignIn: () => {},
   createAccountWithMagic: async () => null,
   disconnect: () => {},
   clearError: () => {},
@@ -665,10 +667,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [isConnecting, connected, accountId, walletProvider, setConnectedState, clearConnectedState]);
 
   // ------------------------------------------------------------------
-  // Create Account — Magic (email / Google / Apple)
+  // Create / Sign-in — Magic email OTP only
   // ------------------------------------------------------------------
   const createAccountWithMagic = useCallback(
-    async (method: MagicLoginMethod, email?: string): Promise<string | null> => {
+    async (email: string): Promise<string | null> => {
       if (!canUseMagic()) {
         toast.error("Magic Create Account is not enabled on this environment.");
         return null;
@@ -692,38 +694,25 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           );
         }
 
-        if (method === "email") {
-          if (!email || !email.includes("@")) {
-            throw new Error("Enter a valid email address");
-          }
-          try {
-            await magic.auth.loginWithEmailOTP({ email });
-          } catch (loginErr: any) {
-            throw new Error(`Magic login failed: ${loginErr?.message || loginErr}`);
-          }
-        } else if (method === "google" || method === "apple") {
-          // Requires Magic dashboard social providers + @magic-ext/oauth when using redirect.
-          // Prefer popup when available so the user stays on WCO.
-          const oauth = (magic as any).oauth || (magic as any).oauth2;
-          if (oauth?.loginWithPopup) {
-            await oauth.loginWithPopup({ provider: method });
-          } else if (oauth?.loginWithRedirect) {
-            await oauth.loginWithRedirect({
-              provider: method,
-              redirectURI: window.location.href.split("#")[0],
-            });
-            return null; // page navigates away
-          } else {
-            throw new Error(
-              `${method === "google" ? "Google" : "Apple"} login needs Magic OAuth enabled in the dashboard. Use email for now.`,
-            );
-          }
+        if (!email || !email.includes("@")) {
+          throw new Error("Enter a valid email address");
         }
 
-        let didToken: string | null;
+        let didFromLogin: string | null = null;
+        try {
+          // loginWithEmailOTP resolves to the DID token (15m lifespan)
+          const loginResult = await magic.auth.loginWithEmailOTP({ email });
+          if (typeof loginResult === "string" && loginResult.length > 20) {
+            didFromLogin = loginResult;
+          }
+        } catch (loginErr: any) {
+          throw new Error(`Magic login failed: ${loginErr?.message || loginErr}`);
+        }
+
+        let didToken: string | null = didFromLogin;
         let publicKeyDer: string | null;
         try {
-          didToken = await magicGetDidToken();
+          if (!didToken) didToken = await magicGetDidToken();
           publicKeyDer = await magicGetPublicKeyDer();
         } catch (keyErr: any) {
           throw new Error(`Magic wallet key error: ${keyErr?.message || keyErr}`);
@@ -781,18 +770,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ------------------------------------------------------------------
-  // connect() — chooser when Magic enabled, else HashPack only
+  // connect() — HashPack only (fast path for existing clients)
   // ------------------------------------------------------------------
   const connect = useCallback(async (): Promise<string | null> => {
     if (connected && accountId) return accountId;
-    if (!canUseMagic()) {
-      return connectExistingWallet();
-    }
-    return new Promise<string | null>((resolve) => {
-      connectResolverRef.current = resolve;
-      setConnectModalOpen(true);
-    });
+    return connectExistingWallet();
   }, [connected, accountId, connectExistingWallet]);
+
+  const openMagicEmailSignIn = useCallback(() => {
+    if (!canUseMagic()) {
+      toast.error("Email account create is not enabled on this environment.");
+      return;
+    }
+    setConnectModalOpen(true);
+  }, []);
 
   const closeConnectModal = useCallback(() => {
     setConnectModalOpen(false);
@@ -953,6 +944,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     connect,
     connectExistingWallet,
+    openMagicEmailSignIn,
     createAccountWithMagic,
     disconnect,
     clearError,
@@ -969,21 +961,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         <ConnectWalletModal
           open={connectModalOpen}
           onClose={closeConnectModal}
-          onConnectExisting={async () => {
-            const id = await connectExistingWallet();
-            if (connectResolverRef.current) {
-              connectResolverRef.current(id);
-              connectResolverRef.current = null;
-            }
-            if (id) setConnectModalOpen(false);
-            return id;
-          }}
-          onCreateWithMagic={async (method, email) => {
-            const id = await createAccountWithMagic(method, email);
-            if (connectResolverRef.current) {
-              connectResolverRef.current(id);
-              connectResolverRef.current = null;
-            }
+          onCreateWithMagic={async (email) => {
+            const id = await createAccountWithMagic(email);
             if (id) setConnectModalOpen(false);
             return id;
           }}

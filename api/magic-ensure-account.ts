@@ -92,11 +92,81 @@ async function kvMset(keys: string[], values: any[]): Promise<void> {
   if (error) throw new Error(`KV write failed: ${error.message}`);
 }
 
-async function validateMagicDidToken(didToken: string): Promise<{ issuer: string } | null> {
+/**
+ * Magic DID tokens are base64(JSON.stringify([proof, claim])), NOT JWTs.
+ * Claim includes `iss` (did:ethr:0x…).
+ */
+function decodeMagicDidIssuer(didToken: string): string | null {
+  const raw = didToken.trim().replace(/^["']|["']$/g, "");
+  if (!raw) return null;
+
+  // Primary Magic format: btoa(JSON.stringify([proof, claim]))
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    const tuple = JSON.parse(json);
+    if (Array.isArray(tuple) && tuple.length >= 2) {
+      const claim = typeof tuple[1] === "string" ? JSON.parse(tuple[1]) : tuple[1];
+      if (claim?.iss && typeof claim.iss === "string") return claim.iss;
+    }
+  } catch {
+    /* try JWT-ish fallback */
+  }
+
+  // Rare/legacy: proof.claim style segments
+  try {
+    const parts = raw.split(".");
+    if (parts.length >= 2) {
+      const payload = JSON.parse(
+        Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"),
+      );
+      if (payload?.iss && typeof payload.iss === "string") return payload.iss;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
+ * Validate Magic DID via Admin REST (same approach as Edge).
+ * Returns issuer or a typed failure reason for clearer client errors.
+ */
+async function validateMagicDidToken(
+  didToken: string,
+): Promise<{ issuer: string } | { error: string; code: string }> {
   const secret = env("MAGIC_SECRET_KEY");
-  if (!secret || !didToken) return null;
+  if (!secret) {
+    return {
+      error: "MAGIC_SECRET_KEY missing on Vercel. Set sk_live_… from the same Magic app as VITE_MAGIC_PUBLISHABLE_KEY.",
+      code: "MAGIC_SECRET_MISSING",
+    };
+  }
+  if (!didToken || didToken.length < 20) {
+    return { error: "Magic DID token missing or too short.", code: "MAGIC_DID_MISSING" };
+  }
 
   try {
+    // 1) Preferred: user metadata by Bearer DID (Admin API)
+    const userRes = await fetch("https://api.magic.link/v1/admin/auth/user/get", {
+      method: "GET",
+      headers: {
+        "X-Magic-Secret-Key": secret,
+        Authorization: `Bearer ${didToken}`,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+
+    if (userRes.ok) {
+      const data = await userRes.json();
+      const issuer = data?.data?.issuer || data?.issuer;
+      if (issuer && typeof issuer === "string") return { issuer };
+    } else {
+      console.error(`[MAGIC-VERCEL] user/get failed: ${userRes.status}`);
+    }
+
+    // 2) Fallback: token validate endpoint
     const validateRes = await fetch("https://api.magic.link/v2/admin/auth/token/validate", {
       method: "POST",
       headers: {
@@ -109,21 +179,41 @@ async function validateMagicDidToken(didToken: string): Promise<{ issuer: string
 
     if (validateRes.ok) {
       const v = await validateRes.json();
-      const issuer = v?.data?.issuer || v?.issuer;
+      const issuer = v?.data?.issuer || v?.issuer || decodeMagicDidIssuer(didToken);
       if (issuer && typeof issuer === "string") return { issuer };
+    } else {
+      const bodyText = await validateRes.text().catch(() => "");
+      console.error(`[MAGIC-VERCEL] token/validate failed: ${validateRes.status} ${bodyText.slice(0, 200)}`);
+      if (validateRes.status === 401 || validateRes.status === 403) {
+        return {
+          error:
+            "Magic secret rejected the DID token. On Vercel, MAGIC_SECRET_KEY must be sk_live_… from the SAME Magic app as VITE_MAGIC_PUBLISHABLE_KEY (pk_live_…). Live↔Test mismatch also fails.",
+          code: "MAGIC_SECRET_MISMATCH",
+        };
+      }
     }
 
-    const parts = didToken.replace(/^["']|["']$/g, "").split(".");
-    if (parts.length >= 2) {
-      const payload = JSON.parse(
-        Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"),
-      );
-      if (payload?.iss && typeof payload.iss === "string") return { issuer: payload.iss };
+    // 3) Local decode only if APIs failed but token shape is valid — still reject for AccountCreate
+    //    (forged issuer would be unsafe). Surface a clear error instead.
+    const localIss = decodeMagicDidIssuer(didToken);
+    if (localIss) {
+      return {
+        error:
+          "Magic Admin API rejected the session even though the DID token decoded. Check MAGIC_SECRET_KEY matches the publishable key’s Magic app, then retry.",
+        code: "MAGIC_AUTH_FAILED",
+      };
     }
-    return null;
+
+    return {
+      error: "Invalid or expired Magic session. Please sign in again.",
+      code: "MAGIC_AUTH_FAILED",
+    };
   } catch (err) {
     console.error("[MAGIC-VERCEL] DID validation error:", err);
-    return null;
+    return {
+      error: `Magic auth check failed: ${String((err as any)?.message || err).slice(0, 160)}`,
+      code: "MAGIC_AUTH_ERROR",
+    };
   }
 }
 
@@ -247,11 +337,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const identity = await validateMagicDidToken(didToken);
-    if (!identity) {
+    if (!("issuer" in identity)) {
       return res.status(401).json({
         success: false,
-        error: "Invalid or expired Magic session. Please sign in again.",
-        code: "MAGIC_AUTH_FAILED",
+        error: identity.error,
+        code: identity.code,
       });
     }
 

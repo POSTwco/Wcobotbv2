@@ -6,6 +6,7 @@ import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
 import { VIPBadge } from "./vip/vip-badge";
 import { NotificationBell } from "./notification-bell";
+import { isMagicEnabled } from "../lib/wallet-types";
 
 const NAV_LINKS = [
   { to: "/", label: "Home" },
@@ -40,6 +41,7 @@ export function Navbar() {
     governorNftsOwned,
     hasGovernorNFT,
     connect,
+    openMagicEmailSignIn,
     disconnect,
     isConnecting,
     isLoadingBalances,
@@ -236,8 +238,8 @@ export function Navbar() {
                   </button>
                 </div>
               ) : (
-                /* ─── Connect button ─── */
-                <div className="flex flex-col items-end gap-1">
+                /* ─── Connect (HashPack) + optional email create link ─── */
+                <div className="flex flex-col items-end gap-0.5">
                   <button
                     onClick={() => connect()}
                     disabled={isConnecting}
@@ -249,12 +251,23 @@ export function Navbar() {
                   >
                     {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
                     <span className="text-xs sm:text-sm font-semibold hidden sm:inline" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                      {isConnecting ? "Connecting..." : "Connect Wallet"}
+                      {isConnecting ? "Connecting..." : "Connect"}
                     </span>
                     <span className="text-[0.65rem] font-semibold sm:hidden" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                       {isConnecting ? "..." : "Connect"}
                     </span>
                   </button>
+                  {isMagicEnabled() && (
+                    <button
+                      type="button"
+                      onClick={() => openMagicEmailSignIn()}
+                      disabled={isConnecting}
+                      className="text-[0.65rem] sm:text-[0.7rem] text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline disabled:opacity-50 px-0.5"
+                      style={{ fontFamily: "'DM Sans', sans-serif" }}
+                    >
+                      Create email account
+                    </button>
+                  )}
                   {error && (
                     <span className="text-[0.6rem] text-red-400 max-w-[120px] sm:max-w-[200px] truncate" title={error}>
                       {error}

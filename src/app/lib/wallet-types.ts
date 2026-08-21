@@ -5,7 +5,8 @@
 
 export type WalletProviderKind = "hashpack" | "magic";
 
-export type MagicLoginMethod = "email" | "google" | "apple";
+/** @deprecated Google/Apple removed from WCO Magic path — email OTP only */
+export type MagicLoginMethod = "email";
 
 /** Feature flag — when false, Connect behaves exactly as pre-Magic (WC only). */
 export function isMagicEnabled(): boolean {

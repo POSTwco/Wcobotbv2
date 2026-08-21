@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
+import { isMagicEnabled } from "../lib/wallet-types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -132,7 +133,7 @@ function MoreSheet({
   const location = useLocation();
   const {
     connected, address, balance, botbBalance, nftsOwned, governorNftsOwned,
-    hasGovernorNFT, connect, disconnect, isConnecting, isLoadingBalances,
+    hasGovernorNFT, connect, openMagicEmailSignIn, disconnect, isConnecting, isLoadingBalances,
     refreshBalances, network,
   } = useWallet();
   const { tierName } = useVIP();
@@ -281,23 +282,36 @@ function MoreSheet({
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => { connect(); onClose(); }}
-                  disabled={isConnecting}
-                  className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-[0.98] text-white"
-                  style={{
-                    ...dmSans,
-                    background: "linear-gradient(135deg, #D4A843, #a07520)",
-                    boxShadow: "0 4px 20px rgba(212,168,67,0.35)",
-                  }}
-                >
-                  {isConnecting ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Wallet className="w-5 h-5" />
+                <div className="space-y-2">
+                  <button
+                    onClick={() => { connect(); onClose(); }}
+                    disabled={isConnecting}
+                    className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-[0.98] text-white"
+                    style={{
+                      ...dmSans,
+                      background: "linear-gradient(135deg, #D4A843, #a07520)",
+                      boxShadow: "0 4px 20px rgba(212,168,67,0.35)",
+                    }}
+                  >
+                    {isConnecting ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Wallet className="w-5 h-5" />
+                    )}
+                    {isConnecting ? "Connecting..." : "Connect HashPack"}
+                  </button>
+                  {isMagicEnabled() && (
+                    <button
+                      type="button"
+                      onClick={() => { openMagicEmailSignIn(); onClose(); }}
+                      disabled={isConnecting}
+                      className="w-full text-center text-xs text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline py-1"
+                      style={dmSans}
+                    >
+                      Create email account
+                    </button>
                   )}
-                  {isConnecting ? "Connecting..." : "Connect HashPack Wallet"}
-                </button>
+                </div>
               )}
             </div>
 

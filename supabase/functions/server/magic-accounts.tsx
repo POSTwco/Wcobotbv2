@@ -72,6 +72,28 @@ function extractClientIp(c: any): string {
   return c.req.header("x-real-ip") || "unknown";
 }
 
+/** Magic DID = base64(JSON.stringify([proof, claim])) — not a JWT. */
+function decodeMagicDidIssuer(didToken: string): string | null {
+  const raw = didToken.trim().replace(/^["']|["']$/g, "");
+  if (!raw) return null;
+  try {
+    const json = atob(raw.replace(/-/g, "+").replace(/_/g, "/"));
+    const tuple = JSON.parse(json);
+    if (Array.isArray(tuple) && tuple.length >= 2) {
+      const claim = typeof tuple[1] === "string" ? JSON.parse(tuple[1]) : tuple[1];
+      if (claim?.iss && typeof claim.iss === "string") return claim.iss;
+    }
+  } catch { /* ignore */ }
+  try {
+    const parts = raw.split(".");
+    if (parts.length >= 2) {
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+      if (payload?.iss && typeof payload.iss === "string") return payload.iss;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 /** Validate Magic DID token; returns issuer (user id) or null */
 async function validateMagicDidToken(didToken: string): Promise<{ issuer: string } | null> {
   const secret = env("MAGIC_SECRET_KEY");
@@ -91,7 +113,7 @@ async function validateMagicDidToken(didToken: string): Promise<{ issuer: string
     });
 
     if (!res.ok) {
-      // Fallback: parse DID JWT payload without network (issuer claim) + ping validate endpoint
+      // Fallback: ping validate endpoint
       const validateRes = await fetch("https://api.magic.link/v2/admin/auth/token/validate", {
         method: "POST",
         headers: {
@@ -106,26 +128,14 @@ async function validateMagicDidToken(didToken: string): Promise<{ issuer: string
         return null;
       }
       const v = await validateRes.json();
-      const issuer = v?.data?.issuer || v?.issuer;
+      const issuer = v?.data?.issuer || v?.issuer || decodeMagicDidIssuer(didToken);
       if (!issuer || typeof issuer !== "string") return null;
       return { issuer };
     }
 
     const data = await res.json();
-    const issuer = data?.data?.issuer || data?.issuer;
-    if (!issuer || typeof issuer !== "string") {
-      // Try decode DID token middle segment for issuer
-      const parts = didToken.replace(/^["']|["']$/g, "").split(".");
-      if (parts.length >= 2) {
-        try {
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-          if (payload?.iss && typeof payload.iss === "string") {
-            return { issuer: payload.iss };
-          }
-        } catch { /* ignore */ }
-      }
-      return null;
-    }
+    const issuer = data?.data?.issuer || data?.issuer || decodeMagicDidIssuer(didToken);
+    if (!issuer || typeof issuer !== "string") return null;
     return { issuer };
   } catch (err) {
     console.log(`[MAGIC] DID validation error: ${err}`);
