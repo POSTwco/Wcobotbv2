@@ -91,7 +91,9 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/vite": "4.1.12",
+    "@vercel/node": "^5.10.1",
     "@vitejs/plugin-react": "4.7.0",
     "jimp": "^1.6.0",
     "sharp": "^0.35.2",

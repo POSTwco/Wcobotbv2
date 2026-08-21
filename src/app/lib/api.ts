@@ -181,12 +181,36 @@ export const api = {
       body: { wallet, wcTopic },
     }),
 
-  /** Magic Create Account — provision Hedera account (sponsored AccountCreate) */
-  magicEnsureAccount: (didToken: string, publicKeyDer: string) =>
-    request<{ accountId: string; created: boolean; network: string }>("/wallet/magic/ensure-account", {
-      method: "POST",
-      body: { didToken, publicKeyDer },
-    }),
+  /**
+   * Magic Create Account — provision Hedera account (sponsored AccountCreate).
+   * Runs on Vercel Node (/api/magic-ensure-account) because Supabase Edge cannot
+   * reach Hedera consensus gRPC. Session register stays on Edge.
+   */
+  magicEnsureAccount: async (didToken: string, publicKeyDer: string) => {
+    try {
+      const res = await fetch("/api/magic-ensure-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ didToken, publicKeyDer }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return {
+          success: false as const,
+          error: (json as any)?.error || `Account create failed (${res.status})`,
+          code: (json as any)?.code,
+          data: undefined,
+        };
+      }
+      return json as ApiResponse<{ accountId: string; created: boolean; network: string }>;
+    } catch (err: any) {
+      return {
+        success: false as const,
+        error: err?.message || "Account create request failed",
+        data: undefined,
+      };
+    }
+  },
 
   /** Magic session — issues X-Wallet-Session after DID validation (no WC topic) */
   registerMagicWalletSession: (wallet: string, didToken: string) =>
