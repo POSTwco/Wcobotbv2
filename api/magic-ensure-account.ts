@@ -24,9 +24,15 @@ import {
   PublicKey,
   AccountCreateTransaction,
   Hbar,
+  Timestamp,
+  TransactionId,
 } from "@hashgraph/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
+import { createRequire } from "node:module";
+import path from "node:path";
+
+const require = createRequire(import.meta.url);
 
 const KV_TABLE = "kv_store_f75faf6c";
 const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
@@ -386,44 +392,74 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
   const network = hederaNetwork();
   const operatorAccountId = AccountId.fromString(opId);
 
+  /** Align SDK clock to Hedera consensus time (avoids TRANSACTION_EXPIRED on serverless). */
+  async function syncSdkClockFromMirror(): Promise<number> {
+    const mirror =
+      network === "testnet"
+        ? "https://testnet.mirrornode.hedera.com"
+        : "https://mainnet-public.mirrornode.hedera.com";
+    const res = await fetch(`${mirror}/api/v1/transactions?limit=1&order=desc`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) throw new Error(`Mirror time sync HTTP ${res.status}`);
+    const data = await res.json();
+    const cts = data?.transactions?.[0]?.consensus_timestamp;
+    if (!cts) throw new Error("Mirror returned no consensus_timestamp");
+    const networkMs = Math.floor(parseFloat(String(cts)) * 1000);
+    const driftMs = networkMs - Date.now();
+    // Cache.timeDrift is added as SECONDS inside Timestamp.generate()
+    const driftSec = Math.round(driftMs / 1000);
+    try {
+      // Absolute path bypasses package "exports" — Cache is the singleton Timestamp.generate() uses
+      const sdkRoot = path.dirname(require.resolve("@hashgraph/sdk/package.json"));
+      const CacheMod = require(path.join(sdkRoot, "lib", "Cache.cjs"));
+      const Cache = CacheMod?.default ?? CacheMod;
+      if (Cache && typeof Cache.setTimeDrift === "function") {
+        Cache.setTimeDrift(driftSec);
+      }
+    } catch (e) {
+      console.warn("[MAGIC-VERCEL] Could not set SDK Cache.timeDrift:", e);
+    }
+    console.log(`[MAGIC-VERCEL] Clock sync driftSec=${driftSec} networkMs=${networkMs}`);
+    return networkMs;
+  }
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
   client.setOperator(operatorAccountId, operatorKey);
-  // Critical: allow SDK to mint a new tx id when a node returns TRANSACTION_EXPIRED.
-  // Manually setTransactionId() LOCKS the start time and produces:
-  // "TRANSACTION_EXPIRED for previous transaction with locked start time"
   if (typeof (client as any).setDefaultRegenerateTransactionId === "function") {
     (client as any).setDefaultRegenerateTransactionId(true);
   }
 
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const buildTx = () => {
-    // Do NOT call setTransactionId() — that locks validStart and breaks SDK retries.
-    const proto = AccountCreateTransaction.prototype as any;
-    let tx: AccountCreateTransaction;
-    if (typeof proto.setECDSAKeyWithAlias === "function") {
-      tx = new AccountCreateTransaction()
-        .setECDSAKeyWithAlias(userKey)
-        .setInitialBalance(new Hbar(0))
-        .setMaxAutomaticTokenAssociations(16);
-    } else {
-      tx = new AccountCreateTransaction()
-        .setKey(userKey)
-        .setInitialBalance(new Hbar(0))
-        .setMaxAutomaticTokenAssociations(16);
-    }
-    tx = tx.setMaxTransactionFee(new Hbar(2));
-    if (typeof (tx as any).setRegenerateTransactionId === "function") {
-      (tx as any).setRegenerateTransactionId(true);
-    }
-    return tx;
-  };
-
   try {
     let lastErr: unknown;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 4; attempt++) {
       try {
-        // Brand-new unsigned tx each outer attempt (no locked id)
-        const tx = buildTx();
+        const networkMs = await syncSdkClockFromMirror();
+        // validStart ≈ consensus now (no SDK past-jitter of 3–8s)
+        const validStart = Timestamp.fromDate(new Date(networkMs + 500));
+        const txId = TransactionId.withValidStart(operatorAccountId, validStart);
+
+        // Simple setKey — more reliable than setECDSAKeyWithAlias on serverless
+        const tx = new AccountCreateTransaction()
+          .setKey(userKey)
+          .setInitialBalance(new Hbar(0))
+          .setMaxAutomaticTokenAssociations(16)
+          .setMaxTransactionFee(new Hbar(2))
+          .setTransactionValidDuration(180)
+          .setTransactionId(txId);
+
+        // setTransactionId locks the list; unlock so SDK can regenerate if a node returns EXPIRED
+        try {
+          (tx as any)._transactionIds.locked = false;
+          if (typeof (tx as any).setRegenerateTransactionId === "function") {
+            (tx as any).setRegenerateTransactionId(true);
+          }
+        } catch {
+          /* ignore */
+        }
+
         const resp = await tx.execute(client);
         const receipt = await resp.getReceipt(client);
         const status = receipt.status?.toString?.() || String(receipt.status);
@@ -436,13 +472,13 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
       } catch (err: any) {
         lastErr = err;
         const msg = String(err?.message || err);
-        console.error(`[MAGIC-VERCEL] AccountCreate attempt ${attempt} failed:`, msg.slice(0, 240));
+        console.error(`[MAGIC-VERCEL] AccountCreate attempt ${attempt} failed:`, msg.slice(0, 280));
         const retryable =
-          /TRANSACTION_EXPIRED|BUSY|PLATFORM_TRANSACTION_NOT_CREATED|PLATFORM_NOT_ACTIVE|INVALID_NODE|timeout|ECONNRESET|ETIMEDOUT|UNAVAILABLE/i.test(
+          /TRANSACTION_EXPIRED|BUSY|PLATFORM_TRANSACTION_NOT_CREATED|PLATFORM_NOT_ACTIVE|INVALID_NODE|timeout|ECONNRESET|ETIMEDOUT|UNAVAILABLE|Mirror time/i.test(
             msg,
           );
-        if (!retryable || attempt === 3) break;
-        await sleep(600 * attempt);
+        if (!retryable || attempt === 4) break;
+        await sleep(700 * attempt);
       }
     }
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
