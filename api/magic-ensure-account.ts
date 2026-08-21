@@ -29,10 +29,6 @@ import {
 } from "@hashgraph/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
-import { createRequire } from "node:module";
-import path from "node:path";
-
-const require = createRequire(import.meta.url);
 
 const KV_TABLE = "kv_store_f75faf6c";
 const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
@@ -392,8 +388,8 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
   const network = hederaNetwork();
   const operatorAccountId = AccountId.fromString(opId);
 
-  /** Align SDK clock to Hedera consensus time (avoids TRANSACTION_EXPIRED on serverless). */
-  async function syncSdkClockFromMirror(): Promise<number> {
+  /** Read Hedera consensus time from mirror (used for TransactionId validStart). */
+  async function mirrorConsensusMs(): Promise<number> {
     const mirror =
       network === "testnet"
         ? "https://testnet.mirrornode.hedera.com"
@@ -406,21 +402,9 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     const cts = data?.transactions?.[0]?.consensus_timestamp;
     if (!cts) throw new Error("Mirror returned no consensus_timestamp");
     const networkMs = Math.floor(parseFloat(String(cts)) * 1000);
-    const driftMs = networkMs - Date.now();
-    // Cache.timeDrift is added as SECONDS inside Timestamp.generate()
-    const driftSec = Math.round(driftMs / 1000);
-    try {
-      // Absolute path bypasses package "exports" — Cache is the singleton Timestamp.generate() uses
-      const sdkRoot = path.dirname(require.resolve("@hashgraph/sdk/package.json"));
-      const CacheMod = require(path.join(sdkRoot, "lib", "Cache.cjs"));
-      const Cache = CacheMod?.default ?? CacheMod;
-      if (Cache && typeof Cache.setTimeDrift === "function") {
-        Cache.setTimeDrift(driftSec);
-      }
-    } catch (e) {
-      console.warn("[MAGIC-VERCEL] Could not set SDK Cache.timeDrift:", e);
-    }
-    console.log(`[MAGIC-VERCEL] Clock sync driftSec=${driftSec} networkMs=${networkMs}`);
+    console.log(
+      `[MAGIC-VERCEL] Mirror consensus ms=${networkMs} localDriftSec=${Math.round((networkMs - Date.now()) / 1000)}`,
+    );
     return networkMs;
   }
 
@@ -436,21 +420,31 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= 4; attempt++) {
       try {
-        const networkMs = await syncSdkClockFromMirror();
-        // validStart ≈ consensus now (no SDK past-jitter of 3–8s)
-        const validStart = Timestamp.fromDate(new Date(networkMs + 500));
+        const networkMs = await mirrorConsensusMs();
+        // validStart = consensus now — avoids SDK's 3–8s past jitter that can expire on cold starts
+        const validStart = Timestamp.fromDate(new Date(networkMs + 750));
         const txId = TransactionId.withValidStart(operatorAccountId, validStart);
 
-        // Simple setKey — more reliable than setECDSAKeyWithAlias on serverless
-        const tx = new AccountCreateTransaction()
-          .setKey(userKey)
+        // Prefer ECDSA alias when available (Magic Hedera keys are ECDSA); fall back to setKey
+        const proto = AccountCreateTransaction.prototype as any;
+        let tx: AccountCreateTransaction;
+        if (typeof proto.setECDSAKeyWithAlias === "function") {
+          try {
+            tx = new AccountCreateTransaction().setECDSAKeyWithAlias(userKey);
+          } catch {
+            tx = new AccountCreateTransaction().setKey(userKey);
+          }
+        } else {
+          tx = new AccountCreateTransaction().setKey(userKey);
+        }
+        tx = tx
           .setInitialBalance(new Hbar(0))
           .setMaxAutomaticTokenAssociations(16)
           .setMaxTransactionFee(new Hbar(2))
           .setTransactionValidDuration(180)
           .setTransactionId(txId);
 
-        // setTransactionId locks the list; unlock so SDK can regenerate if a node returns EXPIRED
+        // Unlock so SDK can regenerate tx id if a node returns TRANSACTION_EXPIRED
         try {
           (tx as any)._transactionIds.locked = false;
           if (typeof (tx as any).setRegenerateTransactionId === "function") {
@@ -497,33 +491,73 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Safe diagnostics — no secrets. Open https://www.wcorg.io/api/magic-ensure-account in a browser.
   if (req.method === "GET") {
-    const id = operatorId();
-    const key = operatorKeyRaw();
-    const idOk = ACCOUNT_ID_RE.test(id);
-    return res.status(200).json({
-      ok: true,
-      magicEnabled: magicEnabled(),
-      magicSecretConfigured: !!env("MAGIC_SECRET_KEY"),
-      magicSecretLooksLikeSk: /^sk_(live|test)_/i.test(env("MAGIC_SECRET_KEY")),
-      operatorIdConfigured: !!id,
-      operatorIdFormatOk: idOk,
-      /** Safe preview only — e.g. 0.0.1081…841 */
-      operatorIdPreview: id
-        ? idOk
-          ? `${id.slice(0, 8)}…${id.slice(-3)}`
-          : `INVALID(len=${id.length}, starts=${id.slice(0, 6)}…)`
-        : null,
-      operatorKeyConfigured: !!key,
-      operatorKeyLength: key ? key.length : 0,
-      operatorKeyLooksLikeAccountId: ACCOUNT_ID_RE.test(key),
-      operatorKeyLooksLikeHex: /^[0-9a-fA-F]{64}$/.test(key.replace(/^0x/i, "")),
-      hederaNetwork: hederaNetwork(),
-      hasViteOperatorIdLeftover: !!env("VITE_HEDERA_OPERATOR_ID"),
-      hasViteOperatorKeyLeftover: !!env("VITE_HEDERA_OPERATOR_KEY"),
-      tip: idOk
-        ? "Operator ID format looks good. If Create Account still fails, check KEY matches this account and Redeploy after env changes."
-        : "HEDERA_OPERATOR_ID must be exactly like 0.0.10817841 (not the private key hex).",
-    });
+    try {
+      const id = operatorId();
+      const key = operatorKeyRaw();
+      const idOk = ACCOUNT_ID_RE.test(id);
+      let operatorKeyMatchesAccount: boolean | null = null;
+      let operatorKeyParseOk: boolean | null = null;
+      let mirrorKeyType: string | null = null;
+      if (idOk && key) {
+        try {
+          const priv = parseOperatorKey(key);
+          operatorKeyParseOk = true;
+          const derived = priv.publicKey.toStringRaw?.() || priv.publicKey.toString();
+          const net = hederaNetwork();
+          const mirror =
+            net === "testnet"
+              ? "https://testnet.mirrornode.hedera.com"
+              : "https://mainnet-public.mirrornode.hedera.com";
+          const acc = await fetch(`${mirror}/api/v1/accounts/${id}`, {
+            signal: AbortSignal.timeout(8_000),
+          }).then((r) => r.json());
+          mirrorKeyType = acc?.key?._type || null;
+          const mirrorRaw = String(acc?.key?.key || "").toLowerCase();
+          const derivedNorm = String(derived).replace(/^0x/i, "").toLowerCase();
+          // Compare compressed/uncompressed loosely by suffix/contains
+          operatorKeyMatchesAccount = !!(
+            mirrorRaw &&
+            (mirrorRaw === derivedNorm ||
+              derivedNorm.endsWith(mirrorRaw) ||
+              mirrorRaw.endsWith(derivedNorm.slice(-64)))
+          );
+        } catch {
+          operatorKeyParseOk = false;
+          operatorKeyMatchesAccount = false;
+        }
+      }
+      return res.status(200).json({
+        ok: true,
+        magicEnabled: magicEnabled(),
+        magicSecretConfigured: !!env("MAGIC_SECRET_KEY"),
+        magicSecretLooksLikeSk: /^sk_(live|test)_/i.test(env("MAGIC_SECRET_KEY")),
+        operatorIdConfigured: !!id,
+        operatorIdFormatOk: idOk,
+        operatorIdPreview: id
+          ? idOk
+            ? `${id.slice(0, 8)}…${id.slice(-3)}`
+            : `INVALID(len=${id.length}, starts=${id.slice(0, 6)}…)`
+          : null,
+        operatorKeyConfigured: !!key,
+        operatorKeyLength: key ? key.length : 0,
+        operatorKeyLooksLikeAccountId: ACCOUNT_ID_RE.test(key),
+        operatorKeyLooksLikeHex: /^[0-9a-fA-F]{64}$/.test(key.replace(/^0x/i, "")),
+        operatorKeyParseOk,
+        operatorKeyMatchesAccount,
+        mirrorKeyType,
+        hederaNetwork: hederaNetwork(),
+        hasViteOperatorIdLeftover: !!env("VITE_HEDERA_OPERATOR_ID"),
+        hasViteOperatorKeyLeftover: !!env("VITE_HEDERA_OPERATOR_KEY"),
+        tip:
+          operatorKeyMatchesAccount === false
+            ? "HEDERA_OPERATOR_KEY does not match account 0.0.… on mirror — re-export the private key for that exact account."
+            : idOk
+              ? "Operator ID format looks good."
+              : "HEDERA_OPERATOR_ID must be exactly like 0.0.10817841 (not the private key hex).",
+      });
+    } catch (e: any) {
+      return res.status(200).json({ ok: false, error: String(e?.message || e).slice(0, 200) });
+    }
   }
 
   if (req.method !== "POST") {
@@ -609,13 +643,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (err: any) {
-    const detail = String(err?.message || err).slice(0, 280);
-    console.error("[MAGIC-VERCEL] ensure-account failed:", detail);
+    const detail = String(err?.message || err).slice(0, 400);
+    const hederaStatus =
+      err?.status?.toString?.() ||
+      (detail.match(/status\s+([A-Z0-9_]+)/i) || [])[1] ||
+      null;
+    console.error("[MAGIC-VERCEL] ensure-account failed:", detail, "status=", hederaStatus);
     return res.status(502).json({
       success: false,
-      error: `Could not create Hedera account. ${detail}`,
-      code: "ACCOUNT_CREATE_FAILED",
+      error: `Could not create Hedera account. ${hederaStatus ? `[${hederaStatus}] ` : ""}${detail}`,
+      code: hederaStatus || "ACCOUNT_CREATE_FAILED",
       detail,
+      hederaStatus,
     });
   }
 }

@@ -204,15 +204,16 @@ export const api = {
       } catch {
         return {
           success: false as const,
-          error: `Account create API returned non-JSON (${res.status}). Is /api/magic-ensure-account deployed on Vercel?`,
+          error: `Account create API returned non-JSON (${res.status}). ${text.slice(0, 160).replace(/\s+/g, " ")}`,
           data: undefined,
         };
       }
       if (!res.ok) {
+        const statusTag = json?.hederaStatus ? `[${json.hederaStatus}] ` : "";
         return {
           success: false as const,
-          error: json?.error || `Account create failed (${res.status})`,
-          code: json?.code,
+          error: statusTag + (json?.error || `Account create failed (${res.status})`),
+          code: json?.hederaStatus || json?.code,
           data: undefined,
         };
       }
