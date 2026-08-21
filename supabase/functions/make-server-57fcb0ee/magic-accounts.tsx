@@ -186,6 +186,58 @@ function parseUserPublicKey(sdk: any, publicKeyDer: string): any {
   );
 }
 
+/**
+ * Build a Client that does NOT call mainnet-public.mirrornode (fails from Supabase Edge).
+ * Uses a static consensus node map + the same mirror host our REST helpers already use.
+ */
+function buildHederaClient(sdk: any, network: "mainnet" | "testnet"): any {
+  const { Client, AccountId } = sdk;
+
+  // Well-known public consensus nodes (address book subset). Avoids mirror "network/nodes" bootstrap.
+  // Source: Hedera mainnet / testnet address books (stable node account IDs 0.0.3+).
+  const MAINNET: Record<string, any> = {
+    "35.237.200.180:50211": new AccountId(3),
+    "35.186.191.158:50211": new AccountId(4),
+    "35.192.2.25:50211": new AccountId(5),
+    "35.199.161.108:50211": new AccountId(6),
+    "34.94.106.61:50211": new AccountId(7),
+    "35.203.82.240:50211": new AccountId(8),
+    "35.236.5.219:50211": new AccountId(9),
+    "35.197.192.225:50211": new AccountId(10),
+    "35.242.233.154:50211": new AccountId(11),
+    "35.240.13.71:50211": new AccountId(12),
+  };
+
+  const TESTNET: Record<string, any> = {
+    "0.testnet.hedera.com:50211": new AccountId(3),
+    "1.testnet.hedera.com:50211": new AccountId(4),
+    "2.testnet.hedera.com:50211": new AccountId(5),
+    "3.testnet.hedera.com:50211": new AccountId(6),
+  };
+
+  const client = Client.forNetwork(network === "testnet" ? TESTNET : MAINNET);
+
+  // Use the mirror host that already works for our REST calls (NOT mainnet-public.*)
+  try {
+    if (network === "testnet") {
+      client.setMirrorNetwork(["testnet.mirrornode.hedera.com:443"]);
+    } else {
+      client.setMirrorNetwork(["mainnet.mirrornode.hedera.com:443"]);
+    }
+  } catch (err) {
+    console.log(`[MAGIC] setMirrorNetwork skipped: ${err}`);
+  }
+
+  // Stop periodic address-book refreshes that hit mainnet-public.mirrornode
+  try {
+    if (typeof client.setNetworkUpdatePeriod === "function") {
+      client.setNetworkUpdatePeriod(7 * 24 * 60 * 60 * 1000); // 1 week
+    }
+  } catch { /* ignore */ }
+
+  return client;
+}
+
 async function createHederaAccount(publicKeyDer: string): Promise<string> {
   const opId = env("HEDERA_OPERATOR_ID");
   const opKeyRaw = env("HEDERA_OPERATOR_KEY");
@@ -198,7 +250,6 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
 
   const sdk = await loadHederaSdk();
   const {
-    Client,
     AccountId,
     AccountCreateTransaction,
     Hbar,
@@ -211,7 +262,7 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     `[MAGIC] AccountCreate start | network=${network} | operator=${opId}`,
   );
 
-  const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
+  const client = buildHederaClient(sdk, network);
   client.setOperator(AccountId.fromString(opId), operatorKey);
 
   try {
@@ -342,8 +393,16 @@ export function mountMagicRoutes(app: Hono, PREFIX: string) {
           hint = "HEDERA_OPERATOR_KEY could not be parsed — check key format in Edge secrets.";
         } else if (d.includes("publickey") || d.includes("public key") || d.includes("publickeyder")) {
           hint = "Magic public key could not be parsed as ECDSA.";
-        } else if (d.includes("grpc") || d.includes("connect") || d.includes("fetch failed") || d.includes("network")) {
-          hint = "Could not reach Hedera from Edge (network/gRPC). Check HEDERA_NETWORK and redeploy.";
+        } else if (
+          d.includes("grpc") ||
+          d.includes("connect") ||
+          d.includes("fetch failed") ||
+          d.includes("network/nodes") ||
+          d.includes("mirrornode") ||
+          d.includes("50211")
+        ) {
+          hint =
+            "Edge could not reach Hedera nodes. If this persists after redeploy, AccountCreate may need a Node host (gRPC :50211).";
         } else if (d.includes("receipt status")) {
           hint = detail;
         }
