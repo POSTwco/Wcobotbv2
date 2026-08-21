@@ -421,38 +421,19 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     for (let attempt = 1; attempt <= 4; attempt++) {
       try {
         const networkMs = await mirrorConsensusMs();
-        // validStart = consensus now — avoids SDK's 3–8s past jitter that can expire on cold starts
+        // Mirror-based validStart (keep LOCKED — unlocking after setTransactionId caused INVALID_SIGNATURE)
         const validStart = Timestamp.fromDate(new Date(networkMs + 750));
         const txId = TransactionId.withValidStart(operatorAccountId, validStart);
 
-        // Prefer ECDSA alias when available (Magic Hedera keys are ECDSA); fall back to setKey
-        const proto = AccountCreateTransaction.prototype as any;
-        let tx: AccountCreateTransaction;
-        if (typeof proto.setECDSAKeyWithAlias === "function") {
-          try {
-            tx = new AccountCreateTransaction().setECDSAKeyWithAlias(userKey);
-          } catch {
-            tx = new AccountCreateTransaction().setKey(userKey);
-          }
-        } else {
-          tx = new AccountCreateTransaction().setKey(userKey);
-        }
-        tx = tx
+        // setKey only — alias path can complicate precheck; Magic ECDSA still works as account key
+        const tx = new AccountCreateTransaction()
+          .setKey(userKey)
           .setInitialBalance(new Hbar(0))
           .setMaxAutomaticTokenAssociations(16)
           .setMaxTransactionFee(new Hbar(2))
           .setTransactionValidDuration(180)
-          .setTransactionId(txId);
-
-        // Unlock so SDK can regenerate tx id if a node returns TRANSACTION_EXPIRED
-        try {
-          (tx as any)._transactionIds.locked = false;
-          if (typeof (tx as any).setRegenerateTransactionId === "function") {
-            (tx as any).setRegenerateTransactionId(true);
-          }
-        } catch {
-          /* ignore */
-        }
+          .setTransactionId(txId)
+          .setRegenerateTransactionId(false);
 
         const resp = await tx.execute(client);
         const receipt = await resp.getReceipt(client);
@@ -502,7 +483,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           const priv = parseOperatorKey(key);
           operatorKeyParseOk = true;
-          const derived = priv.publicKey.toStringRaw?.() || priv.publicKey.toString();
           const net = hederaNetwork();
           const mirror =
             net === "testnet"
@@ -512,15 +492,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             signal: AbortSignal.timeout(8_000),
           }).then((r) => r.json());
           mirrorKeyType = acc?.key?._type || null;
-          const mirrorRaw = String(acc?.key?.key || "").toLowerCase();
-          const derivedNorm = String(derived).replace(/^0x/i, "").toLowerCase();
-          // Compare compressed/uncompressed loosely by suffix/contains
-          operatorKeyMatchesAccount = !!(
-            mirrorRaw &&
-            (mirrorRaw === derivedNorm ||
-              derivedNorm.endsWith(mirrorRaw) ||
-              mirrorRaw.endsWith(derivedNorm.slice(-64)))
-          );
+          const mirrorKeyHex = String(acc?.key?.key || "").replace(/^0x/i, "");
+          if (!mirrorKeyHex) {
+            operatorKeyMatchesAccount = null;
+          } else {
+            let mirrorPub: PublicKey;
+            try {
+              mirrorPub =
+                mirrorKeyType === "ECDSA_SECP256K1"
+                  ? PublicKey.fromStringECDSA(mirrorKeyHex)
+                  : PublicKey.fromString(mirrorKeyHex);
+            } catch {
+              mirrorPub = PublicKey.fromString(mirrorKeyHex);
+            }
+            operatorKeyMatchesAccount = priv.publicKey.equals(mirrorPub);
+          }
         } catch {
           operatorKeyParseOk = false;
           operatorKeyMatchesAccount = false;
