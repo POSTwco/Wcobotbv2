@@ -44,25 +44,45 @@ function hederaNetwork(): "mainnet" | "testnet" {
   return n === "testnet" ? "testnet" : "mainnet";
 }
 
+const ACCOUNT_ID_RE = /^0\.0\.\d+$/;
+
 /**
  * Server operator credentials. Prefer names WITHOUT VITE_ (never bake private keys into the browser).
- * Falls back to VITE_HEDERA_OPERATOR_* if someone only created the Vite-prefixed names on Vercel —
- * but those VITE_ vars must still be deleted so the next build does not expose the key.
+ * If both HEDERA_* and VITE_HEDERA_* exist, pick the value that looks like a real account id / key
+ * (guards against swapped or stale VITE_ leftovers after a partial rename).
  */
 function operatorId(): string {
-  return env("HEDERA_OPERATOR_ID") || env("VITE_HEDERA_OPERATOR_ID");
+  const preferred = env("HEDERA_OPERATOR_ID");
+  const vite = env("VITE_HEDERA_OPERATOR_ID");
+  if (ACCOUNT_ID_RE.test(preferred)) return preferred;
+  if (ACCOUNT_ID_RE.test(vite)) {
+    console.warn(
+      "[MAGIC-VERCEL] Using VITE_HEDERA_OPERATOR_ID because HEDERA_OPERATOR_ID is missing/invalid. Add HEDERA_OPERATOR_ID=0.0.… and delete the VITE_ copy.",
+    );
+    return vite;
+  }
+  // Return whatever we have so the format check below can explain the mistake
+  return preferred || vite;
 }
 
 function operatorKeyRaw(): string {
   const preferred = env("HEDERA_OPERATOR_KEY");
-  if (preferred) return preferred;
   const vite = env("VITE_HEDERA_OPERATOR_KEY");
-  if (vite) {
-    console.warn(
-      "[MAGIC-VERCEL] Using VITE_HEDERA_OPERATOR_KEY — DELETE that env var after copying its value to HEDERA_OPERATOR_KEY (no VITE_). VITE_ secrets are embedded in public JS.",
-    );
+  // If preferred was accidentally set to an account id, prefer a hex-looking VITE_ key
+  if (preferred && !ACCOUNT_ID_RE.test(preferred)) return preferred;
+  if (vite && !ACCOUNT_ID_RE.test(vite)) {
+    if (preferred && ACCOUNT_ID_RE.test(preferred)) {
+      console.warn(
+        "[MAGIC-VERCEL] HEDERA_OPERATOR_KEY looks like an account id; using VITE_HEDERA_OPERATOR_KEY for the private key. Fix env names/values and delete VITE_ secrets.",
+      );
+    } else if (!preferred) {
+      console.warn(
+        "[MAGIC-VERCEL] Using VITE_HEDERA_OPERATOR_KEY — copy to HEDERA_OPERATOR_KEY and DELETE the VITE_ var (exposed in browser builds).",
+      );
+    }
+    return vite;
   }
-  return vite;
+  return preferred || vite;
 }
 
 function magicEnabled(): boolean {
