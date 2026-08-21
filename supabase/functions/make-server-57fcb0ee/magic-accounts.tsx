@@ -20,14 +20,6 @@
  */
 
 import { Hono } from "npm:hono";
-import {
-  Client,
-  AccountId,
-  PrivateKey,
-  PublicKey,
-  AccountCreateTransaction,
-  Hbar,
-} from "npm:@hashgraph/sdk";
 import * as kv from "./kv_store.tsx";
 import {
   isValidHederaAccountId,
@@ -35,6 +27,11 @@ import {
   checkRateLimit,
   sanitizeString,
 } from "./admin-auth.tsx";
+
+/** Lazy-load Hedera SDK — top-level import can break Supabase Edge deploys (bundle size / gRPC). */
+async function loadHederaSdk() {
+  return await import("npm:@hashgraph/sdk");
+}
 
 const WALLET_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
 
@@ -128,15 +125,15 @@ async function validateMagicDidToken(didToken: string): Promise<{ issuer: string
   }
 }
 
-function parseOperatorKey(raw: string): PrivateKey {
+function parseOperatorKey(sdk: any, raw: string): any {
+  const { PrivateKey } = sdk;
   const key = raw.trim().replace(/^["']|["']$/g, "");
-  // Strip common PEM headers if pasted from explorer exports
   const cleaned = key
     .replace(/-----BEGIN[^-]+-----/g, "")
     .replace(/-----END[^-]+-----/g, "")
     .replace(/\s+/g, "");
 
-  const attempts: Array<() => PrivateKey> = [
+  const attempts: Array<() => any> = [
     () => PrivateKey.fromStringECDSA(cleaned),
     () => PrivateKey.fromStringED25519(cleaned),
     () => PrivateKey.fromStringDer(cleaned),
@@ -160,9 +157,10 @@ function parseOperatorKey(raw: string): PrivateKey {
 }
 
 /** Magic returns DER hex for an ECDSA secp256k1 public key — try ECDSA parsers first. */
-function parseUserPublicKey(publicKeyDer: string): PublicKey {
+function parseUserPublicKey(sdk: any, publicKeyDer: string): any {
+  const { PublicKey } = sdk;
   const raw = publicKeyDer.trim().replace(/^0x/i, "");
-  const attempts: Array<() => PublicKey> = [
+  const attempts: Array<() => any> = [
     () => PublicKey.fromStringECDSA(raw),
     () => PublicKey.fromString(raw),
   ];
@@ -190,11 +188,19 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     throw new Error(`Invalid HEDERA_OPERATOR_ID format: ${opId}`);
   }
 
-  const userKey = parseUserPublicKey(publicKeyDer);
-  const operatorKey = parseOperatorKey(opKeyRaw);
+  const sdk = await loadHederaSdk();
+  const {
+    Client,
+    AccountId,
+    AccountCreateTransaction,
+    Hbar,
+  } = sdk;
+
+  const userKey = parseUserPublicKey(sdk, publicKeyDer);
+  const operatorKey = parseOperatorKey(sdk, opKeyRaw);
   const network = hederaNetwork();
   console.log(
-    `[MAGIC] AccountCreate start | network=${network} | operator=${opId} | userKeyType=${(userKey as any)._type || userKey.constructor?.name || "unknown"}`,
+    `[MAGIC] AccountCreate start | network=${network} | operator=${opId}`,
   );
 
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
@@ -203,7 +209,7 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
   try {
     // Magic keys are ECDSA — prefer setECDSAKeyWithAlias (Hedera docs recommended).
     const proto = AccountCreateTransaction.prototype as any;
-    let tx: AccountCreateTransaction;
+    let tx: any;
 
     if (typeof proto.setECDSAKeyWithAlias === "function") {
       tx = new AccountCreateTransaction()
@@ -222,7 +228,6 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
         .setMaxAutomaticTokenAssociations(16);
     }
 
-    // Explicit max fee so underfunded operator fails with a clear receipt status
     tx = tx.setMaxTransactionFee(new Hbar(2));
 
     const resp = await tx.execute(client);
@@ -239,7 +244,6 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
     const msg = err?.message || String(err);
     const status = err?.status?.toString?.() || err?.statusPrecheck?.toString?.() || "";
     console.log(`[MAGIC] AccountCreate FAILED | status=${status} | msg=${msg}`);
-    // Re-throw with status baked in so the HTTP handler can surface a useful hint
     throw new Error(status ? `${msg} (${status})` : msg);
   } finally {
     try { client.close(); } catch { /* ignore */ }
