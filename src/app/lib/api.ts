@@ -227,15 +227,55 @@ export const api = {
     }
   },
 
-  /** Magic session — issues X-Wallet-Session after DID validation (no WC topic) */
-  registerMagicWalletSession: (wallet: string, didToken: string) =>
-    request<{ token: string; expiresAt: number; ttlMs: number; authProvider: string }>(
-      "/wallet/magic/register",
-      {
+  /**
+   * Magic session — issues X-Wallet-Session after DID validation.
+   * Runs on Vercel (/api/magic-register-session) so we are not blocked by
+   * Edge 404 / HTTP 546 on /wallet/magic/register.
+   */
+  registerMagicWalletSession: async (wallet: string, didToken: string) => {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/api/magic-register-session`
+        : "/api/magic-register-session";
+    try {
+      const res = await fetch(url, {
         method: "POST",
-        body: { wallet, didToken },
-      },
-    ),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet, didToken }),
+      });
+      const text = await res.text();
+      let json: any = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        return {
+          success: false as const,
+          error: `Session register API returned non-JSON (${res.status}). ${text.slice(0, 120).replace(/\s+/g, " ")}`,
+          data: undefined,
+        };
+      }
+      if (!res.ok) {
+        return {
+          success: false as const,
+          error: json?.error || `Session register failed (${res.status})`,
+          code: json?.code,
+          data: undefined,
+        };
+      }
+      return json as ApiResponse<{
+        token: string;
+        expiresAt: number;
+        ttlMs: number;
+        authProvider: string;
+      }>;
+    } catch (err: any) {
+      return {
+        success: false as const,
+        error: `Session register request failed: ${err?.message || err}`,
+        data: undefined,
+      };
+    }
+  },
 
   disconnectWalletSession: (wallet: string, walletSessionToken?: string) =>
     request<{ message: string }>("/wallet/disconnect", {
