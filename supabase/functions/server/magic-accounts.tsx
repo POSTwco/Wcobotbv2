@@ -165,16 +165,6 @@ function parseUserPublicKey(publicKeyDer: string): PublicKey {
   const attempts: Array<() => PublicKey> = [
     () => PublicKey.fromStringECDSA(raw),
     () => PublicKey.fromString(raw),
-    () => {
-      // hex DER → bytes
-      const hex = raw.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(raw) ? raw : null;
-      if (!hex) throw new Error("not hex");
-      const bytes = new Uint8Array(hex.length / 2);
-      for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-      }
-      return (PublicKey as any).fromBytesECDSA?.(bytes) ?? PublicKey.fromBytes(bytes);
-    },
   ];
 
   let lastErr: unknown;
