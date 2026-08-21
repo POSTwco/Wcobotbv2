@@ -187,18 +187,32 @@ export const api = {
    * reach Hedera consensus gRPC. Session register stays on Edge.
    */
   magicEnsureAccount: async (didToken: string, publicKeyDer: string) => {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/api/magic-ensure-account`
+        : "/api/magic-ensure-account";
     try {
-      const res = await fetch("/api/magic-ensure-account", {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ didToken, publicKeyDer }),
       });
-      const json = await res.json().catch(() => ({}));
+      const text = await res.text();
+      let json: any = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        return {
+          success: false as const,
+          error: `Account create API returned non-JSON (${res.status}). Is /api/magic-ensure-account deployed on Vercel?`,
+          data: undefined,
+        };
+      }
       if (!res.ok) {
         return {
           success: false as const,
-          error: (json as any)?.error || `Account create failed (${res.status})`,
-          code: (json as any)?.code,
+          error: json?.error || `Account create failed (${res.status})`,
+          code: json?.code,
           data: undefined,
         };
       }
@@ -206,7 +220,7 @@ export const api = {
     } catch (err: any) {
       return {
         success: false as const,
-        error: err?.message || "Account create request failed",
+        error: `Account create request failed: ${err?.message || err}`,
         data: undefined,
       };
     }

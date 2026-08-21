@@ -686,13 +686,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const magic = getMagic();
-        if (!magic) throw new Error("Magic SDK failed to initialize");
+        if (!magic) {
+          throw new Error(
+            "Magic SDK failed to initialize. Check VITE_MAGIC_PUBLISHABLE_KEY (pk_…) and redeploy Vercel.",
+          );
+        }
 
         if (method === "email") {
           if (!email || !email.includes("@")) {
             throw new Error("Enter a valid email address");
           }
-          await magic.auth.loginWithEmailOTP({ email });
+          try {
+            await magic.auth.loginWithEmailOTP({ email });
+          } catch (loginErr: any) {
+            throw new Error(`Magic login failed: ${loginErr?.message || loginErr}`);
+          }
         } else if (method === "google" || method === "apple") {
           // Requires Magic dashboard social providers + @magic-ext/oauth when using redirect.
           // Prefer popup when available so the user stays on WCO.
@@ -712,21 +720,27 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const didToken = await magicGetDidToken();
-        const publicKeyDer = await magicGetPublicKeyDer();
+        let didToken: string | null;
+        let publicKeyDer: string | null;
+        try {
+          didToken = await magicGetDidToken();
+          publicKeyDer = await magicGetPublicKeyDer();
+        } catch (keyErr: any) {
+          throw new Error(`Magic wallet key error: ${keyErr?.message || keyErr}`);
+        }
         if (!didToken || !publicKeyDer) {
           throw new Error("Magic login succeeded but wallet keys were unavailable. Try again.");
         }
 
         const ensure = await api.magicEnsureAccount(didToken, publicKeyDer);
         if (!ensure.success || !ensure.data?.accountId) {
-          throw new Error(ensure.error || "Could not create Hedera account");
+          throw new Error(`Account create (Vercel API): ${ensure.error || "unknown error"}`);
         }
 
         const acctId = ensure.data.accountId;
         const reg = await api.registerMagicWalletSession(acctId, didToken);
         if (!reg.success || !reg.data?.token) {
-          throw new Error(reg.error || "Could not register Magic wallet session");
+          throw new Error(`Session register (Edge): ${reg.error || "unknown error"}`);
         }
 
         const net = (ensure.data.network === "testnet" ? "testnet" : "mainnet") as HederaNetwork;

@@ -18,8 +18,8 @@ importers:
         specifier: ^2.80.0
         version: 2.81.0(bn.js@5.2.3)(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@18.3.1))
       '@magic-ext/hedera':
-        specifier: ^2.7.0
-        version: 2.7.0(@hashgraph/sdk@2.81.0(bn.js@5.2.3)(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@18.3.1)))
+        specifier: ^2.8.2
+        version: 2.8.2(@hashgraph/sdk@2.81.0(bn.js@5.2.3)(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@18.3.1)))
       '@radix-ui/react-accordion':
         specifier: 1.2.3
         version: 1.2.3(@types/react@19.2.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -132,8 +132,8 @@ importers:
         specifier: 0.487.0
         version: 0.487.0(react@18.3.1)
       magic-sdk:
-        specifier: ^29.0.0
-        version: 29.0.0
+        specifier: ^33.10.2
+        version: 33.10.2
       motion:
         specifier: 12.23.24
         version: 12.23.24(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1150,24 +1150,18 @@ packages:
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
 
-  '@magic-ext/hedera@2.7.0':
-    resolution: {integrity: sha512-rr285NWSK/R1HSf+3IhMyJRqusqgPdzo1ITRo5xoDEYk42IHzudPiE304yJF1MNrgJ+bLpUbSpkyJ1lPJhTd2g==}
+  '@magic-ext/hedera@2.8.2':
+    resolution: {integrity: sha512-hdgJkm0b9V6BtpV+4IyU9ahYcLgOHN4xiHWxqVn6o6oG0pRpAKBUbeoREn9OPz2xU16wUkXrHOls9BGPekO5/Q==}
     peerDependencies:
       '@hashgraph/sdk': ^2.31.0
 
-  '@magic-sdk/commons@25.4.2':
-    resolution: {integrity: sha512-R3wJ1NWa+uDH9+Cc6kLjPDCSkelG3VM9pnuHR0zpE52XxiYaL0IplSG8DsjCqt2FeurTgqlUHGUEFrDHIdXEFQ==}
-    peerDependencies:
-      '@magic-sdk/provider': '>=18.6.0'
-      '@magic-sdk/types': '>=15.8.0'
-
-  '@magic-sdk/provider@29.5.0':
-    resolution: {integrity: sha512-OAd813MLFfJDdRk/puRYqoGpBukGbTAlnR0n7f5AHG1NH9vQd/VSo3g6FunAPgoMfnLtJjFH9PdmD+Sh+f1yWA==}
+  '@magic-sdk/provider@33.10.2':
+    resolution: {integrity: sha512-az0QpnWTpzdJU8S+bcUGWFvrDs4HNuwzJb4n8pRaSM3+9mDeudViPCUInAWnHTu3n8kEiBBBefvYxeND+RyqMA==}
     peerDependencies:
       localforage: ^1.7.4
 
-  '@magic-sdk/types@24.22.0':
-    resolution: {integrity: sha512-FLa9ChjsHcuRNF+dcXIFK4wPb1hJMjGtW+dz1gY5Oyhv37UB7xmOaIlR6YAe4jAxQvO+Hz2Q2Htk4JGI7WRluA==}
+  '@magic-sdk/types@27.10.1':
+    resolution: {integrity: sha512-2jXUMEiYVgjB950YZTeHWaX0rzUm0tUbtzUoCKVtWggy7TTfB9rzJEH6uZ9mHJZl5Fhit/ST3iprE4/iI31SPw==}
 
   '@mapbox/node-pre-gyp@2.0.3':
     resolution: {integrity: sha512-uwPAhccfFJlsfCxMYTwOdVfOz3xqyj8xYL3zJj8f0pb30tLohnnFPhLuqp4/qoEz8sNxe4SESZedcBojRefIzg==}
@@ -4047,8 +4041,8 @@ packages:
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  magic-sdk@29.0.0:
-    resolution: {integrity: sha512-8awpk21HJizU3XftRJNkV7f68ckOKJ2j4jCtagIemHA9Q4vd1QKgt5xZWDak/djXpWch2xOvNiSDtMCZDwEAhw==}
+  magic-sdk@33.10.2:
+    resolution: {integrity: sha512-qtgIkOGHEwfcOjCe38gyAiDe1LPV/fh3KISgLjDdPwTTC8sbhoeZOZK/f9mxKzjx/zNhTqmq79QKrl2WcEMJwQ==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -6414,22 +6408,17 @@ snapshots:
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.6.0
 
-  '@magic-ext/hedera@2.7.0(@hashgraph/sdk@2.81.0(bn.js@5.2.3)(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@18.3.1)))':
+  '@magic-ext/hedera@2.8.2(@hashgraph/sdk@2.81.0(bn.js@5.2.3)(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@18.3.1)))':
     dependencies:
       '@hashgraph/sdk': 2.81.0(bn.js@5.2.3)(react-native@0.85.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@18.3.1))
 
-  '@magic-sdk/commons@25.4.2(@magic-sdk/provider@29.5.0(localforage@1.10.0))(@magic-sdk/types@24.22.0)':
+  '@magic-sdk/provider@33.10.2(localforage@1.10.0)':
     dependencies:
-      '@magic-sdk/provider': 29.5.0(localforage@1.10.0)
-      '@magic-sdk/types': 24.22.0
-
-  '@magic-sdk/provider@29.5.0(localforage@1.10.0)':
-    dependencies:
-      '@magic-sdk/types': 24.22.0
+      '@magic-sdk/types': 27.10.1
       eventemitter3: 4.0.7
       localforage: 1.10.0
 
-  '@magic-sdk/types@24.22.0': {}
+  '@magic-sdk/types@27.10.1': {}
 
   '@mapbox/node-pre-gyp@2.0.3':
     dependencies:
@@ -10140,11 +10129,10 @@ snapshots:
     dependencies:
       react: 18.3.1
 
-  magic-sdk@29.0.0:
+  magic-sdk@33.10.2:
     dependencies:
-      '@magic-sdk/commons': 25.4.2(@magic-sdk/provider@29.5.0(localforage@1.10.0))(@magic-sdk/types@24.22.0)
-      '@magic-sdk/provider': 29.5.0(localforage@1.10.0)
-      '@magic-sdk/types': 24.22.0
+      '@magic-sdk/provider': 33.10.2(localforage@1.10.0)
+      '@magic-sdk/types': 27.10.1
       localforage: 1.10.0
 
   magic-string@0.30.21:
