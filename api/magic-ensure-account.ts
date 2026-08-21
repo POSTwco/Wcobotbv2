@@ -94,11 +94,19 @@ async function kvMset(keys: string[], values: any[]): Promise<void> {
 
 /**
  * Magic DID tokens are base64(JSON.stringify([proof, claim])), NOT JWTs.
- * Claim includes `iss` (did:ethr:0x…).
+ * Claim includes `iss` (did:ethr:0x…) and `aud` (Magic Client ID).
  */
-function decodeMagicDidIssuer(didToken: string): string | null {
+function decodeMagicDidClaim(didToken: string): { iss?: string; aud?: string } | null {
   const raw = didToken.trim().replace(/^["']|["']$/g, "");
   if (!raw) return null;
+
+  const fromObj = (claim: any) => {
+    if (!claim || typeof claim !== "object") return null;
+    const iss = typeof claim.iss === "string" ? claim.iss : undefined;
+    const aud = typeof claim.aud === "string" ? claim.aud : undefined;
+    if (!iss && !aud) return null;
+    return { iss, aud };
+  };
 
   // Primary Magic format: btoa(JSON.stringify([proof, claim]))
   try {
@@ -107,25 +115,29 @@ function decodeMagicDidIssuer(didToken: string): string | null {
     const tuple = JSON.parse(json);
     if (Array.isArray(tuple) && tuple.length >= 2) {
       const claim = typeof tuple[1] === "string" ? JSON.parse(tuple[1]) : tuple[1];
-      if (claim?.iss && typeof claim.iss === "string") return claim.iss;
+      const out = fromObj(claim);
+      if (out) return out;
     }
   } catch {
     /* try JWT-ish fallback */
   }
 
-  // Rare/legacy: proof.claim style segments
   try {
     const parts = raw.split(".");
     if (parts.length >= 2) {
       const payload = JSON.parse(
         Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"),
       );
-      if (payload?.iss && typeof payload.iss === "string") return payload.iss;
+      return fromObj(payload);
     }
   } catch {
     /* ignore */
   }
   return null;
+}
+
+function decodeMagicDidIssuer(didToken: string): string | null {
+  return decodeMagicDidClaim(didToken)?.iss || null;
 }
 
 /**
@@ -193,13 +205,16 @@ async function validateMagicDidToken(
       }
     }
 
-    // 3) Local decode only if APIs failed but token shape is valid — still reject for AccountCreate
-    //    (forged issuer would be unsafe). Surface a clear error instead.
-    const localIss = decodeMagicDidIssuer(didToken);
-    if (localIss) {
+    // 3) Local decode — still reject for AccountCreate (unsafe to trust without Admin API),
+    //    but surface claim.aud so operators can match Magic Dashboard → Client ID.
+    const claim = decodeMagicDidClaim(didToken);
+    if (claim?.iss) {
+      const audHint = claim.aud
+        ? ` DID aud(Client ID)=${claim.aud}. Magic Dashboard Client ID for your Hedera app must match, and MAGIC_SECRET_KEY must be that app's sk_live_. Also VITE_MAGIC_PUBLISHABLE_KEY must be that app's pk_live_ (requires Redeploy).`
+        : "";
       return {
         error:
-          "Magic Admin API rejected the session even though the DID token decoded. Check MAGIC_SECRET_KEY matches the publishable key’s Magic app, then retry.",
+          `Magic Admin API rejected the DID (token decoded OK).${audHint} Vercel + Supabase MAGIC_SECRET_KEY must both be sk_live from the SAME Hedera Magic app as the publishable key.`,
         code: "MAGIC_AUTH_FAILED",
       };
     }
