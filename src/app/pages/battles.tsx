@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { useLiveBattles, useAthleteMap, useMyVotes, useAllocations, useEvents } from "../lib/hooks";
 import { api } from "../lib/api";
 import { generateSecureNonce } from "../lib/api";
+import { signatureCancelledMessage } from "../lib/magic-signing-guidance";
 import type { Battle, Athlete, BattleVote } from "../lib/types";
 import { ErrorCard } from "../components/error-boundary";
 import { VoteCelebration, type CelebrationData } from "../components/vote-celebration";
@@ -130,7 +131,7 @@ export function BattlesPage() {
   const {
     connected, connect, accountId, botbBalance, votingPower,
     hasGovernorNFT, hasSigmaNFT, isConnecting, signMessage,
-    walletSessionToken,
+    walletSessionToken, walletProvider,
   } = useWallet();
   const { vipActive } = useVIP();
 
@@ -375,11 +376,16 @@ export function BattlesPage() {
       // Sign once
       setSigningStep("signing");
       toast.info(
-        `Sign once to submit ${allBattleCount} vote${allBattleCount > 1 ? "s" : ""} — check HashPack.`,
+        `Sign once to submit ${allBattleCount} vote${allBattleCount > 1 ? "s" : ""} — ${
+          walletProvider === "magic" ? "approve the Magic prompt." : "check HashPack."
+        }`,
         { duration: 15000 },
       );
       const signature = await signMessage(combinedMsg);
-      if (!signature) { toast.error("Vote signature cancelled. Approve in HashPack to vote."); return; }
+      if (!signature) {
+        toast.error(signatureCancelledMessage(walletProvider));
+        return;
+      }
 
       setSigningStep("submitting");
 
@@ -486,7 +492,7 @@ export function BattlesPage() {
       setTimeout(() => refreshBattles(), 800);
     } catch (err: any) {
       if (err?.message?.includes("cancelled") || err?.message?.includes("rejected")) {
-        toast.error("Vote signature was cancelled. Approve in HashPack to vote.");
+        toast.error(signatureCancelledMessage(walletProvider));
       } else {
         toast.error("Vote failed. Please try again.");
         console.error("[VOTE]", err);
@@ -495,7 +501,7 @@ export function BattlesPage() {
       setSubmitting(false);
       setSigningStep("idle");
     }
-  }, [connected, accountId, signMessage, picks, picksByEvent, battles, voteMap, tokenLive, patchBattles, refreshBattles, refreshMyVotes, refreshAllocations, votingPower, hasGovernorNFT, hasSigmaNFT, athleteMap]);
+  }, [connected, accountId, signMessage, picks, picksByEvent, battles, voteMap, tokenLive, patchBattles, refreshBattles, refreshMyVotes, refreshAllocations, votingPower, hasGovernorNFT, hasSigmaNFT, athleteMap, walletProvider]);
 
   // ─── Filters ────────────────────────────────────────────────────────────
   const FILTERS: { key: BattleFilter; label: string; icon: typeof Swords }[] = [

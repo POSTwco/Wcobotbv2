@@ -250,21 +250,19 @@ export function ManageAssetsPage() {
       {walletProvider === "magic" && (
         <div
           id="export"
-          className="rounded-2xl border border-[#f59e0b]/25 bg-[#f59e0b]/5 p-5 mb-4 scroll-mt-24"
+          className="rounded-2xl border border-[#4274B9]/25 bg-[#4274B9]/8 p-5 mb-4 scroll-mt-24"
         >
           <div className="flex items-start gap-3 mb-3">
-            <Shield className="w-5 h-5 text-[#f59e0b] shrink-0 mt-0.5" />
+            <Shield className="w-5 h-5 text-[#6AA3E0] shrink-0 mt-0.5" />
             <div>
               <h2 className="text-sm font-semibold text-[#E8ECF0]" style={orbitron}>
-                On-chain signing
+                Signing on this site
               </h2>
               <p className="text-sm text-[#8494A7] mt-1 leading-relaxed">
-                Votes and chat use Magic message signing on this site. Transfers
-                and other Hedera transactions need{" "}
-                <strong className="text-[#E8ECF0]">HashPack</strong> with{" "}
-                <strong className="text-[#E8ECF0]">this account’s private key</strong>{" "}
-                imported. Using the same email in HashPack creates a{" "}
-                <em>different</em> wallet — that is expected; import the key instead.
+                Your Magic email wallet can sign votes, workouts, and on-chain
+                Hedera transactions here — no HashPack required. Keep a little{" "}
+                <strong className="text-[#E8ECF0]">HBAR</strong> for network fees.
+                Exporting your key is optional backup / self-custody.
               </p>
             </div>
           </div>
@@ -276,13 +274,13 @@ export function ManageAssetsPage() {
             style={{ background: "linear-gradient(135deg, #4274B9, #2a4f82)" }}
           >
             <KeyRound className="w-4 h-4" />
-            Export private key
+            Export private key (backup)
           </button>
 
           {showImportGuide && (
             <ol className="mt-4 space-y-2 text-sm text-[#8494A7] list-decimal list-inside leading-relaxed">
               <li>
-                Install{" "}
+                Optional: install{" "}
                 <a
                   href="https://www.hashpack.app/"
                   target="_blank"
@@ -291,11 +289,14 @@ export function ManageAssetsPage() {
                 >
                   HashPack
                 </a>{" "}
-                (browser or mobile).
+                for a desktop wallet UI.
               </li>
-              <li>Create / open HashPack → choose Import account (private key), not email login.</li>
-              <li>Paste the key only inside HashPack, then connect that account here via Connect.</li>
-              <li>Keep a small HBAR balance for transaction fees.</li>
+              <li>
+                Import <strong className="text-[#E8ECF0]">this</strong> account’s
+                private key — do not sign in to HashPack with the same email (that
+                creates a different wallet).
+              </li>
+              <li>Keep a small HBAR balance for transaction fees either way.</li>
             </ol>
           )}
           {!showImportGuide && (
@@ -304,7 +305,7 @@ export function ManageAssetsPage() {
               onClick={() => setShowImportGuide(true)}
               className="mt-3 text-xs text-[#6AA3E0] hover:underline"
             >
-              Show HashPack import steps
+              Optional HashPack import steps
             </button>
           )}
         </div>

@@ -62,13 +62,15 @@ import {
   canUseMagic,
   getMagic,
 } from "../lib/magic-client";
-import { notifyMagicNeedsHashPackForTx } from "../lib/magic-signing-guidance";
+import { notifyMagicTxFailure } from "../lib/magic-signing-guidance";
 import {
   magicGetDidToken,
   magicGetPublicKeyDer,
   magicIsLoggedIn,
   magicLogout,
   magicSignMessage,
+  magicSignTransactionBytes,
+  magicSignAndExecuteTransactionBytes,
 } from "../lib/magic-wallet";
 import {
   MAGIC_STORAGE,
@@ -854,12 +856,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // ------------------------------------------------------------------
   const signTransaction = useCallback(
     async (transactionBytes: Uint8Array): Promise<Uint8Array | null> => {
-      if (!connected) return null;
-      // Magic sessions can sign messages on-site; on-chain WC txs need HashPack + imported key
+      if (!connected || !accountId) return null;
+
+      // Magic email wallets sign on-site via MagicWallet (no HashPack required)
       if (walletProvider === "magic") {
-        notifyMagicNeedsHashPackForTx();
-        return null;
+        try {
+          return await magicSignTransactionBytes(accountId, transactionBytes);
+        } catch (err) {
+          notifyMagicTxFailure(err instanceof Error ? err.message : undefined);
+          throw err;
+        }
       }
+
       if (!session) return null;
       try {
         const client = await getSignClient();
@@ -888,11 +896,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const signAndExecuteTransaction = useCallback(
     async (transactionBytes: Uint8Array): Promise<Uint8Array | null> => {
-      if (!connected) return null;
+      if (!connected || !accountId) return null;
+
       if (walletProvider === "magic") {
-        notifyMagicNeedsHashPackForTx();
-        return null;
+        try {
+          return await magicSignAndExecuteTransactionBytes(accountId, transactionBytes);
+        } catch (err) {
+          notifyMagicTxFailure(err instanceof Error ? err.message : undefined);
+          throw err;
+        }
       }
+
       if (!session) return null;
       try {
         const client = await getSignClient();

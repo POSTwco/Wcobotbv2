@@ -31,6 +31,7 @@ import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png
 import { toast } from "sonner";
 import { AdminPanel } from "../components/admin-panel";
 import { generateSecureNonce } from "../lib/api";
+import { signatureCancelledMessage } from "../lib/magic-signing-guidance";
 import type { ProposalVote, ProposalStatus } from "../lib/types";
 import { BOTBSpinner, SkeletonProposalCard } from "../components/botb-spinner";
 
@@ -86,7 +87,7 @@ function generateNonce(): string {
 }
 
 export function GovernancePage() {
-  const { connected, connect, votingPower, hasGovernorNFT, isAdmin, accountId, signMessage, walletSessionToken, isLoadingBalances } = useWallet();
+  const { connected, connect, votingPower, hasGovernorNFT, isAdmin, accountId, signMessage, walletSessionToken, isLoadingBalances, walletProvider } = useWallet();
   const { vipActive, sound, tierName, governorCount } = useVIP();
 
   // Existing votes loaded from server
@@ -266,7 +267,7 @@ export function GovernancePage() {
       }
     } catch (err: any) {
       if (err?.message?.includes("cancelled") || err?.message?.includes("rejected")) {
-        toast.error("Vote signature was cancelled. You must approve in HashPack to vote.");
+        toast.error(signatureCancelledMessage(walletProvider));
       } else {
         console.error("[Governance] Vote error:", err);
         toast.error("Vote failed. Please try again or check your wallet connection.");
@@ -623,7 +624,7 @@ export function GovernancePage() {
                                   <div className="text-center py-2 rounded-lg text-xs bg-[#4274B9]/5 border border-[#4274B9]/20 text-[#6AA3E0] flex items-center justify-center gap-2">
                                     <Loader2 className="w-3 h-3 animate-spin" />
                                     {signingStep === "building" && "Preparing vote change..."}
-                                    {signingStep === "signing" && "Approve VOTE CHANGE in HashPack..."}
+                                    {signingStep === "signing" && (walletProvider === "magic" ? "Approve VOTE CHANGE in Magic..." : "Approve VOTE CHANGE in HashPack...")}
                                     {signingStep === "submitting" && "Verifying change on-chain..."}
                                   </div>
                                 ) : (
@@ -685,7 +686,7 @@ export function GovernancePage() {
                             <div className="flex-1 text-center py-2 rounded-lg text-xs bg-[#4274B9]/5 border border-[#4274B9]/20 text-[#6AA3E0] flex items-center justify-center gap-2">
                               <Loader2 className="w-3 h-3 animate-spin" />
                               {signingStep === "building" && "Preparing vote..."}
-                              {signingStep === "signing" && "Approve in HashPack..."}
+                              {signingStep === "signing" && (walletProvider === "magic" ? "Approve in Magic..." : "Approve in HashPack...")}
                               {signingStep === "submitting" && "Verifying on-chain..."}
                             </div>
                           )}
