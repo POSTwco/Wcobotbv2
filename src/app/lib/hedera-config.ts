@@ -14,8 +14,12 @@
 // ---------------------------------------------------------------------------
 // WalletConnect Project ID (public identifier — safe to embed in frontend)
 // Registered at https://cloud.reown.com
+// Override with VITE_WC_PROJECT_ID for isolated test environments (WCO-Resolver).
 // ---------------------------------------------------------------------------
-export const WC_PROJECT_ID = "a89d7b107e0310e2e7ffddc91d37415d";
+const WC_PROJECT_ID_DEFAULT = "a89d7b107e0310e2e7ffddc91d37415d";
+export const WC_PROJECT_ID =
+  (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() ||
+  WC_PROJECT_ID_DEFAULT;
 
 // ---------------------------------------------------------------------------
 // Hedera Network Definitions (CAIP-2 format: "hedera:<network>")
@@ -57,9 +61,19 @@ export const HEDERA_NETWORKS: Record<HederaNetwork, HederaNetworkConfig> = {
 };
 
 // ---------------------------------------------------------------------------
-// Active Network — change this single value to switch testnet <-> mainnet
+// Active Network
+// Production demo defaults to mainnet. Team test (WCO-Resolver) sets
+// VITE_HEDERA_NETWORK=testnet — never point www.wcorg.io at testnet.
 // ---------------------------------------------------------------------------
-export const DEFAULT_NETWORK: HederaNetwork = "mainnet";
+function resolveDefaultNetwork(): HederaNetwork {
+  const fromEnv = (import.meta.env.VITE_HEDERA_NETWORK as string | undefined)
+    ?.trim()
+    .toLowerCase();
+  if (fromEnv === "testnet" || fromEnv === "mainnet") return fromEnv;
+  return "mainnet";
+}
+
+export const DEFAULT_NETWORK: HederaNetwork = resolveDefaultNetwork();
 
 /** Convenience getter for the currently-active network config */
 export function getNetworkConfig(network?: HederaNetwork): HederaNetworkConfig {
@@ -106,30 +120,81 @@ export const HEDERA_REQUIRED_EVENTS = [
 // These will be set to real token IDs once deployed.
 // Format: "0.0.XXXXXXX"
 // ---------------------------------------------------------------------------
+function envTokenId(name: string, fallback: string | null): string | null {
+  const v = (import.meta.env[name] as string | undefined)?.trim();
+  if (v && /^0\.0\.\d+$/.test(v)) return v;
+  return fallback;
+}
+
 export const TOKEN_IDS = {
   /**
-   * BOTB fungible governance/utility token.
+   * WCO / BOTB fungible governance/utility token.
    * Launching Summer 2026 — no token ID yet.
-   * Once deployed, replace this placeholder with the real 0.0.XXXXXXX ID.
+   * Once deployed, set VITE_BOTB_TOKEN_ID to the real 0.0.XXXXXXX ID.
    */
-  BOTB: null as string | null, // Token launching Summer 2026
-  /** WCO Governors NFT collection — 100 minted, sold out (gates Governors Hub access) */
-  GOVERNOR_NFT: "0.0.9338241",
+  BOTB: envTokenId("VITE_BOTB_TOKEN_ID", null),
+  /**
+   * Hedera-native USDC (mainnet default 0.0.456858).
+   * Override with VITE_USDC_TOKEN_ID on testnet or if Circle rotates the ID.
+   */
+  USDC: envTokenId("VITE_USDC_TOKEN_ID", "0.0.456858") as string,
+  /**
+   * WCO Governors NFT collection — 100 minted, sold out (gates Governors Hub).
+   * Mainnet default; override with VITE_GOVERNOR_NFT_TOKEN_ID on testnet.
+   */
+  GOVERNOR_NFT: envTokenId("VITE_GOVERNOR_NFT_TOKEN_ID", "0.0.9338241") as string,
   /** Sigma Series athlete NFT collection — 1.5x voting boost, 1200 supply, upcoming */
-  SIGMA_NFT: null as string | null, // Set to real 0.0.XXXXXXX when Sigma Series deploys
+  SIGMA_NFT: envTokenId("VITE_SIGMA_NFT_TOKEN_ID", null),
   /** Meta Series influencer competition NFTs — unlimited supply, launch Q2-Q3 2026 */
-  META_NFT: null as string | null, // Set to real 0.0.XXXXXXX when Meta Series deploys
+  META_NFT: envTokenId("VITE_META_NFT_TOKEN_ID", null),
+  /**
+   * Hybrid governance Admin NFTs — fixed supply 2, held by treasury.
+   * Proof-of-authority for proposal creation (not the 100 Governors).
+   */
+  ADMIN_NFT: envTokenId("VITE_ADMIN_NFT_TOKEN_ID", null),
 } as const;
+
+/** USDC on Hedera uses 6 decimals (smallest unit → display). */
+export const USDC_DECIMALS = 6;
+
+/**
+ * Whitelisted fungible assets for Manage Assets (HBAR is native, not HTS).
+ * Only these symbols are shown — never dump the full mirror token list.
+ */
+export const MANAGE_ASSETS_WHITELIST = [
+  { symbol: "HBAR", kind: "native" as const, tokenId: null, decimals: 8 },
+  {
+    symbol: "WCO",
+    kind: "hts" as const,
+    tokenId: TOKEN_IDS.BOTB,
+    /** Unknown until launch — display raw smallest units like existing botbBalance */
+    decimals: 0,
+  },
+  {
+    symbol: "USDC",
+    kind: "hts" as const,
+    tokenId: TOKEN_IDS.USDC,
+    decimals: USDC_DECIMALS,
+  },
+] as const;
+
+/** Public treasury account that must hold Admin NFT(s) to propose (optional UI display) */
+export const TREASURY_ACCOUNT_ID = envTokenId("VITE_TREASURY_ACCOUNT_ID", null);
 
 // ---------------------------------------------------------------------------
 // HCS (Hedera Consensus Service) Topic IDs
-// Used for on-chain vote recording and event messaging.
+// Set via VITE_* for team testnet; leave null on production until cutover.
 // ---------------------------------------------------------------------------
 export const TOPIC_IDS = {
-  /** Battle vote submissions */
-  VOTES: null as string | null, // Set to real 0.0.XXXXXXX when HCS topic is created
-  /** Governance proposal votes */
-  GOVERNANCE: null as string | null, // Set to real 0.0.XXXXXXX when HCS topic is created
+  /** Battle vote submissions (legacy / future) */
+  VOTES: envTokenId("VITE_HCS_VOTES_TOPIC_ID", null),
+  /**
+   * Governance proposals + votes (typed messages).
+   * Private topic — submit key required; IDs are public for Mirror reads.
+   */
+  GOVERNANCE: envTokenId("VITE_HCS_GOV_TOPIC_ID", null),
+  /** Forensic audit stream for proposal submissions */
+  AUDIT: envTokenId("VITE_HCS_AUDIT_TOPIC_ID", null),
 } as const;
 
 // ---------------------------------------------------------------------------

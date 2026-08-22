@@ -17,6 +17,12 @@ type MagicWithHedera = Magic & {
   hedera: {
     getPublicKey: () => Promise<{ publicKeyDer: string }>;
     sign: (message: string | Uint8Array) => Promise<any>;
+    /**
+     * Opens Magic’s official reveal UI. The private key is shown only to the
+     * end user inside Magic’s modal — this method must be treated as void.
+     * Never log, store, or forward any return value.
+     */
+    revealPrivateKey: () => Promise<void>;
   };
 };
 

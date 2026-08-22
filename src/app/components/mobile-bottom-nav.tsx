@@ -17,7 +17,7 @@ import {
   Home, Swords, Layers, MessageCircle, MoreHorizontal,
   Users, Shield, FileText, Wallet, Dumbbell,
   X, RefreshCw, Crown, ExternalLink, LogOut,
-  Loader2,
+  Loader2, LayoutGrid,
 } from "lucide-react";
 import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
@@ -271,6 +271,16 @@ function MoreSheet({
                       </span>
                     </div>
                   )}
+
+                  <Link
+                    to="/wallet/assets"
+                    onClick={onClose}
+                    className="w-full mb-2 py-2.5 rounded-xl text-sm text-[#E8ECF0] bg-[#4274B9]/10 border border-[#4274B9]/25 active:bg-[#4274B9]/18 transition-colors flex items-center justify-center gap-2"
+                    style={dmSans}
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    Manage Assets
+                  </Link>
 
                   <button
                     onClick={() => { disconnect(); onClose(); }}

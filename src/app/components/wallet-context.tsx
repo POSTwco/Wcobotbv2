@@ -62,6 +62,7 @@ import {
   canUseMagic,
   getMagic,
 } from "../lib/magic-client";
+import { notifyMagicNeedsHashPackForTx } from "../lib/magic-signing-guidance";
 import {
   magicGetDidToken,
   magicGetPublicKeyDer,
@@ -96,6 +97,8 @@ export interface WalletState {
 
   balance: number;
   botbBalance: number;
+  /** USDC display units (6 decimals) — Manage Assets whitelist */
+  usdcBalance: number;
   stakedBalance: number;
   nftsOwned: number;
   governorNftsOwned: number;
@@ -151,6 +154,7 @@ const defaultState: WalletState = {
   session: null,
   balance: 0,
   botbBalance: 0,
+  usdcBalance: 0,
   stakedBalance: 0,
   nftsOwned: 0,
   governorNftsOwned: 0,
@@ -185,6 +189,7 @@ const WalletContext = createContext<WalletState>(defaultState);
 const ZERO_BALANCES: WalletBalances = {
   hbarBalance: 0,
   botbBalance: 0,
+  usdcBalance: 0,
   nftsOwned: 0,
   governorNftsOwned: 0,
   hasGovernorNFT: false,
@@ -849,7 +854,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // ------------------------------------------------------------------
   const signTransaction = useCallback(
     async (transactionBytes: Uint8Array): Promise<Uint8Array | null> => {
-      if (!connected || !session) return null;
+      if (!connected) return null;
+      // Magic sessions can sign messages on-site; on-chain WC txs need HashPack + imported key
+      if (walletProvider === "magic") {
+        notifyMagicNeedsHashPackForTx();
+        return null;
+      }
+      if (!session) return null;
       try {
         const client = await getSignClient();
         const result = await client.request({
@@ -872,12 +883,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [connected, session, network, accountId]
+    [connected, session, network, accountId, walletProvider]
   );
 
   const signAndExecuteTransaction = useCallback(
     async (transactionBytes: Uint8Array): Promise<Uint8Array | null> => {
-      if (!connected || !session) return null;
+      if (!connected) return null;
+      if (walletProvider === "magic") {
+        notifyMagicNeedsHashPackForTx();
+        return null;
+      }
+      if (!session) return null;
       try {
         const client = await getSignClient();
         const result = await client.request({
@@ -900,7 +916,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [connected, session, network, accountId]
+    [connected, session, network, accountId, walletProvider]
   );
 
   // ------------------------------------------------------------------
@@ -936,6 +952,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     balance: balances.hbarBalance,
     botbBalance: balances.botbBalance,
+    usdcBalance: balances.usdcBalance,
     stakedBalance: 0,
     nftsOwned: balances.nftsOwned,
     governorNftsOwned: balances.governorNftsOwned,

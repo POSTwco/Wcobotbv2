@@ -19,6 +19,7 @@ import { CalisthenicsEliteCustomPage } from "./pages/calisthenics-elite-custom";
 import { PrivacyPage } from "./pages/privacy";
 import { TermsPage } from "./pages/terms";
 import { WhitepaperPage } from "./pages/whitepaper";
+import { ManageAssetsPage } from "./pages/manage-assets";
 import { RouteErrorPage, NotFoundPage } from "./components/error-boundary";
 
 // Historical client pen-test UIs removed from the tree (2026-07 hygiene pass).
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "calisthenics/elite/workout/:id", Component: CalisthenicsEliteWorkoutPage },
       { path: "calisthenics/elite/custom", Component: CalisthenicsEliteCustomPage },
 
+      { path: "wallet/assets", Component: ManageAssetsPage },
       { path: "privacy", Component: PrivacyPage },
       { path: "terms", Component: TermsPage },
       { path: "whitepaper", Component: WhitepaperPage },

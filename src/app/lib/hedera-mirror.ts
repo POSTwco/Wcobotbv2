@@ -12,6 +12,7 @@ import {
   getNetworkConfig,
   TOKEN_IDS,
   MIRROR_PATHS,
+  USDC_DECIMALS,
   type HederaNetwork,
 } from "./hedera-config";
 
@@ -86,8 +87,10 @@ export interface MirrorAccountInfo {
 export interface WalletBalances {
   /** HBAR balance in display units (e.g., 12.45 HBAR) */
   hbarBalance: number;
-  /** BOTB fungible token balance (0 until token launches Summer 2026) */
+  /** WCO / BOTB fungible token balance (0 until token launches Summer 2026) */
   botbBalance: number;
+  /** USDC balance in display units (6 decimals) */
+  usdcBalance: number;
   /** Total NFTs owned by this account */
   nftsOwned: number;
   /** Number of WCO Governor NFTs owned (gates Governors Hub) */
@@ -347,11 +350,19 @@ export async function fetchWalletBalances(
     console.error("[BOTB Mirror] NFT fetch failed:", nftsResult.reason);
   }
 
-  // Find BOTB token balance (will be 0 until token launches Summer 2026)
+  // Find WCO / BOTB token balance (will be 0 until token launches Summer 2026)
   let botbBalance = 0;
   if (TOKEN_IDS.BOTB) {
     const botbEntry = tokenBalances.find((t) => t.token_id === TOKEN_IDS.BOTB);
     botbBalance = botbEntry?.balance ?? 0;
+  }
+
+  // USDC — mirror returns smallest units; convert with known 6 decimals
+  let usdcBalance = 0;
+  if (TOKEN_IDS.USDC) {
+    const usdcEntry = tokenBalances.find((t) => t.token_id === TOKEN_IDS.USDC);
+    const raw = usdcEntry?.balance ?? 0;
+    usdcBalance = raw / 10 ** USDC_DECIMALS;
   }
 
   // Count Governor NFTs
@@ -370,6 +381,7 @@ export async function fetchWalletBalances(
   const result: WalletBalances = {
     hbarBalance,
     botbBalance,
+    usdcBalance,
     nftsOwned: nfts.length,
     governorNftsOwned: governorNfts.length,
     hasGovernorNFT: governorNfts.length > 0,
@@ -383,7 +395,8 @@ export async function fetchWalletBalances(
   console.log(
     `[BOTB Mirror] Wallet summary for ${accountId}:`,
     `${hbarBalance.toFixed(4)} HBAR`,
-    `| ${botbBalance} BOTB`,
+    `| ${botbBalance} WCO`,
+    `| ${usdcBalance.toFixed(2)} USDC`,
     `| ${nfts.length} NFTs`,
     `| ${governorNfts.length} Governor NFTs`,
     `| ${sigmaNfts.length} Sigma NFTs`

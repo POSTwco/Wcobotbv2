@@ -93,3 +93,40 @@ export async function magicLogout(): Promise<void> {
     console.warn("[MagicWallet] logout:", err);
   }
 }
+
+/**
+ * Open Magic’s Hedera private-key reveal UI.
+ *
+ * Security: Magics shows the key only inside its own modal. We intentionally
+ * discard any return value and never assign it to React state, storage, or logs.
+ * Callers must show HashPack-style disclaimers before invoking this.
+ */
+export async function magicRevealHederaPrivateKey(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const magic = getMagic();
+  if (!magic) {
+    return { ok: false, error: "Magic is not available in this environment." };
+  }
+
+  try {
+    const loggedIn = await magic.user.isLoggedIn();
+    if (!loggedIn) {
+      return { ok: false, error: "Sign in with email first to export your key." };
+    }
+  } catch {
+    return { ok: false, error: "Could not verify Magic session. Sign in again." };
+  }
+
+  try {
+    // Do not capture a key string — revealPrivateKey opens Magic UI only.
+    await magic.hedera.revealPrivateKey();
+    return { ok: true };
+  } catch (err) {
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : "Key reveal was cancelled or failed.";
+    // Log only a generic failure — never dump err objects that might embed secrets
+    console.warn("[MagicWallet] revealPrivateKey failed or cancelled");
+    return { ok: false, error: message.slice(0, 180) };
+  }
+}
