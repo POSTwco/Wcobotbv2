@@ -38,7 +38,7 @@ export type CaliPhase =
   | "checking"    // restoring token from localStorage / probing /me
   | "connecting"  // wallet connect modal open
   | "challenging" // requesting a challenge from the server
-  | "signing"     // waiting for HashPack signature
+  | "signing"     // waiting for wallet / Magic signature
   | "verifying"   // posting signature to /cali/verify
   | "eligible"    // session active, full access
   | "revoked"     // token expired or balance fell below gate
@@ -183,17 +183,10 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     setError(null);
     let accountId = wallet.accountId;
     if (!wallet.connected || !accountId) {
-      setPhase("connecting");
-      try {
-        accountId = await wallet.connect();
-      } catch (err: any) {
-        setError(err?.message || "Wallet connection failed.");
-        setPhase("error");
-        return;
-      }
-    }
-    if (!accountId) {
-      setError("No wallet connected.");
+      // Do not auto-open HashPack when Magic email is an option — gate UI offers both.
+      setError(
+        "Connect HashPack or Sign in with email first, then tap Verify again."
+      );
       setPhase("error");
       return;
     }
@@ -216,7 +209,11 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (!signature) {
-      setError("Wallet did not return a signature. Approve the request in HashPack and try again.");
+      const hint =
+        wallet.walletProvider === "magic"
+          ? "Approve the Magic prompt, then try again."
+          : "Approve the request in HashPack, then try again.";
+      setError(`Wallet did not return a signature. ${hint}`);
       setPhase("error");
       return;
     }
@@ -224,7 +221,11 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     setPhase("verifying");
     const wcSession = await wallet.waitForWalletSession();
     if (!wcSession) {
-      setError("Wallet session not ready. Wait a moment after connecting, then try again.");
+      setError(
+        wallet.walletProvider === "magic"
+          ? "Magic session not ready. Sign in with email again, then retry."
+          : "Wallet session not ready. Wait a moment after connecting, then try again."
+      );
       setPhase("error");
       return;
     }
@@ -248,7 +249,13 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     walletEverMatchedRef.current = true;
     setEligibility(verify.data.eligibility);
     setPhase("eligible");
-  }, [wallet.connected, wallet.accountId, wallet.connect, wallet.signMessage, wallet.waitForWalletSession]);
+  }, [
+    wallet.connected,
+    wallet.accountId,
+    wallet.signMessage,
+    wallet.waitForWalletSession,
+    wallet.walletProvider,
+  ]);
 
   // ── Refresh ─────────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {

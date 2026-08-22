@@ -1,14 +1,12 @@
 /**
- * Cali Gate — Wallet-connect + HBAR-balance check + signature verification.
- *
- * Shown whenever the cali session phase is not "eligible". Drives the entire
- * sign-and-verify flow via useCaliSession().enter(). Matches the platform's
- * dark BOTB look (#0B1120 / #4274B9 accent, DM Sans + Orbitron, lucide icons).
+ * Cali Gate — Wallet connect + HBAR check + signature verification.
+ * Supports HashPack (WalletConnect) and Magic email wallets.
  */
 
-import { Dumbbell, Loader2, Wallet, ShieldCheck, AlertCircle, Coins } from "lucide-react";
+import { Dumbbell, Loader2, Wallet, ShieldCheck, AlertCircle, Coins, Mail } from "lucide-react";
 import { useCaliSession } from "./cali-context";
 import { useWallet } from "../wallet-context";
+import { isMagicEnabled } from "../../lib/wallet-types";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -16,6 +14,7 @@ const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 export function CaliGate() {
   const cali = useCaliSession();
   const wallet = useWallet();
+  const magicOn = isMagicEnabled();
 
   const busy =
     cali.phase === "checking" ||
@@ -24,17 +23,33 @@ export function CaliGate() {
     cali.phase === "signing" ||
     cali.phase === "verifying";
 
+  const signLabel =
+    wallet.walletProvider === "magic"
+      ? "Sign one challenge with Magic"
+      : wallet.connected
+        ? "Sign one challenge in your wallet"
+        : "Sign one challenge (HashPack or Magic)";
+
   const phaseLabel: Record<typeof cali.phase, string> = {
     idle: wallet.connected ? "Verify your wallet to continue" : "Connect your wallet",
     checking: "Checking your session…",
     connecting: "Opening wallet…",
     challenging: "Requesting challenge…",
-    signing: "Waiting for HashPack signature…",
+    signing:
+      wallet.walletProvider === "magic"
+        ? "Waiting for Magic signature…"
+        : "Waiting for wallet signature…",
     verifying: "Verifying HBAR balance…",
     eligible: "You're in.",
     revoked: "Access revoked — HBAR balance dropped below the gate.",
     error: "Something went wrong.",
   };
+
+  const connectLabel = wallet.connected
+    ? `Connected: ${wallet.address ?? wallet.accountId}${
+        wallet.walletProvider === "magic" ? " (Magic)" : wallet.walletProvider === "hashpack" ? " (HashPack)" : ""
+      }`
+    : "Connect a wallet";
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
@@ -46,7 +61,6 @@ export function CaliGate() {
           boxShadow: "0 10px 40px rgba(66,116,185,0.12)",
         }}
       >
-        {/* Header */}
         <div className="flex items-center gap-3 mb-5">
           <div
             className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -67,18 +81,16 @@ export function CaliGate() {
           </div>
         </div>
 
-        {/* Pitch */}
         <p className="text-sm text-[#A3B0C2] mb-6 leading-relaxed" style={dmSans}>
           Auto-generated calisthenics sessions, 30–45 min, levels 1–3. Track every set,
-          beat your PRs, build a streak — all gated to verified HBAR holders.
-          Anchor your favorite workouts on Hedera when you're ready.
+          beat your PRs, build a streak — gated to verified HBAR holders.
+          Use HashPack or email (Magic) — both can sign the gate challenge on this site.
         </p>
 
-        {/* Eligibility checklist */}
         <div className="space-y-2.5 mb-6">
           <ChecklistItem
             ok={wallet.connected}
-            label={wallet.connected ? `Connected: ${wallet.address ?? wallet.accountId}` : "Connect HashPack wallet"}
+            label={connectLabel}
             icon={<Wallet className="w-4 h-4" />}
           />
           <ChecklistItem
@@ -88,12 +100,11 @@ export function CaliGate() {
           />
           <ChecklistItem
             ok={cali.phase === "eligible"}
-            label="Sign one challenge in HashPack"
+            label={signLabel}
             icon={<ShieldCheck className="w-4 h-4" />}
           />
         </div>
 
-        {/* Status banner */}
         {(cali.phase === "error" || cali.phase === "revoked") && cali.error && (
           <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg mb-4 bg-red-500/8 border border-red-500/20">
             <AlertCircle className="w-4 h-4 mt-0.5 text-red-300 flex-shrink-0" />
@@ -111,35 +122,60 @@ export function CaliGate() {
           </div>
         )}
 
-        {/* Primary CTA */}
-        <button
-          onClick={cali.enter}
-          disabled={busy}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
-          style={{
-            ...dmSans,
-            background: "linear-gradient(135deg, #4274B9, #3563A0)",
-            color: "#fff",
-            boxShadow: "0 4px 20px rgba(66,116,185,0.3)",
-          }}
-        >
-          {busy ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Dumbbell className="w-5 h-5" />
-          )}
-          {!wallet.connected
-            ? "Connect Wallet & Verify"
-            : cali.phase === "revoked"
-              ? "Re-verify HBAR Balance"
-              : "Enter Calisthenics"}
-        </button>
-
-        {/* Privacy note */}
-        <p className="text-[0.65rem] text-[#8494A7] mt-5 leading-relaxed text-center" style={dmSans}>
-          Your wallet signs one short message — no transactions, no fees. Your workout
-          data stays in your account; only hashes go on-graph when you opt to anchor.
-        </p>
+        {!wallet.connected && !busy ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => wallet.connect()}
+              disabled={wallet.isConnecting}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
+              style={{
+                ...dmSans,
+                background: "linear-gradient(135deg, #D4A843, #a07520)",
+                color: "#0B1120",
+              }}
+            >
+              {wallet.isConnecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5" />}
+              Connect HashPack
+            </button>
+            {magicOn && (
+              <button
+                type="button"
+                onClick={() => wallet.openMagicEmailSignIn("signin")}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-[#E8ECF0] border border-[#4274B9]/35 hover:bg-[#4274B9]/12"
+                style={dmSans}
+              >
+                <Mail className="w-4 h-4" />
+                Sign in with email
+              </button>
+            )}
+            <p className="text-[0.65rem] text-center text-[#8494A7] pt-1" style={dmSans}>
+              After connecting, tap Verify below.
+            </p>
+            <button
+              type="button"
+              onClick={cali.enter}
+              className="w-full py-2.5 rounded-xl text-xs text-[#8494A7] border border-white/10 hover:bg-white/5"
+              style={dmSans}
+            >
+              Verify (after connect)
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={cali.enter}
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{
+              ...dmSans,
+              background: "linear-gradient(135deg, #4274B9, #3563A0)",
+              color: "#fff",
+            }}
+          >
+            {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+            {busy ? "Verifying…" : cali.phase === "revoked" ? "Re-verify Access" : "Verify & Enter Workouts"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -147,30 +183,26 @@ export function CaliGate() {
 
 function ChecklistItem({
   ok,
-  label,
   icon,
+  label,
 }: {
   ok: boolean;
-  label: string;
   icon: React.ReactNode;
+  label: string;
 }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div
-        className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-        style={{
-          background: ok ? "rgba(16,185,129,0.12)" : "rgba(132,148,167,0.08)",
-          color: ok ? "#10b981" : "#8494A7",
-        }}
-      >
-        {icon}
-      </div>
-      <p
-        className="text-xs"
-        style={{ ...dmSans, color: ok ? "#E8ECF0" : "#A3B0C2" }}
+    <div
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${
+        ok ? "border-emerald-500/25 bg-emerald-500/5" : "border-[#4274B9]/15 bg-white/[0.02]"
+      }`}
+    >
+      <span className={ok ? "text-emerald-400" : "text-[#8494A7]"}>{icon}</span>
+      <span
+        className={`text-xs ${ok ? "text-emerald-200" : "text-[#8494A7]"}`}
+        style={dmSans}
       >
         {label}
-      </p>
+      </span>
     </div>
   );
 }

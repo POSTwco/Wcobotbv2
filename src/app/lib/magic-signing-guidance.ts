@@ -34,11 +34,12 @@ export function notifyMagicTxFailure(detail?: string): void {
   });
 }
 
-/** @deprecated Prefer notifyMagicTxFailure — Magic can sign on-site now. */
+/**
+ * @deprecated Magic signs on-site — do not resurrect HashPack-required copy.
+ * Kept as alias so any stale import still shows the Magic fee/failure toast.
+ */
 export function notifyMagicNeedsHashPackForTx(): void {
-  notifyMagicTxFailure(
-    "If signing failed, fund this account with HBAR for fees. HashPack import from Manage Assets is optional backup — not required for Magic signing."
-  );
+  notifyMagicTxFailure();
 }
 
 export function getManageAssetsExportPath(): string {

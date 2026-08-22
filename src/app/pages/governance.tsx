@@ -201,18 +201,22 @@ export function GovernancePage() {
     setSigningStep("building");
 
     try {
-      // Step 1: Request wallet signature via WalletConnect → HashPack
+      // Step 1: Request wallet / Magic signature
       setSigningStep("signing");
       toast.info(
-        isVoteChange
-          ? "Check your HashPack wallet and approve the VOTE CHANGE signature."
-          : "Check your HashPack wallet and approve the governance vote signature.",
+        walletProvider === "magic"
+          ? isVoteChange
+            ? "Approve the VOTE CHANGE signature in Magic."
+            : "Approve the governance vote signature in Magic."
+          : isVoteChange
+            ? "Check your HashPack wallet and approve the VOTE CHANGE signature."
+            : "Check your HashPack wallet and approve the governance vote signature.",
         { duration: 15000 },
       );
 
       const signature = await signMessage(voteMessage);
       if (!signature) {
-        toast.error("Vote signature was cancelled or failed. Open HashPack and approve to vote.");
+        toast.error(signatureCancelledMessage(walletProvider));
         return;
       }
 

@@ -85,14 +85,12 @@ export function EliteSessionProvider({ children }: { children: ReactNode }) {
 
   const enter = useCallback(async () => {
     setError(null);
-    let accountId = wallet.accountId;
+    const accountId = wallet.accountId;
     if (!wallet.connected || !accountId) {
-      setPhase("connecting");
-      try { accountId = await wallet.connect(); } catch (e: any) {
-        setError(e?.message || "Wallet connection failed"); setPhase("error"); return;
-      }
+      setError("Connect HashPack or Sign in with email first, then unlock again.");
+      setPhase("error");
+      return;
     }
-    if (!accountId) { setError("No wallet connected"); setPhase("error"); return; }
 
     setPhase("challenging");
     const ch = await api.elite.challenge(accountId);
@@ -103,12 +101,24 @@ export function EliteSessionProvider({ children }: { children: ReactNode }) {
     try { signature = await wallet.signMessage(ch.data.challenge); } catch (e: any) {
       setError(e?.message || "Signature cancelled"); setPhase("error"); return;
     }
-    if (!signature) { setError("No signature returned"); setPhase("error"); return; }
+    if (!signature) {
+      setError(
+        wallet.walletProvider === "magic"
+          ? "No signature returned. Approve the Magic prompt and try again."
+          : "No signature returned. Approve in HashPack and try again."
+      );
+      setPhase("error");
+      return;
+    }
 
     setPhase("verifying");
     const wcSession = await wallet.waitForWalletSession();
     if (!wcSession) {
-      setError("Wallet session not ready. Wait a moment after connecting, then try again.");
+      setError(
+        wallet.walletProvider === "magic"
+          ? "Magic session not ready. Sign in with email again, then retry."
+          : "Wallet session not ready. Wait a moment after connecting, then try again."
+      );
       setPhase("error");
       return;
     }

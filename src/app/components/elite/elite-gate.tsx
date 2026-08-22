@@ -1,6 +1,7 @@
-import { Crown, Loader2, Wallet, ShieldCheck, AlertCircle, Lock } from "lucide-react";
+import { Crown, Loader2, Wallet, ShieldCheck, AlertCircle, Lock, Mail } from "lucide-react";
 import { useEliteSession } from "./elite-context";
 import { useWallet } from "../wallet-context";
+import { isMagicEnabled } from "../../lib/wallet-types";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -8,8 +9,16 @@ const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 export function EliteGate() {
   const elite = useEliteSession();
   const wallet = useWallet();
+  const magicOn = isMagicEnabled();
 
   const busy = ["checking", "connecting", "challenging", "signing", "verifying"].includes(elite.phase);
+
+  const signLabel =
+    wallet.walletProvider === "magic"
+      ? "Sign vault challenge with Magic"
+      : wallet.connected
+        ? "Sign vault challenge in your wallet"
+        : "Sign vault challenge (HashPack or Magic)";
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
@@ -36,12 +45,21 @@ export function EliteGate() {
         <p className="text-sm text-[#A3B0C2] mb-6 leading-relaxed" style={dmSans}>
           Judge-destroying BoB techniques — statics, dynamics, combos. 60–120 min skill-focused sessions.
           Access requires a WCO Governors NFT or admin-granted elite whitelist.
+          HashPack and Magic email wallets can both sign the challenge here.
         </p>
 
         <div className="space-y-2.5 mb-6">
-          <Row ok={wallet.connected} icon={<Wallet className="w-4 h-4" />} label={wallet.connected ? `Connected: ${wallet.accountId}` : "Connect wallet"} />
+          <Row
+            ok={wallet.connected}
+            icon={<Wallet className="w-4 h-4" />}
+            label={
+              wallet.connected
+                ? `Connected: ${wallet.accountId}${wallet.walletProvider === "magic" ? " (Magic)" : ""}`
+                : "Connect wallet"
+            }
+          />
           <Row ok={wallet.hasGovernorNFT} icon={<Crown className="w-4 h-4" />} label="WCO Governors NFT or elite whitelist" />
-          <Row ok={elite.phase === "eligible"} icon={<ShieldCheck className="w-4 h-4" />} label="Sign vault challenge in HashPack" />
+          <Row ok={elite.phase === "eligible"} icon={<ShieldCheck className="w-4 h-4" />} label={signLabel} />
         </div>
 
         {(elite.phase === "error" || elite.phase === "revoked") && elite.error && (
@@ -51,16 +69,50 @@ export function EliteGate() {
           </div>
         )}
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => elite.enter()}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-bold text-[#0B1120] disabled:opacity-50"
-          style={{ ...dmSans, background: "linear-gradient(135deg, #D4A843, #B8860B)" }}
-        >
-          {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
-          {busy ? "Verifying…" : elite.phase === "revoked" ? "Re-verify Access" : "Unlock Elite Vault"}
-        </button>
+        {!wallet.connected && !busy ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled={wallet.isConnecting}
+              onClick={() => wallet.connect()}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-bold text-[#0B1120] disabled:opacity-50"
+              style={{ ...dmSans, background: "linear-gradient(135deg, #D4A843, #B8860B)" }}
+            >
+              {wallet.isConnecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-5 h-5" />}
+              Connect HashPack
+            </button>
+            {magicOn && (
+              <button
+                type="button"
+                onClick={() => wallet.openMagicEmailSignIn("signin")}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-[#E8ECF0] border border-[#D4A843]/30 hover:bg-[#D4A843]/10"
+                style={dmSans}
+              >
+                <Mail className="w-4 h-4" />
+                Sign in with email
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => elite.enter()}
+              className="w-full py-2.5 rounded-xl text-xs text-[#8494A7] border border-white/10 hover:bg-white/5"
+              style={dmSans}
+            >
+              Unlock (after connect)
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => elite.enter()}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-bold text-[#0B1120] disabled:opacity-50"
+            style={{ ...dmSans, background: "linear-gradient(135deg, #D4A843, #B8860B)" }}
+          >
+            {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
+            {busy ? "Verifying…" : elite.phase === "revoked" ? "Re-verify Access" : "Unlock Elite Vault"}
+          </button>
+        )}
       </div>
     </div>
   );
