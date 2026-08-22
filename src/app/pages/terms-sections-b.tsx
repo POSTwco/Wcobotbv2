@@ -551,14 +551,60 @@ export function Section10_Disclaimers() {
           or vulnerabilities. Exploits may result in loss of tokens or NFTs.
         </>,
         <>
-          <Strong>Wallet security</Strong> — Loss of your private keys, seed phrase, or wallet
-          password results in permanent, irrecoverable loss of all assets and Platform access
-          associated with that wallet.
+          <Strong>Wallet security</Strong> — Loss of your private keys, seed phrase, Magic recovery
+          access, or wallet password can result in permanent, irrecoverable loss of all assets and
+          Platform access associated with that account. The WCO cannot recover keys for you.
         </>,
         <>
           <Strong>Mirror Node dependency</Strong> — The Platform depends on the Hedera Mirror
           Node for real-time data (balances, NFT holdings, transaction history). Mirror Node
           outages or delays may temporarily prevent voting, balance display, or NFT verification.
+        </>,
+      ]} />
+
+      <SubHead>10.3A Email Sign-In / Magic Embedded Wallets (Beta)</SubHead>
+      <P>
+        In addition to connecting an existing wallet (such as HashPack via WalletConnect), the
+        Platform may offer <Strong>email sign-in and create-account</Strong> using Magic (one-time
+        email passcodes). This path creates or unlocks a non-custodial Hedera key managed through
+        Magic’s embedded wallet. The WCO does not store your private keys. By using email auth you
+        accept the following additional risks and responsibilities:
+      </P>
+      <BulletList items={[
+        <>
+          <Strong>Third-party dependency</Strong> — Login, session continuity, and key reveal/export
+          depend on Magic and your email provider. Outages, account lockouts, or beta defects may
+          delay or prevent access.
+        </>,
+        <>
+          <Strong>Recovery</Strong> — You should treat Magic’s reveal/export (or equivalent) as the
+          way to back up your Hedera private key offline. Loss of email access or Magic recovery
+          materials without a backed-up key may mean permanent loss of the account and any assets
+          held there.
+        </>,
+        <>
+          <Strong>Self-custody with HashPack</Strong> — For ongoing management of HBAR, tokens, and
+          NFTs, you are encouraged to install the official{" "}
+          <a
+            href="https://www.hashpack.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#6AA3E0] hover:underline"
+          >
+            HashPack browser extension
+          </a>{" "}
+          (or HashPack mobile) and, if you choose, import your exported private key so you can
+          approve transfers and manage assets in a full wallet UI. Email OTP alone is not a
+          complete asset-management toolkit.
+        </>,
+        <>
+          <Strong>No starter HBAR</Strong> — Sponsored account creation (if offered) does not fund
+          your account with HBAR. Network fees for transfers and other on-chain actions remain your
+          responsibility.
+        </>,
+        <>
+          <Strong>Path clarity</Strong> — HashPack connections and Magic email accounts are separate
+          auth paths. You are responsible for knowing which Hedera account ID holds your assets.
         </>,
       ]} />
 

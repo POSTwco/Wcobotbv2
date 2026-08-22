@@ -12,8 +12,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Shield, AlertTriangle, ExternalLink, ChevronDown } from "lucide-react";
 
 const STORAGE_KEY = "botb-beta-agreement-v1";
-/** Bumped for Connect-to-Enter contest terms — forces re-accept. */
-const AGREEMENT_VERSION = "1.1.0";
+/** Bumped for Magic email sign-in / HashPack recovery disclosure — forces re-accept. */
+const AGREEMENT_VERSION = "1.2.0";
 
 interface BetaAgreement {
   version: string;
@@ -118,16 +118,59 @@ export function BetaDisclaimer() {
             any decisions involving digital assets.
           </Section>
 
-          <Section title="4. Wallet Connection & Data">
-            When you connect your Hedera wallet (e.g., HashPack) via WalletConnect, this platform accesses 
+          <Section title="4. Wallet Connection & Data (HashPack)">
+            When you connect an existing Hedera wallet (e.g.,{" "}
+            <strong className="text-[#E8ECF0]">HashPack</strong>) via WalletConnect, this platform accesses
             your <strong className="text-[#E8ECF0]">public account ID</strong> and{" "}
-            <strong className="text-[#E8ECF0]">publicly available on-chain data</strong> (token balances, NFT 
-            holdings) through the Hedera Mirror Node. We do not access, store, or have the ability to access 
-            your private keys. All transaction signing occurs within your wallet application and requires your 
+            <strong className="text-[#E8ECF0]">publicly available on-chain data</strong> (token balances, NFT
+            holdings) through the Hedera Mirror Node. We do not access, store, or have the ability to access
+            your private keys. All transaction signing occurs within your wallet application and requires your
             explicit approval.
           </Section>
 
-          <Section title="5. Voting & Governance">
+          <Section title="5. Email Sign-In / Sign-Up (Magic) — Added Beta Risks">
+            The platform also offers <strong className="text-[#E8ECF0]">email sign-in and create-account</strong>{" "}
+            via Magic (one-time email codes). This path is additive to HashPack and is part of the beta. By
+            using email auth you acknowledge additional risks:
+            <ul className="mt-2 ml-4 space-y-1.5 list-disc marker:text-[#4274B9]/50">
+              <li>
+                A <strong className="text-[#E8ECF0]">non-custodial Hedera key</strong> is created and held in
+                Magic’s embedded wallet infrastructure. WCO does <strong className="text-[#E8ECF0]">not</strong>{" "}
+                store or custody your private keys, but you depend on Magic’s login, recovery, and availability.
+              </li>
+              <li>
+                Losing access to your email, Magic session, or recovery materials can mean{" "}
+                <strong className="text-[#E8ECF0]">permanent loss of access</strong> to that Hedera account and
+                any assets in it. Email OTP is not a substitute for exporting and safely backing up keys.
+              </li>
+              <li>
+                Beta bugs, Magic outages, or misconfiguration may delay account creation, session login, or
+                signing. Sponsored account creation does not include starter HBAR; network fees for later
+                transfers remain your responsibility.
+              </li>
+              <li>
+                <strong className="text-[#E8ECF0]">Private key recovery / self-custody:</strong> Advanced users
+                should use Magic’s reveal/export (or equivalent) to back up their Hedera private key offline.
+                For day-to-day asset management, download the official{" "}
+                <a
+                  href="https://www.hashpack.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#6AA3E0] hover:underline"
+                >
+                  HashPack browser extension
+                </a>{" "}
+                (or HashPack mobile), import your exported key if desired, and manage HBAR / tokens / NFTs in
+                HashPack. Importing into HashPack is optional but recommended before holding significant value.
+              </li>
+              <li>
+                Email wallets and HashPack wallets are different connection paths. You are responsible for
+                knowing which account holds your assets and for keeping recovery materials secure.
+              </li>
+            </ul>
+          </Section>
+
+          <Section title="6. Voting & Governance">
             Votes cast through this platform are recorded both in our backend systems and, where applicable, 
             on the Hedera Consensus Service (HCS). Voting power multipliers are determined by your verified 
             NFT holdings at the time of voting. The WCO reserves the right to moderate governance proposals, 
@@ -135,7 +178,7 @@ export function BetaDisclaimer() {
             Governor NFT holders participate in governance as a privilege, not a guaranteed right.
           </Section>
 
-          <Section title="6. Limitation of Liability">
+          <Section title="7. Limitation of Liability">
             To the fullest extent permitted by applicable law, the World Calisthenics Organization, its 
             officers, directors, employees, affiliates, and partners shall not be liable for any direct, 
             indirect, incidental, special, consequential, or punitive damages arising out of or related to 
@@ -143,7 +186,7 @@ export function BetaDisclaimer() {
             data, loss of profits, or interruption of service.
           </Section>
 
-          <Section title="7. Jurisdictional Compliance">
+          <Section title="8. Jurisdictional Compliance">
             You represent that your use of this platform complies with all applicable laws and regulations 
             in your jurisdiction. Access to this platform may be restricted in certain jurisdictions. It is 
             your responsibility to ensure compliance with local laws regarding digital assets, online voting, 
@@ -151,14 +194,14 @@ export function BetaDisclaimer() {
             proceed.
           </Section>
 
-          <Section title="8. Beta Feedback & Changes">
+          <Section title="9. Beta Feedback & Changes">
             During the beta period, features including but not limited to token staking, reward distributions, 
             NFT minting, and governance mechanics may be modified, suspended, or discontinued at any time. 
             Your feedback is valued and may be used to improve the platform. By participating in the beta, 
             you consent to the collection of anonymized usage data for platform improvement purposes.
           </Section>
 
-          <Section title="9. Connect-to-Enter Contest">
+          <Section title="10. Connect-to-Enter Contest">
             From time to time WCO may run promotional contests, including the{" "}
             <strong className="text-[#E8ECF0]">Connect-to-Enter giveaway</strong> described on the platform.
             By connecting a wallet while a contest is open you may be automatically entered if you meet
@@ -240,9 +283,11 @@ export function BetaDisclaimer() {
               className="mt-0.5 w-4 h-4 rounded border-[#4274B9]/40 bg-[#162033] text-[#4274B9] focus:ring-[#4274B9]/50 accent-[#4274B9] disabled:opacity-30"
             />
             <span className={`text-xs leading-relaxed transition-colors ${scrolledToBottom ? "text-[#E8ECF0]" : "text-[#8494A7]/50"}`}>
-              I have read and understand the above disclaimers. I acknowledge that this is a beta platform, 
-              that digital asset interactions carry inherent risks, and that I am solely responsible for my 
-              participation. I agree to the{" "}
+              I have read and understand the above disclaimers, including HashPack and{" "}
+              <strong className="text-[#E8ECF0]">email (Magic) wallet</strong> risks, key recovery, and
+              self-custody. I acknowledge that this is a beta platform, that digital asset interactions carry
+              inherent risks, and that I am solely responsible for my participation and wallet security. I agree
+              to the{" "}
               <a href="/terms" className="text-[#6AA3E0] hover:underline">Terms of Service</a> and{" "}
               <a href="/privacy" className="text-[#6AA3E0] hover:underline">Privacy Policy</a>.
             </span>
@@ -260,7 +305,7 @@ export function BetaDisclaimer() {
           </div>
 
           <p className="text-center text-[0.65rem] text-[#8494A7]/60 leading-tight">
-            Version {AGREEMENT_VERSION} &middot; Last updated July 2026 &middot; World Calisthenics Organization
+            Version {AGREEMENT_VERSION} &middot; Last updated August 2026 &middot; World Calisthenics Organization
           </p>
         </div>
       </div>
