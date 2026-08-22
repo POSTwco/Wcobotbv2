@@ -57,7 +57,7 @@ import {
 } from "../lib/hedera-mirror";
 import { api } from "../lib/api";
 import { toast } from "sonner";
-import { ConnectWalletModal } from "./connect-wallet-modal";
+import { ConnectWalletModal, type MagicEmailMode } from "./connect-wallet-modal";
 import {
   canUseMagic,
   getMagic,
@@ -130,8 +130,8 @@ export interface WalletState {
   connect: () => Promise<string | null>;
   /** Explicit HashPack WalletConnect path (unchanged internals). */
   connectExistingWallet: () => Promise<string | null>;
-  /** Open Magic email Create / Sign-in modal (new + returning users). */
-  openMagicEmailSignIn: () => void;
+  /** Open Magic email modal — Sign in or Sign up tab (same OTP backend). */
+  openMagicEmailSignIn: (mode?: MagicEmailMode) => void;
   /** Magic email OTP — creates Hedera account or signs returning user back in. */
   createAccountWithMagic: (email: string) => Promise<string | null>;
 
@@ -218,6 +218,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const walletSessionTokenRef = useRef<string | null>(null);
   const [walletProvider, setWalletProvider] = useState<WalletProviderKind | null>(null);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [magicEmailMode, setMagicEmailMode] = useState<MagicEmailMode>("signup");
 
   const initRef = useRef(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -784,11 +785,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return connectExistingWallet();
   }, [connected, accountId, connectExistingWallet]);
 
-  const openMagicEmailSignIn = useCallback(() => {
+  const openMagicEmailSignIn = useCallback((mode: MagicEmailMode = "signup") => {
     if (!canUseMagic()) {
-      toast.error("Email account create is not enabled on this environment.");
+      toast.error("Email account is not enabled on this environment.");
       return;
     }
+    setMagicEmailMode(mode);
     setConnectModalOpen(true);
   }, []);
 
@@ -968,6 +970,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         <ConnectWalletModal
           open={connectModalOpen}
           onClose={closeConnectModal}
+          initialMode={magicEmailMode}
           onCreateWithMagic={async (email) => {
             const id = await createAccountWithMagic(email);
             if (id) setConnectModalOpen(false);

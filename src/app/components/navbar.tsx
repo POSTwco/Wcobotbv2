@@ -258,15 +258,25 @@ export function Navbar() {
                     </span>
                   </button>
                   {isMagicEnabled() && (
-                    <button
-                      type="button"
-                      onClick={() => openMagicEmailSignIn()}
-                      disabled={isConnecting}
-                      className="text-[0.65rem] sm:text-[0.7rem] text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline disabled:opacity-50 px-0.5"
-                      style={{ fontFamily: "'DM Sans', sans-serif" }}
-                    >
-                      Create account
-                    </button>
+                    <div className="flex items-center gap-1 text-[0.65rem] sm:text-[0.7rem] px-0.5" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                      <button
+                        type="button"
+                        onClick={() => openMagicEmailSignIn("signin")}
+                        disabled={isConnecting}
+                        className="text-[#8494A7] hover:text-[#6AA3E0] underline-offset-2 hover:underline disabled:opacity-50"
+                      >
+                        Sign in
+                      </button>
+                      <span className="text-[#8494A7]/40">·</span>
+                      <button
+                        type="button"
+                        onClick={() => openMagicEmailSignIn("signup")}
+                        disabled={isConnecting}
+                        className="text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline disabled:opacity-50"
+                      >
+                        Create account
+                      </button>
+                    </div>
                   )}
                   {error && (
                     <span className="text-[0.6rem] text-red-400 max-w-[120px] sm:max-w-[200px] truncate" title={error}>

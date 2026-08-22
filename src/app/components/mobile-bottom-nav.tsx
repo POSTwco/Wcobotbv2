@@ -301,15 +301,25 @@ function MoreSheet({
                     {isConnecting ? "Connecting..." : "Connect HashPack"}
                   </button>
                   {isMagicEnabled() && (
-                    <button
-                      type="button"
-                      onClick={() => { openMagicEmailSignIn(); onClose(); }}
-                      disabled={isConnecting}
-                      className="w-full text-center text-xs text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline py-1"
-                      style={dmSans}
-                    >
-                      Create account
-                    </button>
+                    <div className="flex items-center justify-center gap-2 py-1 text-xs" style={dmSans}>
+                      <button
+                        type="button"
+                        onClick={() => { openMagicEmailSignIn("signin"); onClose(); }}
+                        disabled={isConnecting}
+                        className="text-[#8494A7] hover:text-[#6AA3E0] underline-offset-2 hover:underline"
+                      >
+                        Sign in with email
+                      </button>
+                      <span className="text-[#8494A7]/40">·</span>
+                      <button
+                        type="button"
+                        onClick={() => { openMagicEmailSignIn("signup"); onClose(); }}
+                        disabled={isConnecting}
+                        className="text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline"
+                      >
+                        Create account
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
