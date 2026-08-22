@@ -53,3 +53,14 @@ export function signatureCancelledMessage(provider: string | null | undefined): 
   }
   return "Signature cancelled. Approve in HashPack to continue.";
 }
+
+/** Provider-aware “check your wallet” toast while waiting for a signature. */
+export function signaturePromptMessage(
+  provider: string | null | undefined,
+  action = "approve the signature"
+): string {
+  if (provider === "magic") {
+    return `Approve the Magic prompt to ${action}.`;
+  }
+  return `Check your HashPack wallet and ${action}.`;
+}

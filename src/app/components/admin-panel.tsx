@@ -106,7 +106,7 @@ const TABS: { id: AdminTab; label: string; icon: React.ReactNode; description: s
 
 export function AdminPanel() {
   const wallet = useWallet();
-  const { accountId, isAdmin, connected, signMessage } = wallet;
+  const { accountId, isAdmin, connected, signMessage, walletProvider } = wallet;
 
   // Session state (in-memory only — never persisted)
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -169,6 +169,15 @@ export function AdminPanel() {
   const authenticate = useCallback(async () => {
     if (!accountId) return;
 
+    // Privileged admin auth stays HashPack-only (stricter than Magic email path).
+    if (walletProvider === "magic") {
+      const msg =
+        "Admin authentication requires HashPack. Disconnect the email wallet, Connect HashPack with an admin account, then try again.";
+      setAuthError(msg);
+      toast.error(msg);
+      return;
+    }
+
     setIsAuthenticating(true);
     setAuthError(null);
 
@@ -182,11 +191,9 @@ export function AdminPanel() {
       }
 
       const { challenge, nonce } = challengeRes.data;
-      console.log("[Admin Panel] Step 2: Challenge received, requesting wallet signature...");
+      console.log("[Admin Panel] Step 2: Challenge received, requesting HashPack signature...");
 
-      // Step 2: Sign via wallet-context → wallet-connect.ts → WC relay → HashPack
-      // This sends hedera_signMessage through the relay. NO redirects, NO deep links.
-      // The user must open HashPack to approve the signature.
+      // Step 2: Sign via wallet-context → WC relay → HashPack (required for admin).
       toast.info(
         "Check your HashPack wallet and approve the signature request to authenticate as admin.",
         { duration: 15000 }
@@ -252,7 +259,7 @@ export function AdminPanel() {
     } finally {
       setIsAuthenticating(false);
     }
-  }, [accountId, signMessage]);
+  }, [accountId, signMessage, walletProvider]);
 
   // ---------------------------------------------------------------------------
   // Logout
@@ -1053,8 +1060,9 @@ function ManualTab() {
           <div className="bg-[#162033] rounded-lg p-3 border border-[#4274B9]/10">
             <p className="text-[#6AA3E0] text-xs font-bold mb-1" style={{ fontFamily: "Orbitron, sans-serif" }}>SECURITY NOTICE</p>
             <ul className="text-xs space-y-1 list-disc list-inside">
+              <li>Admin auth is <span className="text-[#D4A843]">HashPack-only</span> (stricter than Magic email wallets)</li>
               <li>You must sign a wallet message each time you access admin features</li>
-              <li>The signature request appears in your HashPack wallet — open it and approve</li>
+              <li>The signature request appears in HashPack — open it and approve</li>
               <li>Sessions automatically expire after <span className="text-[#D4A843]">20 minutes</span></li>
               <li>The timer is visible at the top right — when it runs out, you'll need to re-sign</li>
               <li>Click "LOCK" at any time to end your session early</li>

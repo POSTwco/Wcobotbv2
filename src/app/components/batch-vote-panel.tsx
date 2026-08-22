@@ -51,6 +51,8 @@ interface BatchVotePanelProps {
   wallet: string;
   signMessage: (msg: string) => Promise<string | null>;
   walletSessionToken?: string | null;
+  /** Used only for approve-toast copy (HashPack vs Magic). */
+  walletProvider?: "hashpack" | "magic" | null;
   onClose: () => void;
   onSuccess: (results: any) => void;
 }
@@ -62,7 +64,7 @@ interface BatchVotePanelProps {
 export function BatchVotePanel({
   eventId, eventName, openBattles, athleteMap, voteMap, allocations,
   botbBalance, tokenLive, votingPower, hasGovernorNFT, hasSigmaNFT,
-  wallet, signMessage, walletSessionToken, onClose, onSuccess,
+  wallet, signMessage, walletSessionToken, walletProvider = null, onClose, onSuccess,
 }: BatchVotePanelProps) {
   // Initialize picks from existing votes
   const initialPicks = useMemo(() => {
@@ -222,13 +224,19 @@ export function BatchVotePanel({
     try {
       setSigningStep("signing");
       toast.info(
-        `Sign once to submit ${votesPayload.length} vote${votesPayload.length > 1 ? "s" : ""} — check HashPack.`,
+        `Sign once to submit ${votesPayload.length} vote${votesPayload.length > 1 ? "s" : ""} — ${
+          walletProvider === "magic" ? "approve the Magic prompt." : "check HashPack."
+        }`,
         { duration: 15000 },
       );
 
       const signature = await signMessage(batchMessage);
       if (!signature) {
-        toast.error("Batch vote signature was cancelled. Open HashPack and approve to vote.");
+        toast.error(
+          walletProvider === "magic"
+            ? "Batch vote signature cancelled. Approve the Magic prompt to vote."
+            : "Batch vote signature was cancelled. Open HashPack and approve to vote."
+        );
         return;
       }
 
@@ -265,7 +273,11 @@ export function BatchVotePanel({
       }
     } catch (err: any) {
       if (err?.message?.includes("cancelled") || err?.message?.includes("rejected")) {
-        toast.error("Batch vote signature was cancelled. You must approve in HashPack.");
+        toast.error(
+          walletProvider === "magic"
+            ? "Batch vote signature cancelled. Approve the Magic prompt to vote."
+            : "Batch vote signature was cancelled. You must approve in HashPack."
+        );
       } else {
         toast.error("Batch vote failed. Please try again.");
         console.error("[BATCH-VOTE]", err);
@@ -274,7 +286,7 @@ export function BatchVotePanel({
       setSubmitting(false);
       setSigningStep("idle");
     }
-  }, [picks, openBattles, athleteMap, voteMap, tokenLive, wallet, eventId, eventName, signMessage, onSuccess]);
+  }, [picks, openBattles, athleteMap, voteMap, tokenLive, wallet, eventId, eventName, signMessage, onSuccess, walletProvider, walletSessionToken]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
