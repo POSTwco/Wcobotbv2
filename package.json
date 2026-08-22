@@ -17,6 +17,13 @@
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@9.15.9",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  },
   "scripts": {
     "dev": "vite",
     "build": "node scripts/generate-favicons.mjs && node scripts/generate-og-images.mjs && vite build && node scripts/generate-seo-html.mjs && node scripts/generate-sitemap.mjs",
