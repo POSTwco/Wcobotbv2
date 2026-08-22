@@ -69,8 +69,6 @@ import {
   magicIsLoggedIn,
   magicLogout,
   magicSignMessage,
-  magicSignTransactionBytes,
-  magicSignAndExecuteTransactionBytes,
 } from "../lib/magic-wallet";
 import {
   MAGIC_STORAGE,
@@ -860,9 +858,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     async (transactionBytes: Uint8Array): Promise<Uint8Array | null> => {
       if (!connected || !accountId) return null;
 
-      // Magic email wallets sign on-site via MagicWallet (no HashPack required)
+      // Magic: lazy-load @hashgraph/sdk + MagicWallet only when needed
       if (walletProvider === "magic") {
         try {
+          const { magicSignTransactionBytes } = await import("../lib/magic-tx");
           return await magicSignTransactionBytes(accountId, transactionBytes);
         } catch (err) {
           notifyMagicTxFailure(err instanceof Error ? err.message : undefined);
@@ -902,6 +901,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       if (walletProvider === "magic") {
         try {
+          const { magicSignAndExecuteTransactionBytes } = await import("../lib/magic-tx");
           return await magicSignAndExecuteTransactionBytes(accountId, transactionBytes);
         } catch (err) {
           notifyMagicTxFailure(err instanceof Error ? err.message : undefined);

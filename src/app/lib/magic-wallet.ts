@@ -1,13 +1,12 @@
 /**
- * Magic Hedera signing helpers
- * ============================
- * Message signing + on-chain Transaction sign/execute via MagicWallet.
+ * Magic Hedera signing helpers (lightweight)
+ * ==========================================
+ * Message signing, DID, reveal — no @hashgraph/sdk.
+ * On-chain tx sign/execute lives in magic-tx.ts and is lazy-loaded.
  * Private keys never enter this module — Magic’s TEE signs.
  */
 
-import { Transaction } from "@hashgraph/sdk";
 import { getMagic } from "./magic-client";
-import { createMagicWallet } from "./magic-hedera-signer";
 
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -191,81 +190,4 @@ export async function magicRevealHederaPrivateKey(): Promise<{ ok: true } | { ok
   }
 }
 
-function magicTxErrorMessage(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err ?? "");
-  const lower = raw.toLowerCase();
-  if (
-    lower.includes("insufficient") ||
-    lower.includes("payer balance") ||
-    lower.includes("busy") && lower.includes("balance")
-  ) {
-    return "Not enough HBAR to pay network fees. Fund this account with a little HBAR, then try again.";
-  }
-  if (lower.includes("user denied") || lower.includes("cancel") || lower.includes("rejected")) {
-    return "Signature cancelled.";
-  }
-  return (raw || "Magic transaction signing failed.").slice(0, 200);
-}
 
-/**
- * Sign Hedera transaction bytes with the Magic-embedded key (no submit).
- * Matches wallet-context `signTransaction` return shape.
- */
-export async function magicSignTransactionBytes(
-  accountId: string,
-  transactionBytes: Uint8Array
-): Promise<Uint8Array | null> {
-  const wallet = await createMagicWallet(accountId);
-  if (!wallet) {
-    console.warn("[MagicWallet] signTransaction: no Magic wallet session");
-    return null;
-  }
-
-  try {
-    let tx = Transaction.fromBytes(transactionBytes);
-    const frozen = typeof (tx as { isFrozen?: () => boolean }).isFrozen === "function"
-      ? (tx as { isFrozen: () => boolean }).isFrozen()
-      : false;
-    if (!frozen) {
-      tx = await tx.freezeWithSigner(wallet);
-    }
-    tx = await tx.signWithSigner(wallet);
-    return tx.toBytes();
-  } catch (err) {
-    console.warn("[MagicWallet] signTransaction failed:", magicTxErrorMessage(err));
-    throw new Error(magicTxErrorMessage(err));
-  }
-}
-
-/**
- * Sign and submit Hedera transaction bytes via MagicWallet.
- * Returns signed transaction bytes after a successful execute (same shape as WC).
- */
-export async function magicSignAndExecuteTransactionBytes(
-  accountId: string,
-  transactionBytes: Uint8Array
-): Promise<Uint8Array | null> {
-  const wallet = await createMagicWallet(accountId);
-  if (!wallet) {
-    console.warn("[MagicWallet] signAndExecute: no Magic wallet session");
-    return null;
-  }
-
-  try {
-    let tx = Transaction.fromBytes(transactionBytes);
-    const frozen = typeof (tx as { isFrozen?: () => boolean }).isFrozen === "function"
-      ? (tx as { isFrozen: () => boolean }).isFrozen()
-      : false;
-    if (!frozen) {
-      tx = await tx.freezeWithSigner(wallet);
-    }
-    tx = await tx.signWithSigner(wallet);
-    const response = await tx.executeWithSigner(wallet);
-    // Wait for receipt so callers know the tx landed (or throw on status failure)
-    await response.getReceiptWithSigner(wallet);
-    return tx.toBytes();
-  } catch (err) {
-    console.warn("[MagicWallet] signAndExecute failed:", magicTxErrorMessage(err));
-    throw new Error(magicTxErrorMessage(err));
-  }
-}
