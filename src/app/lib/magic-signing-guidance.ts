@@ -34,14 +34,6 @@ export function notifyMagicTxFailure(detail?: string): void {
   });
 }
 
-/**
- * @deprecated Magic signs on-site — do not resurrect HashPack-required copy.
- * Kept as alias so any stale import still shows the Magic fee/failure toast.
- */
-export function notifyMagicNeedsHashPackForTx(): void {
-  notifyMagicTxFailure();
-}
-
 export function getManageAssetsExportPath(): string {
   return MANAGE_ASSETS_PATH;
 }

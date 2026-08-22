@@ -31,7 +31,7 @@ import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png
 import { toast } from "sonner";
 import { AdminPanel } from "../components/admin-panel";
 import { generateSecureNonce } from "../lib/api";
-import { signatureCancelledMessage } from "../lib/magic-signing-guidance";
+import { signatureCancelledMessage, signaturePromptMessage } from "../lib/magic-signing-guidance";
 import type { ProposalVote, ProposalStatus } from "../lib/types";
 import { BOTBSpinner, SkeletonProposalCard } from "../components/botb-spinner";
 
@@ -204,13 +204,10 @@ export function GovernancePage() {
       // Step 1: Request wallet / Magic signature
       setSigningStep("signing");
       toast.info(
-        walletProvider === "magic"
-          ? isVoteChange
-            ? "Approve the VOTE CHANGE signature in Magic."
-            : "Approve the governance vote signature in Magic."
-          : isVoteChange
-            ? "Check your HashPack wallet and approve the VOTE CHANGE signature."
-            : "Check your HashPack wallet and approve the governance vote signature.",
+        signaturePromptMessage(
+          walletProvider,
+          isVoteChange ? "approve the VOTE CHANGE signature" : "approve the governance vote signature"
+        ),
         { duration: 15000 },
       );
 

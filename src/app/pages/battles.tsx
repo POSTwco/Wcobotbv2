@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { useLiveBattles, useAthleteMap, useMyVotes, useAllocations, useEvents } from "../lib/hooks";
 import { api } from "../lib/api";
 import { generateSecureNonce } from "../lib/api";
-import { signatureCancelledMessage } from "../lib/magic-signing-guidance";
+import { signatureCancelledMessage, signaturePromptMessage } from "../lib/magic-signing-guidance";
 import type { Battle, Athlete, BattleVote } from "../lib/types";
 import { ErrorCard } from "../components/error-boundary";
 import { VoteCelebration, type CelebrationData } from "../components/vote-celebration";
@@ -376,9 +376,10 @@ export function BattlesPage() {
       // Sign once
       setSigningStep("signing");
       toast.info(
-        `Sign once to submit ${allBattleCount} vote${allBattleCount > 1 ? "s" : ""} — ${
-          walletProvider === "magic" ? "approve the Magic prompt." : "check HashPack."
-        }`,
+        `Sign once to submit ${allBattleCount} vote${allBattleCount > 1 ? "s" : ""}. ${signaturePromptMessage(
+          walletProvider,
+          "approve"
+        )}`,
         { duration: 15000 },
       );
       const signature = await signMessage(combinedMsg);

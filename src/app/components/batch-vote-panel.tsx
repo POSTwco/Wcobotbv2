@@ -224,8 +224,10 @@ export function BatchVotePanel({
     try {
       setSigningStep("signing");
       toast.info(
-        `Sign once to submit ${votesPayload.length} vote${votesPayload.length > 1 ? "s" : ""} — ${
-          walletProvider === "magic" ? "approve the Magic prompt." : "check HashPack."
+        `Sign once to submit ${votesPayload.length} vote${votesPayload.length > 1 ? "s" : ""}. ${
+          walletProvider === "magic"
+            ? "Approve the Magic prompt."
+            : "Check HashPack."
         }`,
         { duration: 15000 },
       );

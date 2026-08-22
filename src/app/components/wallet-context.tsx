@@ -325,6 +325,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setNetwork(null);
     setConnected(false);
     setWalletProvider(null);
+    setWalletSessionToken(null);
+    walletSessionTokenRef.current = null;
     setBalances(ZERO_BALANCES);
     setIsLoadingBalances(false);
     setIsAdminWallet(false);
@@ -334,6 +336,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     try {
       sessionStorage.removeItem(MAGIC_STORAGE.provider);
       sessionStorage.removeItem(MAGIC_STORAGE.accountId);
+      sessionStorage.removeItem(MAGIC_STORAGE.sessionToken);
+      sessionStorage.removeItem("wcoWalletSessionToken");
     } catch { /* ignore */ }
   }, [stopBalancePolling]);
 
@@ -772,7 +776,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         return acctId;
       } catch (err: any) {
         const message = err?.message || "Magic Create Account failed";
-        console.error("[BOTB Wallet Context] Magic create error:", err);
+        // Avoid dumping full Magic/DID error objects to the console
+        console.warn("[BOTB Wallet Context] Magic create/sign-in failed:", String(message).slice(0, 180));
         if (!/cancel|closed|dismiss/i.test(message)) {
           setError(message);
           toast.error(message);
@@ -827,16 +832,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         await disconnectWallet();
       }
     } catch (err) {
-      console.error("[BOTB Wallet Context] Disconnect error:", err);
+      console.warn(
+        "[BOTB Wallet Context] Disconnect error:",
+        err instanceof Error ? err.message.slice(0, 120) : "unknown"
+      );
     }
-    setWalletSessionToken(null);
-    walletSessionTokenRef.current = null;
-    try {
-      sessionStorage.removeItem(MAGIC_STORAGE.sessionToken);
-      sessionStorage.removeItem("wcoWalletSessionToken");
-    } catch {
-      /* ignore */
-    }
+    // clearConnectedState also wipes session tokens from React state + sessionStorage
     clearConnectedState();
     setError(null);
   }, [clearConnectedState, accountId, walletSessionToken, walletProvider]);

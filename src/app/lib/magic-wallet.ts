@@ -99,7 +99,11 @@ export async function magicSignMessage(message: string): Promise<string | null> 
     }
     return normalized;
   } catch (err) {
-    console.error("[MagicWallet] signMessage failed:", err);
+    // Never log raw Magic payloads — may include sensitive material
+    console.warn(
+      "[MagicWallet] signMessage failed:",
+      err instanceof Error ? err.message.slice(0, 120) : "unknown"
+    );
     return null;
   }
 }
@@ -111,7 +115,10 @@ export async function magicGetPublicKeyDer(): Promise<string | null> {
     const { publicKeyDer } = await magic.hedera.getPublicKey();
     return publicKeyDer || null;
   } catch (err) {
-    console.error("[MagicWallet] getPublicKey failed:", err);
+    console.warn(
+      "[MagicWallet] getPublicKey failed:",
+      err instanceof Error ? err.message.slice(0, 120) : "unknown"
+    );
     return null;
   }
 }
@@ -121,8 +128,8 @@ export async function magicGetDidToken(): Promise<string | null> {
   if (!magic) return null;
   try {
     return await magic.user.getIdToken();
-  } catch (err) {
-    console.error("[MagicWallet] getIdToken failed:", err);
+  } catch {
+    console.warn("[MagicWallet] getIdToken failed");
     return null;
   }
 }
