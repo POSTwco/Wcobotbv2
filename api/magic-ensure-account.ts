@@ -28,6 +28,7 @@ import {
 } from "@hashgraph/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
+import { applyCors, clientIp, rateLimit, safeClientError } from "./lib/magic-security";
 
 const KV_TABLE = "kv_store_f75faf6c";
 const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
@@ -41,49 +42,25 @@ function env(name: string): string {
 }
 
 function hederaNetwork(): "mainnet" | "testnet" {
+  // Network label may use VITE_ on the client; operator secrets must NEVER use VITE_
   const n = (env("HEDERA_NETWORK") || env("VITE_HEDERA_NETWORK")).toLowerCase();
   return n === "testnet" ? "testnet" : "mainnet";
 }
 
 const ACCOUNT_ID_RE = /^0\.0\.\d+$/;
 
-/**
- * Server operator credentials. Prefer names WITHOUT VITE_ (never bake private keys into the browser).
- * If both HEDERA_* and VITE_HEDERA_* exist, pick the value that looks like a real account id / key
- * (guards against swapped or stale VITE_ leftovers after a partial rename).
- */
+/** Server-only operator credentials — never fall back to VITE_* (those bake into the SPA). */
 function operatorId(): string {
-  const preferred = env("HEDERA_OPERATOR_ID");
-  const vite = env("VITE_HEDERA_OPERATOR_ID");
-  if (ACCOUNT_ID_RE.test(preferred)) return preferred;
-  if (ACCOUNT_ID_RE.test(vite)) {
-    console.warn(
-      "[MAGIC-VERCEL] Using VITE_HEDERA_OPERATOR_ID because HEDERA_OPERATOR_ID is missing/invalid. Add HEDERA_OPERATOR_ID=0.0.… and delete the VITE_ copy.",
-    );
-    return vite;
-  }
-  // Return whatever we have so the format check below can explain the mistake
-  return preferred || vite;
+  return env("HEDERA_OPERATOR_ID");
 }
 
 function operatorKeyRaw(): string {
-  const preferred = env("HEDERA_OPERATOR_KEY");
-  const vite = env("VITE_HEDERA_OPERATOR_KEY");
-  // If preferred was accidentally set to an account id, prefer a hex-looking VITE_ key
-  if (preferred && !ACCOUNT_ID_RE.test(preferred)) return preferred;
-  if (vite && !ACCOUNT_ID_RE.test(vite)) {
-    if (preferred && ACCOUNT_ID_RE.test(preferred)) {
-      console.warn(
-        "[MAGIC-VERCEL] HEDERA_OPERATOR_KEY looks like an account id; using VITE_HEDERA_OPERATOR_KEY for the private key. Fix env names/values and delete VITE_ secrets.",
-      );
-    } else if (!preferred) {
-      console.warn(
-        "[MAGIC-VERCEL] Using VITE_HEDERA_OPERATOR_KEY — copy to HEDERA_OPERATOR_KEY and DELETE the VITE_ var (exposed in browser builds).",
-      );
-    }
-    return vite;
+  if (env("VITE_HEDERA_OPERATOR_KEY") || env("VITE_HEDERA_OPERATOR_ID")) {
+    console.error(
+      "[MAGIC-VERCEL] VITE_HEDERA_OPERATOR_* is set — DELETE it from Vercel immediately (private key risk in browser builds).",
+    );
   }
-  return preferred || vite;
+  return env("HEDERA_OPERATOR_KEY");
 }
 
 function magicEnabled(): boolean {
@@ -108,11 +85,7 @@ function resolveSupabaseUrl(): string {
   }
 }
 
-function cors(res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
+
 
 function kvClient() {
   const url = resolveSupabaseUrl();
@@ -344,12 +317,12 @@ function parseOperatorKey(raw: string): PrivateKey {
     }
   }
 
-  const hint =
-    `len=${key.length} starts=${key.slice(0, 8)}… ` +
-    `Use the private key for HEDERA_OPERATOR_ID (HashPack export / portal DER hex). ` +
-    `Server env name must be HEDERA_OPERATOR_KEY (NO VITE_ prefix).`;
+  console.error(
+    "[MAGIC-VERCEL] operator key parse failed",
+    String((lastErr as Error)?.message || lastErr).slice(0, 120),
+  );
   throw new Error(
-    `Could not parse HEDERA_OPERATOR_KEY — check format in Vercel env. ${hint} Last: ${String((lastErr as Error)?.message || lastErr).slice(0, 80)}`,
+    "Could not parse HEDERA_OPERATOR_KEY — use the Hedera ECDSA/DER private key for HEDERA_OPERATOR_ID (env name must NOT use VITE_).",
   );
 }
 
@@ -367,8 +340,7 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
   const opKey = operatorKeyRaw();
   if (!opId || !opKey) {
     throw new Error(
-      "Operator missing on Vercel. Add HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY (names WITHOUT VITE_). " +
-        "If you only have VITE_HEDERA_OPERATOR_*, copy their values into the non-VITE names, then delete the VITE_ ones.",
+      "Operator missing on Vercel. Set HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY (never VITE_ prefix).",
     );
   }
 
@@ -459,11 +431,16 @@ async function createHederaAccount(publicKeyDer: string): Promise<string> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  cors(res);
+  applyCors(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
-  // Safe diagnostics — no secrets. Open https://www.wcorg.io/api/magic-ensure-account in a browser.
+  // Diagnostics are gated — public GET only confirms the route is up (no config leakage).
   if (req.method === "GET") {
+    const diagToken = env("MAGIC_DIAGNOSTICS_TOKEN");
+    const provided = String(req.query?.token || req.headers["x-magic-diagnostics"] || "");
+    if (!diagToken || provided !== diagToken) {
+      return res.status(200).json({ ok: true, service: "magic-ensure-account" });
+    }
     try {
       const id = operatorId();
       const key = operatorKeyRaw();
@@ -508,61 +485,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ok: true,
         magicEnabled: magicEnabled(),
         magicSecretConfigured: !!env("MAGIC_SECRET_KEY"),
-        magicSecretLooksLikeSk: /^sk_(live|test)_/i.test(env("MAGIC_SECRET_KEY")),
         operatorIdConfigured: !!id,
         operatorIdFormatOk: idOk,
-        operatorIdPreview: id
-          ? idOk
-            ? `${id.slice(0, 8)}…${id.slice(-3)}`
-            : `INVALID(len=${id.length}, starts=${id.slice(0, 6)}…)`
-          : null,
+        operatorIdPreview: idOk ? `${id.slice(0, 8)}…${id.slice(-3)}` : null,
         operatorKeyConfigured: !!key,
-        operatorKeyLength: key ? key.length : 0,
-        operatorKeyLooksLikeAccountId: ACCOUNT_ID_RE.test(key),
-        operatorKeyLooksLikeHex: /^[0-9a-fA-F]{64}$/.test(key.replace(/^0x/i, "")),
         operatorKeyParseOk,
         operatorKeyMatchesAccount,
         mirrorKeyType,
         hederaNetwork: hederaNetwork(),
-        hasViteOperatorIdLeftover: !!env("VITE_HEDERA_OPERATOR_ID"),
-        hasViteOperatorKeyLeftover: !!env("VITE_HEDERA_OPERATOR_KEY"),
-        tip:
-          operatorKeyMatchesAccount === false
-            ? "HEDERA_OPERATOR_KEY does not match account 0.0.… on mirror — re-export the private key for that exact account."
-            : idOk
-              ? "Operator ID format looks good."
-              : "HEDERA_OPERATOR_ID must be exactly like 0.0.10817841 (not the private key hex).",
+        hasDangerousViteOperatorEnv: !!(env("VITE_HEDERA_OPERATOR_KEY") || env("VITE_HEDERA_OPERATOR_ID")),
       });
     } catch (e: any) {
-      return res.status(200).json({ ok: false, error: String(e?.message || e).slice(0, 200) });
+      return res.status(200).json({ ok: false, error: "diagnostics failed" });
     }
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method not allowed" });
+    return res.status(405).json(safeClientError("METHOD", "Method not allowed"));
   }
 
   try {
     if (!magicEnabled()) {
-      return res.status(503).json({
-        success: false,
-        error: "Magic account creation is not enabled on Vercel (set MAGIC_ACCOUNT_CREATE_ENABLED=true).",
-        code: "MAGIC_DISABLED",
-      });
+      return res.status(503).json(
+        safeClientError("MAGIC_DISABLED", "Magic account creation is not enabled."),
+      );
     }
 
-    // Fail fast with clear message if URL/key env is broken
+    // Fail fast if URL/key env is broken (generic client message)
     try {
       resolveSupabaseUrl();
     } catch (e: any) {
-      return res.status(500).json({ success: false, error: e.message, code: "BAD_SUPABASE_URL" });
+      console.error("[MAGIC-VERCEL] bad supabase url", e?.message);
+      return res.status(500).json(safeClientError("BAD_SUPABASE_URL", "Server configuration error."));
     }
     if (!env("SUPABASE_SERVICE_ROLE_KEY")) {
-      return res.status(500).json({
-        success: false,
-        error: "SUPABASE_SERVICE_ROLE_KEY missing on Vercel server env.",
-        code: "BAD_SUPABASE_KEY",
-      });
+      return res.status(500).json(safeClientError("BAD_SUPABASE_KEY", "Server configuration error."));
     }
 
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
@@ -570,18 +527,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const publicKeyDer = typeof body.publicKeyDer === "string" ? body.publicKeyDer.trim() : "";
 
     if (!didToken || didToken.length < 20) {
-      return res.status(400).json({ success: false, error: "Valid Magic DID token required" });
+      return res.status(400).json(safeClientError("BAD_DID", "Valid Magic DID token required"));
     }
     if (!publicKeyDer || publicKeyDer.length < 16) {
-      return res.status(400).json({ success: false, error: "Valid publicKeyDer required" });
+      return res.status(400).json(safeClientError("BAD_PUBKEY", "Valid publicKeyDer required"));
+    }
+
+    const ip = clientIp(req);
+    const ipRL = await rateLimit(kvGet, kvMset, `ensure-ip:${ip}`, 20, 10 * 60 * 1000);
+    if (ipRL.limited) {
+      return res.status(429).json({
+        ...safeClientError("RATE_LIMITED", "Too many account create attempts. Please wait."),
+        retryAfter: ipRL.retryAfterSec,
+      });
     }
 
     const identity = await validateMagicDidToken(didToken);
     if (!("issuer" in identity)) {
-      return res.status(401).json({
-        success: false,
-        error: identity.error,
-        code: identity.code,
+      return res.status(401).json(safeClientError(identity.code, identity.error));
+    }
+
+    const issRL = await rateLimit(kvGet, kvMset, `ensure-iss:${identity.issuer}`, 8, 10 * 60 * 1000);
+    if (issRL.limited) {
+      return res.status(429).json({
+        ...safeClientError("RATE_LIMITED", "Too many account create attempts for this user. Please wait."),
+        retryAfter: issRL.retryAfterSec,
       });
     }
 
@@ -597,7 +567,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const accountId = await createHederaAccount(publicKeyDer);
+    // Single-flight lock — reduces duplicate AccountCreate fee burn on concurrent retries
+    if (existing?.status === "creating" && Number(existing.startedAt) > Date.now() - 90_000) {
+      return res.status(409).json(
+        safeClientError("CREATE_IN_PROGRESS", "Account creation already in progress. Retry in a moment."),
+      );
+    }
+    await kvMset(
+      [`magic-user:${identity.issuer}`],
+      [{ status: "creating", startedAt: Date.now(), issuer: identity.issuer, publicKeyDer: publicKeyDer.slice(0, 500) }],
+    );
+
+    let accountId: string;
+    try {
+      accountId = await createHederaAccount(publicKeyDer);
+    } catch (createErr) {
+      // Clear lock so user can retry
+      try {
+        await kvMset([`magic-user:${identity.issuer}`], [{ status: "failed", issuer: identity.issuer, at: Date.now() }]);
+      } catch {
+        /* ignore */
+      }
+      throw createErr;
+    }
+
     const record = {
       accountId,
       publicKeyDer: publicKeyDer.slice(0, 500),
@@ -627,11 +620,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (detail.match(/status\s+([A-Z0-9_]+)/i) || [])[1] ||
       null;
     console.error("[MAGIC-VERCEL] ensure-account failed:", detail, "status=", hederaStatus);
+    // Do not echo raw internal detail (may include key-format hints) to clients
+    const publicMsg = hederaStatus
+      ? `Could not create Hedera account [${hederaStatus}]. Please try again.`
+      : "Could not create Hedera account. Please try again.";
     return res.status(502).json({
-      success: false,
-      error: `Could not create Hedera account. ${hederaStatus ? `[${hederaStatus}] ` : ""}${detail}`,
-      code: hederaStatus || "ACCOUNT_CREATE_FAILED",
-      detail,
+      ...safeClientError(hederaStatus || "ACCOUNT_CREATE_FAILED", publicMsg),
       hederaStatus,
     });
   }

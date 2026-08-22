@@ -16,6 +16,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
+import { applyCors, clientIp, rateLimit, safeClientError } from "./lib/magic-security";
 
 const KV_TABLE = "kv_store_f75faf6c";
 const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
@@ -36,12 +37,6 @@ function magicEnabled(): boolean {
 function resolveSupabaseUrl(): string {
   const raw = env("SUPABASE_URL") || env("NEXT_PUBLIC_SUPABASE_URL") || DEFAULT_SUPABASE_URL;
   return new URL(raw).origin;
-}
-
-function cors(res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
 function kvClient() {
@@ -152,19 +147,17 @@ function generateWalletSessionToken(): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  cors(res);
+  applyCors(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method not allowed" });
+    return res.status(405).json(safeClientError("METHOD", "Method not allowed"));
   }
 
   try {
     if (!magicEnabled()) {
-      return res.status(503).json({
-        success: false,
-        error: "Magic is not enabled on Vercel (MAGIC_ACCOUNT_CREATE_ENABLED + MAGIC_SECRET_KEY).",
-        code: "MAGIC_DISABLED",
-      });
+      return res.status(503).json(
+        safeClientError("MAGIC_DISABLED", "Magic is not enabled on this environment."),
+      );
     }
 
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
@@ -172,24 +165,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const didToken = typeof body.didToken === "string" ? body.didToken.trim() : "";
 
     if (!ACCOUNT_ID_RE.test(wallet)) {
-      return res.status(400).json({ success: false, error: "Valid Hedera wallet address required" });
+      return res.status(400).json(safeClientError("BAD_WALLET", "Valid Hedera wallet address required"));
     }
     if (!didToken || didToken.length < 20) {
-      return res.status(400).json({ success: false, error: "Valid Magic DID token required" });
+      return res.status(400).json(safeClientError("BAD_DID", "Valid Magic DID token required"));
+    }
+
+    const ip = clientIp(req);
+    const ipRL = await rateLimit(kvGet, kvMset, `reg-ip:${ip}`, 30, 10 * 60 * 1000);
+    if (ipRL.limited) {
+      return res.status(429).json({
+        ...safeClientError("RATE_LIMITED", "Too many session registrations. Please wait."),
+        retryAfter: ipRL.retryAfterSec,
+      });
     }
 
     const identity = await validateMagicDidToken(didToken);
     if (!("issuer" in identity)) {
-      return res.status(401).json({ success: false, error: identity.error, code: identity.code });
+      return res.status(401).json(safeClientError(identity.code, identity.error));
+    }
+
+    const issRL = await rateLimit(kvGet, kvMset, `reg-iss:${identity.issuer}`, 15, 10 * 60 * 1000);
+    if (issRL.limited) {
+      return res.status(429).json({
+        ...safeClientError("RATE_LIMITED", "Too many session registrations. Please wait."),
+        retryAfter: issRL.retryAfterSec,
+      });
     }
 
     const mapping = await kvGet(`magic-user:${identity.issuer}`);
     if (!mapping?.accountId || mapping.accountId !== wallet) {
-      return res.status(403).json({
-        success: false,
-        error: "Wallet is not linked to this Magic user. Complete account creation first.",
-        code: "MAGIC_WALLET_MISMATCH",
-      });
+      return res.status(403).json(
+        safeClientError(
+          "MAGIC_WALLET_MISMATCH",
+          "Wallet is not linked to this Magic user. Complete account creation first.",
+        ),
+      );
     }
 
     const existingRef = await kvGet(`wsession-wallet:${wallet}`);
@@ -227,13 +238,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (err: any) {
-    const detail = String(err?.message || err).slice(0, 280);
-    console.error("[MAGIC-REG] failed:", detail);
-    return res.status(502).json({
-      success: false,
-      error: `Could not register Magic session. ${detail}`,
-      code: "MAGIC_REGISTER_FAILED",
-      detail,
-    });
+    console.error("[MAGIC-REG] failed:", String(err?.message || err).slice(0, 280));
+    return res.status(502).json(
+      safeClientError("MAGIC_REGISTER_FAILED", "Could not register Magic session. Please try again."),
+    );
   }
 }
