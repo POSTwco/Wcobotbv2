@@ -41,6 +41,10 @@ treasury.env
 rewards-*.csv
 snapshots-export/
 
+# Local Hedera script secrets / generated keys (never commit)
+scripts/hedera/.env.hedera
+scripts/hedera/.generated-*.local
+
 # -----------------------------------------------------------------------------
 # Supabase CLI (local link state — not project source)
 # -----------------------------------------------------------------------------
@@ -128,3 +132,5 @@ desktop.ini
 
 # Deno (Supabase edge function local tooling)
 .deno/
+# Local UI verification captures
+.verify/

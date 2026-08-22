@@ -1,64 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { Zap, ArrowRight, Trophy, Users, Coins, Swords, Shield, TrendingUp, Download, Vote, Flame, Sparkles, ChevronRight, ExternalLink, Dumbbell } from "lucide-react";
+import { Zap, ArrowRight, Swords, Flame, Sparkles, ExternalLink, Dumbbell, Mail } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
-import { useVIP } from "../components/vip/vip-context";
-import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { RateAthletesSection } from "../components/rate-athletes";
 import { SponsorShowcase, TitleSponsorBanner } from "../components/sponsor-showcase";
 import { ContestBanner } from "../components/contest/contest-banner";
-import { useConfig, useBattles, useAthletes } from "../lib/hooks";
+import { SiteMapExploratorium } from "../components/site-map-exploratorium";
+import { useConfig } from "../lib/hooks";
 import { api } from "../lib/api";
 import type { ContestPublicStats } from "../lib/contest-types";
-import { AnimatedCounter, StaggerText, FadeInWhenVisible, TiltCard } from "../components/ui-enhancements";
 import { resolveHeroVideoUrl } from "../lib/site-media";
+import { isMagicEnabled } from "../lib/wallet-types";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
 
 const ATHLETE_BG = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/athlete1.jpg";
 
-function StatCard({ label, value, icon: Icon, color, animatedValue, prefix, suffix, decimals }: { label: string; value: string; icon: any; color: string; animatedValue?: number; prefix?: string; suffix?: string; decimals?: number }) {
-  const { vipActive } = useVIP();
-  return (
-    <TiltCard
-      maxTilt={8}
-      glowColor={vipActive ? "#D4A843" : color}
-      className="relative"
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        className={`rounded-xl p-3 sm:p-5 transition-all group ${
-          vipActive
-            ? "vip-glass-card vip-shimmer-overlay hover:border-[#D4A843]/40"
-            : "bg-[#111827] border border-[#4274B9]/10 hover:border-[#4274B9]/30"
-        }`}
-      >
-        <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center" style={{ background: vipActive ? "rgba(212,168,67,0.1)" : `${color}15` }}>
-            <Icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: vipActive ? "#D4A843" : color }} />
-          </div>
-          <span className="text-[#8494A7] text-xs sm:text-sm">{label}</span>
-        </div>
-        <p className={`text-xl sm:text-2xl ${vipActive ? "vip-gold-text" : "text-[#E8ECF0]"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>
-          {animatedValue !== undefined ? (
-            <AnimatedCounter value={animatedValue} prefix={prefix} suffix={suffix} decimals={decimals ?? 0} duration={2.5} />
-          ) : value}
-        </p>
-      </motion.div>
-    </TiltCard>
-  );
-}
-
 export function HomePage() {
-  const { connect, connected, isConnecting } = useWallet();
-  const { vipActive, sound } = useVIP();
+  const { connect, connected, isConnecting, openMagicEmailSignIn } = useWallet();
   const { data: config } = useConfig();
-  const { data: battles } = useBattles();
-  const { data: athletes } = useAthletes();
   const [contestStats, setContestStats] = useState<ContestPublicStats | null>(null);
+  const magicOn = isMagicEnabled();
 
   // Hide Hedera badge while Connect-to-Enter is running (open / full / drawing)
   const contestActive =
@@ -84,10 +47,7 @@ export function HomePage() {
     return () => clearInterval(id);
   }, [loadContest]);
 
-  // Compute live stats from config + actual counts
   const tokenStats = config.tokenStats;
-  const totalBattles = battles.length || tokenStats.totalBattles;
-  const totalAthletes = athletes.length;
   // Admin-editable hero video (Supabase Storage URL) with safe default fallback
   const heroVideoSrc = resolveHeroVideoUrl(config.heroVideoUrl);
 
@@ -285,20 +245,11 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Sponsor Showcase — between hero and stats */}
+      {/* Sponsor Showcase — between hero and site map */}
       <SponsorShowcase />
 
-      {/* Stats */}
-      <section className="py-8 sm:py-16 relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-            <StatCard label="Token Price" value={`$${tokenStats.price}`} icon={TrendingUp} color="#4274B9" animatedValue={parseFloat(tokenStats.price) || 0} prefix="$" decimals={2} />
-            <StatCard label="Total Staked" value="" icon={Shield} color="#6AA3E0" animatedValue={tokenStats.totalStaked / 1e6} suffix="M" decimals={1} />
-            <StatCard label="Total Voters" value="" icon={Users} color="#f59e0b" animatedValue={tokenStats.totalVoters / 1e3} suffix="K" decimals={0} />
-            <StatCard label="Total Battles" value={totalBattles.toString()} icon={Trophy} color="#10b981" animatedValue={totalBattles} />
-          </div>
-        </div>
-      </section>
+      {/* Interactive site map — replaces Token Price / staking stats */}
+      <SiteMapExploratorium />
 
       {/* How It Works */}
       <section className="py-12 sm:py-20 relative">
@@ -316,13 +267,13 @@ export function HomePage() {
               <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">HOW TO PLAY</span>
             </h2>
             <p className="text-[#8494A7] max-w-2xl mx-auto text-sm sm:text-lg" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-              Jump in, pick your athletes, and <span className="text-[#6AA3E0] font-semibold">WIN tokens</span> — it's that simple. 
-              No one loses their stake. <span className="text-[#4274B9] font-semibold">ONLY GAINS</span>.
+              <span className="text-[#6AA3E0] font-semibold">Email in, explore the map, play</span> — workouts, battles, and ranks.
+              No seed phrase required to start. <span className="text-[#4274B9] font-semibold">ONLY GAINS</span>.
             </p>
           </motion.div>
 
           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-            {/* Step 1: Download HashPack */}
+            {/* Step 1: Create account (email or HashPack) */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -332,63 +283,74 @@ export function HomePage() {
             >
               <span
                 className="absolute top-3 right-3 sm:top-4 sm:right-4 text-2xl sm:text-4xl opacity-10"
-                style={{ fontFamily: "Orbitron, sans-serif", color: "#8B5CF6" }}
+                style={{ fontFamily: "Orbitron, sans-serif", color: "#4274B9" }}
               >
                 01
               </span>
-              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#8B5CF615" }}>
-                {/* HashPack Logo */}
-                <svg width="22" height="22" viewBox="0 0 32 32" fill="none" className="sm:w-7 sm:h-7">
-                  <rect width="32" height="32" rx="6" fill="#8B5CF6"/>
-                  <path d="M9 8v16M23 8v16M9 14h14M9 20h14" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-                </svg>
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#4274B915" }}>
+                <Mail className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: "#4274B9" }} />
               </div>
               <h3 className="text-[#E8ECF0] mb-1 sm:mb-2" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                GET HASHPACK
+                CREATE ACCOUNT
               </h3>
               <p className="text-[#8494A7] text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-4 sm:line-clamp-none" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                Download the <span className="text-[#8B5CF6] font-semibold">HashPack wallet</span> — the #1 Hedera wallet. Available as a browser extension or mobile app. Your gateway to the BOTB arena.
+                {magicOn ? (
+                  <>Sign up with <span className="text-[#6AA3E0] font-semibold">email OTP</span> — we create your Hedera account. Or connect <span className="text-[#8B5CF6] font-semibold">HashPack</span> if you already have one.</>
+                ) : (
+                  <>Connect <span className="text-[#8B5CF6] font-semibold">HashPack</span> — the #1 Hedera wallet. Browser extension or mobile. Your gateway to the arena.</>
+                )}
               </p>
-              <a
-                href="https://www.hashpack.app/download"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-[#8B5CF6] hover:text-[#A78BFA] transition-colors"
-                style={{ fontFamily: "Orbitron, sans-serif" }}
-              >
-                DOWNLOAD <ExternalLink className="w-3 h-3" />
-              </a>
+              {magicOn ? (
+                <button
+                  type="button"
+                  onClick={() => openMagicEmailSignIn("signup")}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#6AA3E0] hover:text-[#8BB8E8] transition-colors"
+                  style={{ fontFamily: "Orbitron, sans-serif" }}
+                >
+                  EMAIL SIGN UP <ArrowRight className="w-3 h-3" />
+                </button>
+              ) : (
+                <a
+                  href="https://www.hashpack.app/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#8B5CF6] hover:text-[#A78BFA] transition-colors"
+                  style={{ fontFamily: "Orbitron, sans-serif" }}
+                >
+                  DOWNLOAD <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </motion.div>
 
-            {/* Step 2: Own WCO Token */}
+            {/* Step 2: Explore & train */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: 0.1 }}
-              className="bg-[#111827] border border-[#4274B9]/10 rounded-2xl p-4 sm:p-6 relative group hover:border-[#4274B9]/30 transition-all hover:shadow-lg hover:shadow-[#4274B9]/5"
+              className="bg-[#111827] border border-[#4274B9]/10 rounded-2xl p-4 sm:p-6 relative group hover:border-[#D4A843]/30 transition-all hover:shadow-lg hover:shadow-[#D4A843]/5"
             >
               <span
                 className="absolute top-3 right-3 sm:top-4 sm:right-4 text-2xl sm:text-4xl opacity-10"
-                style={{ fontFamily: "Orbitron, sans-serif", color: "#4274B9" }}
+                style={{ fontFamily: "Orbitron, sans-serif", color: "#D4A843" }}
               >
                 02
               </span>
-              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#4274B915" }}>
-                <Coins className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: "#4274B9" }} />
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#D4A84315" }}>
+                <Dumbbell className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: "#D4A843" }} />
               </div>
               <h3 className="text-[#E8ECF0] mb-1 sm:mb-2" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                OWN WCO TOKEN
+                TRAIN OR EXPLORE
               </h3>
               <p className="text-[#8494A7] text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-4 sm:line-clamp-none" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                Grab <span className="text-[#4274B9] font-semibold">$WCO tokens</span> on SaucerSwap or any Hedera DEX. WCO is your ticket to vote, compete, and <span className="text-[#6AA3E0] font-semibold">WIN</span> in every battle.
+                Tap the <span className="text-[#D4A843] font-semibold">site map</span> — workouts for every level, athlete chats, battles, and ranks. Kids and parents can both jump in.
               </p>
               <div className="flex items-center gap-2">
-                <div className="px-2 py-1 rounded bg-[#4274B9]/10 text-[10px] text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  HEDERA NATIVE
+                <div className="px-2 py-1 rounded bg-[#D4A843]/10 text-[10px] text-[#D4A843]" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                  FAMILY FRIENDLY
                 </div>
-                <div className="px-2 py-1 rounded bg-[#6AA3E0]/10 text-[10px] text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  ONLY GAINS
+                <div className="px-2 py-1 rounded bg-[#4274B9]/10 text-[10px] text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                  ONE TAP
                 </div>
               </div>
             </motion.div>

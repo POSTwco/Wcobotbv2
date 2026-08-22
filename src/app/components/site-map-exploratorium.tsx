@@ -1,0 +1,452 @@
+/**
+ * Site Map Exploratorium — replaces home Token Price / staking stats.
+ * Coin360-style interactive destination map: tap a zone to explore.
+ * Light onboarding hint for simplified Magic email → play path.
+ */
+
+import { useMemo, useState } from "react";
+import { Link } from "react-router";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Swords,
+  Users,
+  Dumbbell,
+  Layers,
+  Shield,
+  Crown,
+  FileText,
+  Mail,
+  Sparkles,
+  ArrowRight,
+  Compass,
+  type LucideIcon,
+} from "lucide-react";
+import { useWallet } from "./wallet-context";
+import { isMagicEnabled } from "../lib/wallet-types";
+
+const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
+const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+
+interface MapZone {
+  id: string;
+  label: string;
+  blurb: string;
+  to: string;
+  Icon: LucideIcon;
+  color: string;
+  colorSoft: string;
+  badge?: string;
+  /** Short “what’s here” line for the exploratorium */
+  expect?: string;
+}
+
+const ZONES: MapZone[] = [
+  {
+    id: "workout",
+    label: "Workout",
+    blurb: "Build routines, log sets, chase PRs. Open to every age — start easy, level up.",
+    to: "/calisthenics",
+    Icon: Dumbbell,
+    color: "#D4A843",
+    colorSoft: "rgba(212,168,67,0.18)",
+    badge: "NEW",
+    expect: "Play · train · prove",
+  },
+  {
+    id: "battles",
+    label: "Battles",
+    blurb: "Vote on live IRL matchups. Pick your athlete and win from the pool — no loss staking.",
+    to: "/battles",
+    Icon: Swords,
+    color: "#6AA3E0",
+    colorSoft: "rgba(106,163,224,0.16)",
+    expect: "Watch · vote · win",
+  },
+  {
+    id: "athletes",
+    label: "Athletes",
+    blurb: "Meet the roster, rate competitors, and jump into Arena Chat.",
+    to: "/athletes",
+    Icon: Users,
+    color: "#4274B9",
+    colorSoft: "rgba(66,116,185,0.18)",
+    expect: "Explore the roster",
+  },
+  {
+    id: "nfts",
+    label: "NFTs",
+    blurb: "Governors, Sigma, and Meta series — boosts, status, and collector energy.",
+    to: "/nfts",
+    Icon: Layers,
+    color: "#a78bfa",
+    colorSoft: "rgba(167,139,250,0.16)",
+    expect: "Collect & boost",
+  },
+  {
+    id: "governors",
+    label: "Governors",
+    blurb: "Shape the protocol. Proposals, votes, and on-chain governance.",
+    to: "/governance",
+    Icon: Shield,
+    color: "#10b981",
+    colorSoft: "rgba(16,185,129,0.14)",
+    expect: "Steer the org",
+  },
+  {
+    id: "leaderboard",
+    label: "Ranks",
+    blurb: "Athletes, voters, and oracle standings — see who's climbing.",
+    to: "/leaderboard",
+    Icon: Crown,
+    color: "#f59e0b",
+    colorSoft: "rgba(245,158,11,0.14)",
+    expect: "Climb the board",
+  },
+  {
+    id: "apply",
+    label: "Apply",
+    blurb: "Pro Card path for athletes ready to compete under WCO.",
+    to: "/apply",
+    Icon: FileText,
+    color: "#8494A7",
+    colorSoft: "rgba(132,148,167,0.14)",
+    expect: "Join the roster",
+  },
+];
+
+/** Fixed exploratorium layout (% of canvas) — Coin360-inspired, stable on resize */
+const LAYOUT: Record<string, { x: number; y: number; w: number; h: number }> = {
+  workout: { x: 0, y: 0, w: 48, h: 100 },
+  battles: { x: 48, y: 0, w: 52, h: 38 },
+  athletes: { x: 48, y: 38, w: 26, h: 32 },
+  nfts: { x: 74, y: 38, w: 26, h: 32 },
+  governors: { x: 48, y: 70, w: 20, h: 30 },
+  leaderboard: { x: 68, y: 70, w: 16, h: 30 },
+  apply: { x: 84, y: 70, w: 16, h: 30 },
+};
+
+function ZoneTile({
+  zone,
+  active,
+  onHover,
+}: {
+  zone: MapZone;
+  active: boolean;
+  onHover: (id: string | null) => void;
+}) {
+  const layout = LAYOUT[zone.id];
+  if (!layout || !zone.to) return null;
+
+  const Icon = zone.Icon;
+  const showDetail = active || layout.w >= 40;
+
+  return (
+    <motion.div
+      layout
+      className="absolute"
+      style={{
+        left: `calc(${layout.x}% + 3px)`,
+        top: `calc(${layout.y}% + 3px)`,
+        width: `calc(${layout.w}% - 6px)`,
+        height: `calc(${layout.h}% - 6px)`,
+      }}
+      whileHover={{ scale: 1.015 }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: "spring", stiffness: 380, damping: 28 }}
+    >
+      <Link
+        to={zone.to}
+        onMouseEnter={() => onHover(zone.id)}
+        onMouseLeave={() => onHover(null)}
+        onFocus={() => onHover(zone.id)}
+        onBlur={() => onHover(null)}
+        aria-label={`${zone.label}: ${zone.blurb}`}
+        className="absolute inset-0 overflow-hidden rounded-xl sm:rounded-2xl cursor-pointer group outline-none focus-visible:ring-2 focus-visible:ring-[#6AA3E0] block"
+        style={{
+          background: active
+            ? `linear-gradient(145deg, ${zone.colorSoft}, rgba(11,17,32,0.92))`
+            : `linear-gradient(160deg, ${zone.colorSoft}, #111827ee)`,
+          border: `1px solid ${active ? zone.color + "88" : zone.color + "33"}`,
+          boxShadow: active
+            ? `0 0 28px ${zone.color}40, inset 0 1px 0 rgba(255,255,255,0.08)`
+            : `inset 0 1px 0 rgba(255,255,255,0.04)`,
+        }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage: `linear-gradient(${zone.color} 1px, transparent 1px), linear-gradient(90deg, ${zone.color} 1px, transparent 1px)`,
+            backgroundSize: "18px 18px",
+          }}
+        />
+
+        <motion.div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `linear-gradient(110deg, transparent 35%, ${zone.color}33 48%, transparent 62%)`,
+          }}
+          initial={{ x: "-120%" }}
+          animate={active ? { x: "140%" } : { x: "-120%" }}
+          transition={{ duration: 1.1, ease: "easeInOut" }}
+        />
+
+        <div className="relative h-full flex flex-col justify-between p-2.5 sm:p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div
+              className="flex items-center justify-center rounded-lg sm:rounded-xl shrink-0"
+              style={{
+                width: layout.w >= 40 ? "2.75rem" : "2rem",
+                height: layout.w >= 40 ? "2.75rem" : "2rem",
+                background: `${zone.color}22`,
+                border: `1px solid ${zone.color}44`,
+              }}
+            >
+              <Icon
+                className={layout.w >= 40 ? "w-5 h-5 sm:w-6 sm:h-6" : "w-3.5 h-3.5 sm:w-4 sm:h-4"}
+                style={{ color: zone.color }}
+              />
+            </div>
+            {zone.badge && (
+              <span
+                className="px-1.5 py-0.5 rounded-full text-[0.5rem] sm:text-[0.55rem] font-bold tracking-wider text-[#0B1120]"
+                style={{
+                  ...orbitron,
+                  background: `linear-gradient(135deg, ${zone.color}, #fff8)`,
+                }}
+              >
+                {zone.badge}
+              </span>
+            )}
+          </div>
+
+          <div>
+            <h3
+              className={`text-[#E8ECF0] leading-tight ${
+                layout.w >= 40 ? "text-sm sm:text-xl" : "text-[0.65rem] sm:text-sm"
+              }`}
+              style={orbitron}
+            >
+              {zone.label.toUpperCase()}
+            </h3>
+            {zone.expect && layout.w >= 24 && (
+              <p
+                className="text-[0.6rem] sm:text-xs mt-0.5 sm:mt-1 truncate"
+                style={{ ...dmSans, color: zone.color }}
+              >
+                {zone.expect}
+              </p>
+            )}
+            <AnimatePresence>
+              {showDetail && layout.h >= 35 && (
+                <motion.p
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="text-[#8494A7] text-[0.65rem] sm:text-sm mt-1.5 sm:mt-2 line-clamp-3 sm:line-clamp-4 hidden sm:block"
+                  style={dmSans}
+                >
+                  {zone.blurb}
+                </motion.p>
+              )}
+            </AnimatePresence>
+            {layout.w >= 40 && (
+              <span
+                className="mt-2 sm:mt-3 inline-flex items-center gap-1 text-[0.55rem] sm:text-xs opacity-80 group-hover:opacity-100 transition-opacity"
+                style={{ ...orbitron, color: zone.color }}
+              >
+                ENTER <ArrowRight className="w-3 h-3" />
+              </span>
+            )}
+          </div>
+        </div>
+      </Link>
+    </motion.div>
+  );
+}
+
+export function SiteMapExploratorium() {
+  const { connected, connect, openMagicEmailSignIn, isConnecting } = useWallet();
+  const magicOn = isMagicEnabled();
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  const preview = useMemo(
+    () => ZONES.find((z) => z.id === hovered) ?? ZONES[0],
+    [hovered],
+  );
+
+  return (
+    <section id="explore-wco" className="py-8 sm:py-14 relative overflow-hidden scroll-mt-24">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[420px] bg-[#4274B9]/[0.05] rounded-full blur-[110px]" />
+      <div className="pointer-events-none absolute -top-10 right-0 w-64 h-64 bg-[#D4A843]/[0.04] rounded-full blur-[80px]" />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5 sm:mb-8"
+        >
+          <div>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#4274B9]/10 border border-[#4274B9]/25 mb-3">
+              <Compass className="w-3.5 h-3.5 text-[#6AA3E0]" />
+              <span className="text-[#6AA3E0] text-[0.6rem] tracking-widest font-semibold" style={orbitron}>
+                INTERACTIVE SITE MAP
+              </span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl" style={orbitron}>
+              <span className="text-white">EXPLORE </span>
+              <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">
+                WCO
+              </span>
+            </h2>
+            <p className="text-[#8494A7] text-sm sm:text-base mt-2 max-w-xl" style={dmSans}>
+              Tap any zone to jump in.{" "}
+              <span className="text-[#6AA3E0] font-semibold">Email → verify → play</span>
+              {" — "}account creation is simple enough for the whole family.
+            </p>
+          </div>
+
+          {/* Easy start chip */}
+          {!connected && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="flex flex-col sm:items-end gap-2 shrink-0"
+            >
+              <div
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#4274B9]/25 bg-[#111827]/80 backdrop-blur-sm"
+              >
+                <Sparkles className="w-4 h-4 text-[#D4A843]" />
+                <span className="text-[0.7rem] text-[#E8ECF0]" style={dmSans}>
+                  No seed phrase required to start
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {magicOn ? (
+                  <button
+                    type="button"
+                    onClick={() => openMagicEmailSignIn("signup")}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#4274B9] text-white text-xs hover:bg-[#3563A0] transition-colors"
+                    style={orbitron}
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    CREATE WITH EMAIL
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={connect}
+                    disabled={isConnecting}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#4274B9] text-white text-xs hover:bg-[#3563A0] transition-colors disabled:opacity-60"
+                    style={orbitron}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {isConnecting ? "CONNECTING…" : "CONNECT TO PLAY"}
+                  </button>
+                )}
+                <Link
+                  to="/calisthenics"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#D4A843]/40 text-[#D4A843] text-xs hover:bg-[#D4A843]/10 transition-colors"
+                  style={orbitron}
+                >
+                  <Dumbbell className="w-3.5 h-3.5" />
+                  TRY WORKOUT
+                </Link>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+
+        {/* Map canvas */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.08 }}
+          className="relative rounded-2xl sm:rounded-3xl border border-[#4274B9]/20 bg-[#0B1120]/90 overflow-hidden"
+          style={{
+            boxShadow: "0 0 0 1px rgba(66,116,185,0.08), 0 20px 60px rgba(0,0,0,0.35)",
+          }}
+        >
+          {/* Top accent */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#6AA3E0] to-transparent z-10" />
+
+          <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] min-h-[280px]">
+            {ZONES.map((zone) => (
+              <ZoneTile
+                key={zone.id}
+                zone={zone}
+                active={hovered === zone.id || (!hovered && zone.id === "workout")}
+                onHover={setHovered}
+              />
+            ))}
+          </div>
+
+          {/* Mobile preview strip */}
+          <div className="sm:hidden border-t border-[#4274B9]/15 px-3 py-3 bg-[#111827]/90">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={preview.id}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="flex items-start gap-3"
+              >
+                <div
+                  className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: preview.colorSoft, border: `1px solid ${preview.color}44` }}
+                >
+                  <preview.Icon className="w-4 h-4" style={{ color: preview.color }} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[#E8ECF0] text-xs" style={orbitron}>
+                    {preview.label.toUpperCase()}
+                  </p>
+                  <p className="text-[#8494A7] text-[0.7rem] line-clamp-2" style={dmSans}>
+                    {preview.blurb}
+                  </p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </motion.div>
+
+        {/* Expectation legend */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.15 }}
+          className="mt-4 sm:mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3"
+        >
+          {[
+            { label: "Email signup", color: "#4274B9" },
+            { label: "One-tap zones", color: "#6AA3E0" },
+            { label: "Kids can train", color: "#D4A843" },
+            { label: "Vote & govern", color: "#10b981" },
+          ].map((chip) => (
+            <span
+              key={chip.label}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[0.6rem] sm:text-[0.65rem] border"
+              style={{
+                ...orbitron,
+                color: chip.color,
+                borderColor: `${chip.color}44`,
+                background: `${chip.color}12`,
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: chip.color, boxShadow: `0 0 6px ${chip.color}` }}
+              />
+              {chip.label.toUpperCase()}
+            </span>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
