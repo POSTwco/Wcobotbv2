@@ -190,8 +190,9 @@ function ZoneTile({
           transition={{ duration: 1.1, ease: "easeInOut" }}
         />
 
-        <div className="relative h-full flex flex-col justify-between p-2.5 sm:p-4">
-          <div className="flex items-start justify-between gap-2">
+        <div className="relative h-full p-2.5 sm:p-4">
+          {/* Corner chrome — icon + badge stay out of the centered title */}
+          <div className="absolute top-2.5 left-2.5 sm:top-4 sm:left-4 z-10">
             <div
               className="flex items-center justify-center rounded-lg sm:rounded-xl shrink-0"
               style={{
@@ -206,31 +207,82 @@ function ZoneTile({
                 style={{ color: zone.color }}
               />
             </div>
-            {zone.badge && (
-              <span
-                className="px-1.5 py-0.5 rounded-full text-[0.5rem] sm:text-[0.55rem] font-bold tracking-wider text-[#0B1120]"
+          </div>
+          {zone.badge && (
+            <span
+              className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 z-10 px-1.5 py-0.5 rounded-full text-[0.5rem] sm:text-[0.55rem] font-bold tracking-wider text-[#0B1120]"
+              style={{
+                ...orbitron,
+                background: `linear-gradient(135deg, ${zone.color}, #fff8)`,
+              }}
+            >
+              {zone.badge}
+            </span>
+          )}
+
+          {/* Dead-center title — bold animated gold */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5] px-1.5 sm:px-3">
+            <motion.h3
+              className={`text-center leading-none tracking-[0.08em] font-extrabold ${
+                layout.w >= 40
+                  ? "text-lg sm:text-3xl md:text-4xl"
+                  : layout.w >= 22
+                    ? "text-xs sm:text-lg md:text-xl"
+                    : "text-[0.65rem] sm:text-sm md:text-base"
+              }`}
+              style={{
+                ...orbitron,
+                fontWeight: 800,
+                color: "#F0D078",
+                textShadow:
+                  "0 0 12px rgba(212,168,67,0.55), 0 0 28px rgba(212,168,67,0.35), 0 1px 2px rgba(0,0,0,0.75)",
+              }}
+              initial={{ opacity: 0, scale: 0.86, y: 10 }}
+              whileInView={{ opacity: 1, scale: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ type: "spring", stiffness: 260, damping: 22, delay: 0.05 }}
+            >
+              <motion.span
+                className="inline-block text-[#F0D078]"
                 style={{
-                  ...orbitron,
-                  background: `linear-gradient(135deg, ${zone.color}, #fff8)`,
+                  color: "#F0D078",
+                  WebkitTextFillColor: "#F0D078",
+                  textShadow:
+                    "0 0 10px rgba(212,168,67,0.65), 0 0 22px rgba(240,208,120,0.4), 0 1px 2px rgba(0,0,0,0.8)",
+                }}
+                animate={{
+                  scale: active ? [1, 1.07, 1] : [1, 1.035, 1],
+                  color: active
+                    ? ["#F0D078", "#FFE7A0", "#F0D078"]
+                    : ["#E8C468", "#F0D078", "#E8C468"],
+                  textShadow: active
+                    ? [
+                        "0 0 10px rgba(212,168,67,0.55), 0 1px 2px rgba(0,0,0,0.8)",
+                        "0 0 26px rgba(255,231,160,0.95), 0 1px 2px rgba(0,0,0,0.8)",
+                        "0 0 10px rgba(212,168,67,0.55), 0 1px 2px rgba(0,0,0,0.8)",
+                      ]
+                    : [
+                        "0 0 8px rgba(212,168,67,0.4), 0 1px 2px rgba(0,0,0,0.75)",
+                        "0 0 18px rgba(240,208,120,0.7), 0 1px 2px rgba(0,0,0,0.75)",
+                        "0 0 8px rgba(212,168,67,0.4), 0 1px 2px rgba(0,0,0,0.75)",
+                      ],
+                }}
+                transition={{
+                  duration: active ? 2.2 : 3.2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
                 }}
               >
-                {zone.badge}
-              </span>
-            )}
+                {zone.label.toUpperCase()}
+              </motion.span>
+            </motion.h3>
           </div>
 
-          <div>
-            <h3
-              className={`text-[#E8ECF0] leading-tight ${
-                layout.w >= 40 ? "text-sm sm:text-xl" : "text-[0.65rem] sm:text-sm"
-              }`}
-              style={orbitron}
-            >
-              {zone.label.toUpperCase()}
-            </h3>
+          {/* Supporting copy stays bottom-anchored */}
+          <div className="absolute bottom-2.5 left-2.5 right-2.5 sm:bottom-4 sm:left-4 sm:right-4 z-10">
             {zone.expect && layout.w >= 24 && (
               <p
-                className="text-[0.6rem] sm:text-xs mt-0.5 sm:mt-1 truncate"
+                className="text-[0.6rem] sm:text-xs truncate text-center sm:text-left"
                 style={{ ...dmSans, color: zone.color }}
               >
                 {zone.expect}
@@ -242,7 +294,7 @@ function ZoneTile({
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="text-[#8494A7] text-[0.65rem] sm:text-sm mt-1.5 sm:mt-2 line-clamp-3 sm:line-clamp-4 hidden sm:block"
+                  className="text-[#8494A7] text-[0.65rem] sm:text-sm mt-1 sm:mt-1.5 line-clamp-2 sm:line-clamp-3 hidden sm:block"
                   style={dmSans}
                 >
                   {zone.blurb}
@@ -251,7 +303,7 @@ function ZoneTile({
             </AnimatePresence>
             {layout.w >= 40 && (
               <span
-                className="mt-2 sm:mt-3 inline-flex items-center gap-1 text-[0.55rem] sm:text-xs opacity-80 group-hover:opacity-100 transition-opacity"
+                className="mt-1.5 sm:mt-2 inline-flex items-center gap-1 text-[0.55rem] sm:text-xs opacity-80 group-hover:opacity-100 transition-opacity"
                 style={{ ...orbitron, color: zone.color }}
               >
                 ENTER <ArrowRight className="w-3 h-3" />
