@@ -16,6 +16,7 @@ import {
 type MagicWithHedera = Magic & {
   hedera: {
     getPublicKey: () => Promise<{ publicKeyDer: string }>;
+    /** Sign message bytes (UTF-8 challenge) or string — returns wallet signature bytes / hex / map */
     sign: (message: string | Uint8Array) => Promise<any>;
     /**
      * Opens Magic’s official reveal UI. The private key is shown only to the

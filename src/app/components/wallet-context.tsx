@@ -367,12 +367,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         });
         if (cancelled) return;
 
-        // Prefer Magic restore when flagged (mutual exclusivity with WC)
+        // Prefer Magic restore when SDK session is still alive (mutual exclusivity with WC).
+        // Also recover when sessionStorage was cleared but Magic cookie/session remains.
         let restoredMagic = false;
         try {
-          const storedProvider = sessionStorage.getItem(MAGIC_STORAGE.provider);
-          const storedMagicAcct = sessionStorage.getItem(MAGIC_STORAGE.accountId);
-          if (canUseMagic() && storedProvider === "magic" && storedMagicAcct) {
+          if (canUseMagic()) {
             const loggedIn = await magicIsLoggedIn();
             if (loggedIn) {
               const didToken = await magicGetDidToken();
@@ -386,6 +385,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                     setMagicConnectedState(ensure.data.accountId, net, reg.data.token);
                     restoredMagic = true;
                     console.log(`[BOTB Wallet Context] Magic auto-restore | Account: ${ensure.data.accountId}`);
+                  } else {
+                    console.warn("[BOTB Wallet Context] Magic restore: session register failed", reg.error);
                   }
                 }
               }

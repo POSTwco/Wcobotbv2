@@ -1524,7 +1524,7 @@ export async function verifyGateSignature(
   if (!signatureBase64 || typeof signatureBase64 !== "string" || signatureBase64.length < 10) {
     return {
       valid: false,
-      error: "Signature missing or too short. Approve the request in HashPack.",
+      error: "Signature missing or too short. Approve the request in your wallet (HashPack or Magic) and try again.",
     };
   }
 
@@ -1548,7 +1548,7 @@ export async function verifyGateSignature(
   if (!sigBytes || sigBytes.length !== 64) {
     return {
       valid: false,
-      error: "Could not extract a valid signature from HashPack. Approve the request and try again.",
+      error: "Could not extract a valid signature from your wallet. Approve the Magic or HashPack prompt and try again.",
       keyType: keyInfo.keyType,
     };
   }

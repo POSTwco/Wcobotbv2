@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Crown, Loader2, Wallet, ShieldCheck, AlertCircle, Lock, Mail } from "lucide-react";
 import { useEliteSession } from "./elite-context";
 import { useWallet } from "../wallet-context";
@@ -10,8 +11,20 @@ export function EliteGate() {
   const elite = useEliteSession();
   const wallet = useWallet();
   const magicOn = isMagicEnabled();
+  const autoEnterRef = useRef(false);
 
   const busy = ["checking", "connecting", "challenging", "signing", "verifying"].includes(elite.phase);
+
+  useEffect(() => {
+    if (!wallet.connected || !wallet.accountId) {
+      autoEnterRef.current = false;
+      return;
+    }
+    if (busy || elite.phase === "eligible") return;
+    if (autoEnterRef.current) return;
+    autoEnterRef.current = true;
+    void elite.enter();
+  }, [wallet.connected, wallet.accountId, busy, elite.phase, elite.enter]);
 
   const signLabel =
     wallet.walletProvider === "magic"
@@ -92,25 +105,29 @@ export function EliteGate() {
                 Sign in with email
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => elite.enter()}
-              className="w-full py-2.5 rounded-xl text-xs text-[#8494A7] border border-white/10 hover:bg-white/5"
-              style={dmSans}
-            >
-              Unlock (after connect)
-            </button>
+            <p className="text-[0.65rem] text-center text-[#8494A7] pt-1" style={dmSans}>
+              After you connect, unlock starts automatically.
+            </p>
           </div>
         ) : (
           <button
             type="button"
             disabled={busy}
-            onClick={() => elite.enter()}
+            onClick={() => {
+              autoEnterRef.current = true;
+              void elite.enter();
+            }}
             className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl font-bold text-[#0B1120] disabled:opacity-50"
             style={{ ...dmSans, background: "linear-gradient(135deg, #D4A843, #B8860B)" }}
           >
             {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
-            {busy ? "Verifying…" : elite.phase === "revoked" ? "Re-verify Access" : "Unlock Elite Vault"}
+            {busy
+              ? "Verifying…"
+              : elite.phase === "revoked"
+                ? "Re-verify Access"
+                : elite.phase === "error"
+                  ? "Retry Unlock"
+                  : "Unlock Elite Vault"}
           </button>
         )}
       </div>

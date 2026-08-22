@@ -3,6 +3,7 @@
  * Supports HashPack (WalletConnect) and Magic email wallets.
  */
 
+import { useEffect, useRef } from "react";
 import { Dumbbell, Loader2, Wallet, ShieldCheck, AlertCircle, Coins, Mail } from "lucide-react";
 import { useCaliSession } from "./cali-context";
 import { useWallet } from "../wallet-context";
@@ -15,6 +16,7 @@ export function CaliGate() {
   const cali = useCaliSession();
   const wallet = useWallet();
   const magicOn = isMagicEnabled();
+  const autoEnterRef = useRef(false);
 
   const busy =
     cali.phase === "checking" ||
@@ -22,6 +24,18 @@ export function CaliGate() {
     cali.phase === "challenging" ||
     cali.phase === "signing" ||
     cali.phase === "verifying";
+
+  // After Magic / HashPack connects on this screen, automatically run the gate.
+  useEffect(() => {
+    if (!wallet.connected || !wallet.accountId) {
+      autoEnterRef.current = false;
+      return;
+    }
+    if (busy || cali.phase === "eligible") return;
+    if (autoEnterRef.current) return;
+    autoEnterRef.current = true;
+    void cali.enter();
+  }, [wallet.connected, wallet.accountId, busy, cali.phase, cali.enter]);
 
   const signLabel =
     wallet.walletProvider === "magic"
@@ -47,7 +61,11 @@ export function CaliGate() {
 
   const connectLabel = wallet.connected
     ? `Connected: ${wallet.address ?? wallet.accountId}${
-        wallet.walletProvider === "magic" ? " (Magic)" : wallet.walletProvider === "hashpack" ? " (HashPack)" : ""
+        wallet.walletProvider === "magic"
+          ? " (Magic)"
+          : wallet.walletProvider === "hashpack"
+            ? " (HashPack)"
+            : ""
       }`
     : "Connect a wallet";
 
@@ -82,17 +100,14 @@ export function CaliGate() {
         </div>
 
         <p className="text-sm text-[#A3B0C2] mb-6 leading-relaxed" style={dmSans}>
-          Auto-generated calisthenics sessions, 30–45 min, levels 1–3. Track every set,
-          beat your PRs, build a streak — gated to verified HBAR holders.
-          Use HashPack or email (Magic) — both can sign the gate challenge on this site.
+          Auto-generated calisthenics sessions for verified HBAR holders. Connect with{" "}
+          <strong className="text-[#E8ECF0]">HashPack</strong> or{" "}
+          <strong className="text-[#E8ECF0]">email (Magic)</strong> — both sign the gate
+          challenge on this site. Keep at least 1 HBAR.
         </p>
 
         <div className="space-y-2.5 mb-6">
-          <ChecklistItem
-            ok={wallet.connected}
-            label={connectLabel}
-            icon={<Wallet className="w-4 h-4" />}
-          />
+          <ChecklistItem ok={wallet.connected} label={connectLabel} icon={<Wallet className="w-4 h-4" />} />
           <ChecklistItem
             ok={cali.phase === "eligible"}
             label="Hold at least 1 HBAR (verified live)"
@@ -150,20 +165,15 @@ export function CaliGate() {
               </button>
             )}
             <p className="text-[0.65rem] text-center text-[#8494A7] pt-1" style={dmSans}>
-              After connecting, tap Verify below.
+              After you connect, verification starts automatically.
             </p>
-            <button
-              type="button"
-              onClick={cali.enter}
-              className="w-full py-2.5 rounded-xl text-xs text-[#8494A7] border border-white/10 hover:bg-white/5"
-              style={dmSans}
-            >
-              Verify (after connect)
-            </button>
           </div>
         ) : (
           <button
-            onClick={cali.enter}
+            onClick={() => {
+              autoEnterRef.current = true;
+              void cali.enter();
+            }}
             disabled={busy}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
             style={{
@@ -173,7 +183,13 @@ export function CaliGate() {
             }}
           >
             {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-            {busy ? "Verifying…" : cali.phase === "revoked" ? "Re-verify Access" : "Verify & Enter Workouts"}
+            {busy
+              ? "Verifying…"
+              : cali.phase === "revoked"
+                ? "Re-verify Access"
+                : cali.phase === "error"
+                  ? "Retry Verify"
+                  : "Verify & Enter Workouts"}
           </button>
         )}
       </div>
@@ -197,10 +213,7 @@ function ChecklistItem({
       }`}
     >
       <span className={ok ? "text-emerald-400" : "text-[#8494A7]"}>{icon}</span>
-      <span
-        className={`text-xs ${ok ? "text-emerald-200" : "text-[#8494A7]"}`}
-        style={dmSans}
-      >
+      <span className={`text-xs ${ok ? "text-emerald-200" : "text-[#8494A7]"}`} style={dmSans}>
         {label}
       </span>
     </div>
