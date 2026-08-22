@@ -70,17 +70,25 @@ export function EliteSessionProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
+  // Cross-account wipe (same bug as cali-context): never keep elite session
+  // when a different Hedera account is connected, even if we never matched
+  // on this page load.
   useEffect(() => {
     const bound = sessionAccountIdRef.current;
     if (!bound) return;
-    if (wallet.connected && wallet.accountId === bound) { walletEverMatchedRef.current = true; return; }
-    if (!walletEverMatchedRef.current) return;
-    clearStored();
-    setSessionToken(null);
-    sessionAccountIdRef.current = null;
-    setSessionAccountId(null);
-    walletEverMatchedRef.current = false;
-    setPhase("idle");
+    if (wallet.connected && wallet.accountId === bound) {
+      walletEverMatchedRef.current = true;
+      return;
+    }
+    if (wallet.connected && wallet.accountId && wallet.accountId !== bound) {
+      clearStored();
+      setSessionToken(null);
+      sessionAccountIdRef.current = null;
+      setSessionAccountId(null);
+      walletEverMatchedRef.current = false;
+      setError(null);
+      setPhase("idle");
+    }
   }, [wallet.connected, wallet.accountId]);
 
   const enter = useCallback(async () => {

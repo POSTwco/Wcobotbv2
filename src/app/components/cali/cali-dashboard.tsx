@@ -58,7 +58,15 @@ export function CaliDashboard() {
 
   // ── Initial load ───────────────────────────────────────────────────────
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!cali.sessionToken) return;
+    if (!cali.sessionToken) {
+      setProfile(null);
+      setHistory([]);
+      setHistoryTotal(0);
+      setStatsSummary(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     if (!opts?.silent) setLoading(true);
     setError(null);
     const token = cali.sessionToken;

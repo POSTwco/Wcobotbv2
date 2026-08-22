@@ -169,11 +169,25 @@ export function CaliWorkout() {
   }, []);
 
   useEffect(() => {
-    if (!cali.sessionToken || !id) return;
+    if (!cali.sessionToken || !id) {
+      setPlan(null);
+      setActuals({});
+      setLoggedSets(new Set());
+      setCompletedBlocks(new Set());
+      setError(null);
+      setLoading(Boolean(id && !cali.sessionToken));
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
+      // Reset UI so a previous account's plan cannot flash while fetching
+      setPlan(null);
+      setActuals({});
+      setLoggedSets(new Set());
+      setCompletedBlocks(new Set());
+      lastSavedRef.current = {};
       const [workoutRes, streakRes] = await Promise.all([
         api.cali.getWorkout(cali.sessionToken!, id),
         api.cali.streak(cali.sessionToken!),
@@ -195,7 +209,11 @@ export function CaliWorkout() {
         }
       } else {
         cali.handleAuthError(workoutRes.code);
-        setError(workoutRes.error || "Workout not found.");
+        setPlan(null);
+        setError(
+          workoutRes.error ||
+            "Workout not found for this wallet. Generate a new session from the dashboard."
+        );
       }
       if (streakRes.success && streakRes.data) {
         setStreak(streakRes.data.streak.current);

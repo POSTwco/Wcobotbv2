@@ -52,8 +52,16 @@ export function CaliHistory() {
   );
 
   useEffect(() => {
+    if (!cali.sessionToken) {
+      setItems([]);
+      setCursor(null);
+      setTotal(0);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     fetchPage();
-  }, [fetchPage]);
+  }, [fetchPage, cali.sessionToken]);
 
   if (loading) {
     return <CaliLoader variant="list" />;

@@ -155,9 +155,14 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // ── Detect wallet disconnect or account swap ────────────────────────────
-  // Wait until wallet has connected at least once with a matching account
-  // before invalidating — prevents flash during WalletConnect auto-reconnect.
+  // ── Detect wallet account swap ──────────────────────────────────────────
+  // CRITICAL: if a *different* Hedera account connects, always wipe the cali
+  // session — even if we never "matched" on this page load. The old
+  // `walletEverMatched` gate skipped invalidation until a match happened, so
+  // restoring account A's localStorage session then connecting account B
+  // (same IP / cleared cache) kept serving A's history, PRs, and workouts.
+  // Brief WalletConnect disconnect of the *same* account still does not wipe
+  // (allows auto-reconnect without re-signing the gate).
   useEffect(() => {
     const bound = sessionAccountIdRef.current;
     if (!bound) return;
@@ -167,15 +172,16 @@ export function CaliSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (!walletEverMatchedRef.current) return;
-
-    clearStored();
-    setSessionToken(null);
-    setEligibility(null);
-    sessionAccountIdRef.current = null;
-    setSessionAccountId(null);
-    walletEverMatchedRef.current = false;
-    setPhase("idle");
+    if (wallet.connected && wallet.accountId && wallet.accountId !== bound) {
+      clearStored();
+      setSessionToken(null);
+      setEligibility(null);
+      sessionAccountIdRef.current = null;
+      setSessionAccountId(null);
+      walletEverMatchedRef.current = false;
+      setError(null);
+      setPhase("idle");
+    }
   }, [wallet.connected, wallet.accountId]);
 
   // ── Enter flow ──────────────────────────────────────────────────────────

@@ -39,17 +39,29 @@ export function CaliPRs() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!cali.sessionToken) return;
+    if (!cali.sessionToken) {
+      setPrs([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     const token = cali.sessionToken;
+    let cancelled = false;
+    setLoading(true);
     (async () => {
       const res = await api.cali.prs(token);
+      if (cancelled) return;
       if (res.success && res.data) setPrs(res.data.prs);
       else {
         cali.handleAuthError(res.code);
         setError(res.error || "Couldn't load PRs.");
+        setPrs([]);
       }
       setLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [cali.sessionToken, cali.handleAuthError]);
 
   const grouped = useMemo(() => {
