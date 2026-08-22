@@ -212,6 +212,14 @@ export const WC_APP_METADATA = {
   ],
 };
 
+/**
+ * WalletConnect Cloud Explorer listing ID for HashPack.
+ * Used to allowlist HashPack in the WC modal (hide MetaMask / other unrelated wallets).
+ * Source: https://explorer-api.walletconnect.com/v3/wallets?search=HashPack
+ */
+export const HASHPACK_WC_EXPLORER_ID =
+  "a29498d225fa4b13468ff4d6cf4ae0ea4adcbd95f07ce8a843a1dee10b632f3f";
+
 // ---------------------------------------------------------------------------
 // Mirror Node API Paths (appended to mirrorNodeUrl)
 // ---------------------------------------------------------------------------

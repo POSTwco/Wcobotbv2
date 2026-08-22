@@ -56,6 +56,7 @@ import {
   HEDERA_REQUIRED_METHODS,
   HEDERA_REQUIRED_EVENTS,
   DEFAULT_NETWORK,
+  HASHPACK_WC_EXPLORER_ID,
   getNetworkConfig,
   type HederaNetwork,
 } from "./hedera-config";
@@ -311,6 +312,9 @@ function getWCModal(): WalletConnectModal {
     // during its constructor/preload phase, so we must clear stale data first.
     cleanupStaleRecentWallet();
 
+    // HashPack-only UI: recommend HashPack and exclude every other explorer listing.
+    // QR pairing still works if another Hedera WC wallet scans the URI (HIP-820
+    // methods still apply). We intentionally do not deep-link custom schemes.
     wcModal = new WalletConnectModal({
       projectId: WC_PROJECT_ID,
       chains: [`hedera:${DEFAULT_NETWORK}`],
@@ -319,8 +323,10 @@ function getWCModal(): WalletConnectModal {
         "--wcm-z-index": "99999",
         "--wcm-accent-color": "#D4A843",
       },
+      explorerRecommendedWalletIds: [HASHPACK_WC_EXPLORER_ID],
+      explorerExcludedWalletIds: "ALL",
     });
-    console.log("[BOTB WC] Official WalletConnect modal initialized");
+    console.log("[BOTB WC] Official WalletConnect modal initialized (HashPack allowlist)");
   }
   return wcModal;
 }
