@@ -229,6 +229,17 @@ function getCollectionMeta(tokenId: string): CollectionMeta {
   if (TOKEN_IDS.META_NFT && tokenId === TOKEN_IDS.META_NFT) {
     return { name: "Meta", color: "#10b981", icon: Layers, multiplier: "1x" };
   }
+  if (
+    TOKEN_IDS.EARLY_SUPPORTER_NFT &&
+    tokenId === TOKEN_IDS.EARLY_SUPPORTER_NFT
+  ) {
+    return {
+      name: "Early Supporter",
+      color: "#D4A843",
+      icon: Sparkles,
+      multiplier: "",
+    };
+  }
   return { name: "NFT", color: "#4274B9", icon: Layers, multiplier: "" };
 }
 
@@ -424,6 +435,7 @@ export function NFTCollectionGallery({
     wcoNfts.push(...nftCategories.governor);
     wcoNfts.push(...nftCategories.sigma);
     wcoNfts.push(...nftCategories.meta);
+    wcoNfts.push(...(nftCategories.earlySupporter ?? []));
   }
 
   const wcoCount = wcoNfts.length;

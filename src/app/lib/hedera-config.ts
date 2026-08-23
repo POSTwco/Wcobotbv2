@@ -152,7 +152,20 @@ export const TOKEN_IDS = {
    * Proof-of-authority for proposal creation (not the 100 Governors).
    */
   ADMIN_NFT: envTokenId("VITE_ADMIN_NFT_TOKEN_ID", null),
+  /**
+   * WCO Early Supporter free claim NFT — max supply 5,000, one per wallet.
+   * Null until mainnet token is created. Set VITE_EARLY_SUPPORTER_NFT_TOKEN_ID.
+   */
+  EARLY_SUPPORTER_NFT: envTokenId("VITE_EARLY_SUPPORTER_NFT_TOKEN_ID", null),
 } as const;
+
+/**
+ * Treasury / mint-source account for Early Supporter NFTs (public ID only).
+ * Checksum form 0.0.10821146-eiydh — APIs use the bare account ID.
+ */
+export const EARLY_SUPPORTER_TREASURY_ACCOUNT_ID =
+  envTokenId("VITE_EARLY_SUPPORTER_TREASURY_ACCOUNT_ID", "0.0.10821146") ??
+  "0.0.10821146";
 
 /** USDC on Hedera uses 6 decimals (smallest unit → display). */
 export const USDC_DECIMALS = 6;

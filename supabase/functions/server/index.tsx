@@ -168,6 +168,7 @@ import { mountCaliRoutes } from "./cali.tsx";
 import { mountEliteRoutes } from "./elite.tsx";
 import { mountContestRoutes } from "./contest.tsx";
 import { mountMagicRoutes } from "./magic-accounts.tsx";
+import { mountEarlySupporterRoutes } from "./early-supporter.tsx";
 
 const app = new Hono();
 
@@ -6256,6 +6257,8 @@ mountMagicRoutes(app, PREFIX);
 mountCaliRoutes(app, PREFIX);
 mountEliteRoutes(app, PREFIX);
 mountContestRoutes(app, PREFIX);
+// Early Supporter claim — defaults DISABLED (EARLY_SUPPORTER_ENABLED=false)
+mountEarlySupporterRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);

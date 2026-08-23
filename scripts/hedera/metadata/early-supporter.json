@@ -1,0 +1,16 @@
+{
+  "name": "WCO Early Supporter",
+  "description": "Commemorative Early Supporter NFT for the World Calisthenics Organization / Battle of the Bars. One free claim per Hedera account. Max supply 5,000.",
+  "image": "REPLACE_WITH_PUBLIC_THUMBNAIL_HTTPS_URL",
+  "animation_url": "REPLACE_WITH_PUBLIC_MP4_HTTPS_URL",
+  "external_url": "https://www.wcorg.io/wallet/assets",
+  "attributes": [
+    { "trait_type": "Collection", "value": "Early Supporter" },
+    { "trait_type": "Organization", "value": "WCO" },
+    { "trait_type": "Claim", "value": "Free — one per wallet" }
+  ],
+  "properties": {
+    "category": "image",
+    "creators": [{ "name": "World Calisthenics Organization" }]
+  }
+}

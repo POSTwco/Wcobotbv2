@@ -197,7 +197,13 @@ const ZERO_BALANCES: WalletBalances = {
   hasSigmaNFT: false,
   tokenBalances: [],
   nfts: [],
-  categorized: { governor: [], sigma: [], meta: [], other: [] },
+  categorized: {
+    governor: [],
+    sigma: [],
+    meta: [],
+    earlySupporter: [],
+    other: [],
+  },
 };
 
 // ---------------------------------------------------------------------------

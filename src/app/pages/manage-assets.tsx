@@ -22,8 +22,16 @@ import {
 import { toast } from "sonner";
 import { useWallet } from "../components/wallet-context";
 import { MagicKeyRevealDisclaimer } from "../components/magic-key-reveal-disclaimer";
+import { EarlySupporterClaimCard } from "../components/early-supporter-claim-card";
 import { TOKEN_IDS, getNetworkConfig } from "../lib/hedera-config";
+import {
+  EARLY_SUPPORTER_LOCAL_MOCK,
+  EARLY_SUPPORTER_UI_ENABLED,
+} from "../lib/early-supporter";
 import { isMagicEnabled } from "../lib/wallet-types";
+
+/** Synthetic account for DEV local-mock claim QA (no real Hedera account). */
+const LOCAL_MOCK_PREVIEW_ACCOUNT = "0.0.90000001";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -52,6 +60,7 @@ export function ManageAssetsPage() {
     botbBalance,
     usdcBalance,
     walletProvider,
+    walletSessionToken,
     isLoadingBalances,
     refreshBalances,
     connect,
@@ -63,6 +72,7 @@ export function ManageAssetsPage() {
   const [copied, setCopied] = useState(false);
   const [revealOpen, setRevealOpen] = useState(false);
   const [showImportGuide, setShowImportGuide] = useState(false);
+  const [localMockPreview, setLocalMockPreview] = useState(false);
 
   // Deep-link: /wallet/assets#export opens reveal flow for Magic users
   useEffect(() => {
@@ -88,7 +98,7 @@ export function ManageAssetsPage() {
     }
   };
 
-  if (!connected || !accountId) {
+  if ((!connected || !accountId) && !(EARLY_SUPPORTER_LOCAL_MOCK && localMockPreview)) {
     return (
       <div className="min-h-[70vh] px-4 py-12 max-w-lg mx-auto" style={dmSans}>
         <Link
@@ -131,14 +141,28 @@ export function ManageAssetsPage() {
                 Sign in with email
               </button>
             )}
+            {EARLY_SUPPORTER_UI_ENABLED && EARLY_SUPPORTER_LOCAL_MOCK && (
+              <button
+                type="button"
+                onClick={() => setLocalMockPreview(true)}
+                className="w-full py-3 rounded-xl text-sm text-[#F0D078] border border-[#D4A843]/30 hover:bg-[#D4A843]/10"
+              >
+                Local mock: preview Early Supporter claim
+              </button>
+            )}
           </div>
         </div>
       </div>
     );
   }
 
-  const providerLabel =
-    walletProvider === "magic"
+  const effectiveAccountId =
+    accountId || (localMockPreview ? LOCAL_MOCK_PREVIEW_ACCOUNT : "");
+  const isLocalPreview = localMockPreview && !connected;
+
+  const providerLabel = isLocalPreview
+    ? "Local mock preview"
+    : walletProvider === "magic"
       ? "Magic email"
       : walletProvider === "hashpack"
         ? "HashPack"
@@ -166,17 +190,30 @@ export function ManageAssetsPage() {
             Manage Assets
           </h1>
           <p className="text-sm text-[#8494A7] mt-1">
-            Whitelisted balances only — HBAR, WCO, USDC.
+            {isLocalPreview
+              ? "Local mock preview — claim uses localStorage only."
+              : "Whitelisted balances only — HBAR, WCO, USDC."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={refreshBalances}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-[#8494A7] border border-[#4274B9]/20 hover:border-[#4274B9]/40 hover:text-[#E8ECF0]"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBalances ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        {!isLocalPreview && (
+          <button
+            type="button"
+            onClick={refreshBalances}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-[#8494A7] border border-[#4274B9]/20 hover:border-[#4274B9]/40 hover:text-[#E8ECF0]"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBalances ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        )}
+        {isLocalPreview && (
+          <button
+            type="button"
+            onClick={() => setLocalMockPreview(false)}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-[#8494A7] border border-[#4274B9]/20 hover:text-[#E8ECF0]"
+          >
+            Exit preview
+          </button>
+        )}
       </div>
 
       {/* Account card */}
@@ -194,57 +231,72 @@ export function ManageAssetsPage() {
             className="text-sm sm:text-base text-[#E8ECF0] break-all"
             style={{ fontFamily: "Orbitron, monospace" }}
           >
-            {address}
+            {isLocalPreview ? effectiveAccountId : address}
           </code>
-          <button
-            type="button"
-            onClick={copyAccount}
-            className="p-1.5 rounded-lg text-[#8494A7] hover:text-[#E8ECF0] hover:bg-white/5"
-            title="Copy account ID"
-          >
-            {copied ? <Check className="w-4 h-4 text-[#10b981]" /> : <Copy className="w-4 h-4" />}
-          </button>
-          <a
-            href={`${explorer}/account/${accountId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 rounded-lg text-[#8494A7] hover:text-[#E8ECF0] hover:bg-white/5"
-            title="View on HashScan"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {!isLocalPreview && (
+            <>
+              <button
+                type="button"
+                onClick={copyAccount}
+                className="p-1.5 rounded-lg text-[#8494A7] hover:text-[#E8ECF0] hover:bg-white/5"
+                title="Copy account ID"
+              >
+                {copied ? <Check className="w-4 h-4 text-[#10b981]" /> : <Copy className="w-4 h-4" />}
+              </button>
+              <a
+                href={`${explorer}/account/${accountId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-lg text-[#8494A7] hover:text-[#E8ECF0] hover:bg-white/5"
+                title="View on HashScan"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Balances */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <AssetCard
-          symbol="HBAR"
-          subtitle="Native"
-          loading={isLoadingBalances}
-          value={formatHbar(balance)}
+      {/* Balances — skip live mirror reads in local mock preview */}
+      {!isLocalPreview && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <AssetCard
+            symbol="HBAR"
+            subtitle="Native"
+            loading={isLoadingBalances}
+            value={formatHbar(balance)}
+          />
+          <AssetCard
+            symbol="WCO"
+            subtitle={wcoConfigured ? TOKEN_IDS.BOTB! : "Token ID pending"}
+            loading={isLoadingBalances}
+            value={
+              !wcoConfigured
+                ? "—"
+                : botbBalance > 0
+                  ? botbBalance.toLocaleString()
+                  : "0"
+            }
+            muted={!wcoConfigured}
+            hint={!wcoConfigured ? "Launching Summer 2026" : undefined}
+          />
+          <AssetCard
+            symbol="USDC"
+            subtitle={TOKEN_IDS.USDC}
+            loading={isLoadingBalances}
+            value={formatUsdc(usdcBalance)}
+          />
+        </div>
+      )}
+
+      {/* Early Supporter collectibles — gated by VITE_EARLY_SUPPORTER_ENABLED */}
+      {EARLY_SUPPORTER_UI_ENABLED && effectiveAccountId && (
+        <EarlySupporterClaimCard
+          accountId={effectiveAccountId}
+          walletSessionToken={isLocalPreview ? null : walletSessionToken}
+          walletProvider={isLocalPreview ? "local-mock" : walletProvider}
         />
-        <AssetCard
-          symbol="WCO"
-          subtitle={wcoConfigured ? TOKEN_IDS.BOTB! : "Token ID pending"}
-          loading={isLoadingBalances}
-          value={
-            !wcoConfigured
-              ? "—"
-              : botbBalance > 0
-                ? botbBalance.toLocaleString()
-                : "0"
-          }
-          muted={!wcoConfigured}
-          hint={!wcoConfigured ? "Launching Summer 2026" : undefined}
-        />
-        <AssetCard
-          symbol="USDC"
-          subtitle={TOKEN_IDS.USDC}
-          loading={isLoadingBalances}
-          value={formatUsdc(usdcBalance)}
-        />
-      </div>
+      )}
 
       {/* Signing / export guidance */}
       {walletProvider === "magic" && (

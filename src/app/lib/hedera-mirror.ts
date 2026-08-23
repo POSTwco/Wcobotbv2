@@ -114,6 +114,7 @@ export interface CategorizedNFTs {
   governor: MirrorNFT[];
   sigma: MirrorNFT[];
   meta: MirrorNFT[];
+  earlySupporter: MirrorNFT[];
   other: MirrorNFT[];
 }
 
@@ -133,7 +134,13 @@ export function computeVotingPower(hasGovernor: boolean, hasSigma: boolean): num
 
 /** Categorize NFTs by known BOTB token IDs */
 export function categorizeNFTs(nfts: MirrorNFT[]): CategorizedNFTs {
-  const result: CategorizedNFTs = { governor: [], sigma: [], meta: [], other: [] };
+  const result: CategorizedNFTs = {
+    governor: [],
+    sigma: [],
+    meta: [],
+    earlySupporter: [],
+    other: [],
+  };
   for (const nft of nfts) {
     if (nft.token_id === TOKEN_IDS.GOVERNOR_NFT) {
       result.governor.push(nft);
@@ -141,6 +148,11 @@ export function categorizeNFTs(nfts: MirrorNFT[]): CategorizedNFTs {
       result.sigma.push(nft);
     } else if (TOKEN_IDS.META_NFT && nft.token_id === TOKEN_IDS.META_NFT) {
       result.meta.push(nft);
+    } else if (
+      TOKEN_IDS.EARLY_SUPPORTER_NFT &&
+      nft.token_id === TOKEN_IDS.EARLY_SUPPORTER_NFT
+    ) {
+      result.earlySupporter.push(nft);
     } else {
       result.other.push(nft);
     }

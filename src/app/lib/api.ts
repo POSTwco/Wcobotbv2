@@ -1293,6 +1293,28 @@ export const api = {
         walletSessionToken,
       }),
   },
+
+  // ---------------------------------------------------------------------------
+  // Early Supporter NFT claim (Phase 1 — mock by default; mint flag off)
+  // ---------------------------------------------------------------------------
+  earlySupporter: {
+    status: () =>
+      request<import("./early-supporter").EarlySupporterStatus>(
+        "/nft/early-supporter/status",
+      ),
+
+    eligibility: (walletSessionToken: string) =>
+      request<import("./early-supporter").EarlySupporterEligibility>(
+        "/nft/early-supporter/eligibility",
+        { walletSessionToken },
+      ),
+
+    claim: (walletSessionToken: string) =>
+      request<import("./early-supporter").EarlySupporterClaimResult>(
+        "/nft/early-supporter/claim",
+        { method: "POST", body: {}, walletSessionToken },
+      ),
+  },
 };
 
 // Runtime bridge: ensure cali admin methods are directly on api.admin
