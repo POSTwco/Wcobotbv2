@@ -34,12 +34,15 @@ TREASURY_PRIVATE_KEY=<your key — never commit>
 
 Confirm account has enough **HBAR** for TokenCreate + ~500 mint txs (chunked).
 
-### A2. Public media (required before mint)
+### A2. Public media — DONE
 
-Signed Supabase URLs expire. Upload thumbnail + mp4 to a **public** Storage path (same pattern as Governor GLB), then put permanent HTTPS URLs into:
+| Asset | Public URL |
+|-------|------------|
+| Thumbnail | `https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/NFT's/WCO%20EARLY%20SUPPORTER%20thumbnail.jpg` |
+| Animation | `https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/NFT's/WCO%20EARLY%20SUPPORTER.mp4` |
+| Metadata JSON | `https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/NFT's/early-supporter.json` |
 
-- `scripts/hedera/metadata/early-supporter.json`
-- Upload that JSON publicly → `EARLY_SUPPORTER_METADATA_URI=https://…/early-supporter.json`
+Treasury `0.0.10821146` Mirror balance checked ≈ **185.7 HBAR** (enough for create + batch mint).
 
 ---
 

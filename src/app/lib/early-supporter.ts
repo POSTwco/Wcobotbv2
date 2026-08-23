@@ -42,15 +42,16 @@ export const EARLY_SUPPORTER_TREASURY = EARLY_SUPPORTER_TREASURY_ACCOUNT_ID;
 /** Display name */
 export const EARLY_SUPPORTER_NAME = "WCO Early Supporter";
 
-/**
- * Phase 1 media — Supabase Storage signed URLs (long-lived tokens).
- * Before mainnet metadata freeze, migrate to public bucket paths.
- */
+/** Public Supabase Storage media (permanent HTTPS — use for mint metadata). */
 export const EARLY_SUPPORTER_THUMBNAIL_URL =
-  "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/sign/NFT's/WCO%20EARLY%20SUPPORTER%20thumbnail.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV84MDljNjJiNS05Y2Y0LTRiNjQtODAyMi1kMDY5YzYyYjFlMjQiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJORlQncy9XQ08gRUFSTFkgU1VQUE9SVEVSIHRodW1ibmFpbC5qcGciLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzg3NTA4NDM4LCJleHAiOjE4ODIxMTY0Mzh9.A9nXHx2gLu0z-bai57krxXIZ9DCtU09qIw1HWTnMvaQ";
+  "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/NFT's/WCO%20EARLY%20SUPPORTER%20thumbnail.jpg";
 
 export const EARLY_SUPPORTER_ANIMATION_URL =
-  "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/sign/NFT's/WCO%20EARLY%20SUPPORTER.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV84MDljNjJiNS05Y2Y0LTRiNjQtODAyMi1kMDY5YzYyYjFlMjQiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJORlQncy9XQ08gRUFSTFkgU1VQUE9SVEVSLm1wNCIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3ODc1MDg0NTgsImV4cCI6MTg4MjExNjQ1OH0.WpNLgENBIJU-yDdtDJibnWYflqHKXaTOko5h0qPk1Yo";
+  "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/NFT's/WCO%20EARLY%20SUPPORTER.mp4";
+
+/** Public metadata JSON (on-chain URI target after mint). */
+export const EARLY_SUPPORTER_METADATA_URI =
+  "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/NFT's/early-supporter.json";
 
 // ---------------------------------------------------------------------------
 // Types
