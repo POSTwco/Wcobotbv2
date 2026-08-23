@@ -6,6 +6,7 @@ import { useWallet } from "../components/wallet-context";
 import { RateAthletesSection } from "../components/rate-athletes";
 import { SponsorShowcase, TitleSponsorBanner } from "../components/sponsor-showcase";
 import { ContestBanner } from "../components/contest/contest-banner";
+import { EarlySupporterHomeBanner } from "../components/early-supporter-home-banner";
 import { SiteMapExploratorium } from "../components/site-map-exploratorium";
 import { useConfig } from "../lib/hooks";
 import { api } from "../lib/api";
@@ -171,6 +172,8 @@ export function HomePage() {
 
               {/* Connect-to-Enter contest banner */}
               <ContestBanner />
+              {/* Separate Early Supporter NFT claim strip */}
+              <EarlySupporterHomeBanner />
             </motion.div>
 
             {/* Video Player with Glowing Frame */}
