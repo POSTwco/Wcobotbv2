@@ -154,9 +154,12 @@ export const TOKEN_IDS = {
   ADMIN_NFT: envTokenId("VITE_ADMIN_NFT_TOKEN_ID", null),
   /**
    * WCO Early Supporter free claim NFT — max supply 5,000, one per wallet.
-   * Null until mainnet token is created. Set VITE_EARLY_SUPPORTER_NFT_TOKEN_ID.
+   * Mainnet token 0.0.10821256 (treasury 0.0.10821146). Override via env.
    */
-  EARLY_SUPPORTER_NFT: envTokenId("VITE_EARLY_SUPPORTER_NFT_TOKEN_ID", null),
+  EARLY_SUPPORTER_NFT: envTokenId(
+    "VITE_EARLY_SUPPORTER_NFT_TOKEN_ID",
+    "0.0.10821256",
+  ),
 } as const;
 
 /**

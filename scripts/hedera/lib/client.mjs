@@ -30,6 +30,38 @@ export function networkFromEnv(env) {
 }
 
 /**
+ * Parse Hedera private keys without logging secret material.
+ * Tries ECDSA first (common for Magic / EVM-style accounts), then ED25519 / DER.
+ * @param {string} keyStr
+ * @returns {import("@hashgraph/sdk").PrivateKey}
+ */
+export function parsePrivateKeyFlexible(keyStr) {
+  const cleaned = keyStr.trim();
+  const no0x = cleaned.replace(/^0x/i, "");
+  const attempts = [
+    () => PrivateKey.fromStringECDSA(no0x),
+    () => PrivateKey.fromStringECDSA(cleaned),
+    () => PrivateKey.fromStringED25519(no0x),
+    () => PrivateKey.fromStringED25519(cleaned),
+    () => PrivateKey.fromStringDer(no0x),
+    () => PrivateKey.fromStringDer(cleaned),
+    () => PrivateKey.fromString(no0x),
+    () => PrivateKey.fromString(cleaned),
+  ];
+  let lastErr;
+  for (const attempt of attempts) {
+    try {
+      return attempt();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(
+    `Could not parse private key (${String(lastErr?.message || lastErr).slice(0, 80)}). Use ECDSA/ED25519 hex or DER for this account.`,
+  );
+}
+
+/**
  * @param {Record<string, string>} env
  * @param {"treasury"|"operator"} role
  */
@@ -52,7 +84,7 @@ export function buildClient(env, role = "operator") {
   }
 
   const operatorId = AccountId.fromString(accountId);
-  const operatorKey = PrivateKey.fromString(privateKeyStr);
+  const operatorKey = parsePrivateKeyFlexible(privateKeyStr);
   client.setOperator(operatorId, operatorKey);
 
   return {

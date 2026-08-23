@@ -138,7 +138,15 @@ export function EarlySupporterClaimCard({
       }
       const res = await api.earlySupporter.claim(walletSessionToken);
       if (!res.success || !res.data) {
-        toast.error(res.error || "Claim failed");
+        const code = (res as { code?: string }).code;
+        if (code === "ASSOCIATION_REQUIRED") {
+          toast.error(
+            res.error ||
+              "Associate the Early Supporter token in HashPack, then try again.",
+          );
+        } else {
+          toast.error(res.error || "Claim failed");
+        }
         await load();
         return;
       }

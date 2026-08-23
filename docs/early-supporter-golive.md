@@ -78,13 +78,50 @@ Treasury `0.0.10821146` Mirror balance checked ≈ **185.7 HBAR** (enough for cr
 
 ---
 
-## E. What is NOT done yet
+## E. Progress
 
-- [ ] Public metadata URLs
-- [ ] TokenCreate on mainnet
-- [ ] Mint 5,000 into `0.0.10821146`
-- [ ] Edge auto-transfer implementation
-- [ ] Staging flag enable
-- [ ] Production flag enable
+- [x] Public metadata URLs
+- [x] TokenCreate on mainnet → **`0.0.10821256`**
+- [x] Mint **10** test serials into `0.0.10821146` (pause before full 5,000)
+- [x] Edge auto-transfer implementation (behind flags)
+- [ ] Staging flag enable + treasury key secret
+- [ ] Production / www enable
+- [ ] Mint remaining 4,990
 
 Phase 1 mock on localhost does **not** move real NFTs.
+
+---
+
+## F. Staging enable checklist (you + bots)
+
+### F1. Supabase Edge secrets (Dashboard → Project WCO → Edge Functions → Secrets)
+
+| Secret name | Value |
+|-------------|--------|
+| `EARLY_SUPPORTER_ENABLED` | `true` |
+| `EARLY_SUPPORTER_MINT_ENABLED` | `true` |
+| `EARLY_SUPPORTER_NFT_TOKEN_ID` | `0.0.10821256` |
+| `EARLY_SUPPORTER_TREASURY_ACCOUNT_ID` | `0.0.10821146` |
+| `EARLY_SUPPORTER_TREASURY_PRIVATE_KEY` | *(same key as local `.env.hedera` — paste only in Dashboard)* |
+| `HEDERA_NETWORK` | `mainnet` |
+| `EARLY_SUPPORTER_REQUIRE_ACTIVITY` | `false` |
+| `EARLY_SUPPORTER_DEBUG` | `true` (staging only) |
+
+Then **redeploy** Edge function `make-server-57fcb0ee`.
+
+### F2. Frontend (staging / WCO-Resolver env — not www yet)
+
+```
+VITE_EARLY_SUPPORTER_ENABLED=true
+VITE_EARLY_SUPPORTER_LOCAL_MOCK=false
+VITE_EARLY_SUPPORTER_NFT_TOKEN_ID=0.0.10821256
+VITE_EARLY_SUPPORTER_TREASURY_ACCOUNT_ID=0.0.10821146
+```
+
+### F3. Claimant wallet
+
+User may need to **associate** token `0.0.10821256` in HashPack before the first claim (auto-associations off on many accounts). Error code: `ASSOCIATION_REQUIRED`.
+
+### F4. HashPack media
+
+On-chain metadata URI + public image/mp4 return HTTP 200 from our checks. If HashPack still shows blank, wait for wallet CDN index, or remint later with a path that avoids `NFT's` apostrophe (`NFTs/early-supporter.json` also uploaded).
