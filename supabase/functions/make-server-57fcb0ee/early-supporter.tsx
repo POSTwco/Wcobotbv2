@@ -1,20 +1,24 @@
 /**
- * Early Supporter NFT Claim — Phase 1 (mock mint, production-safe defaults)
- * ========================================================================
+ * Early Supporter NFT Claim — production hardening
+ * ================================================
  * Routes:
  *   GET  /nft/early-supporter/status
  *   GET  /nft/early-supporter/eligibility   (X-Wallet-Session)
  *   POST /nft/early-supporter/claim         (X-Wallet-Session)
- *   POST /admin/nft/early-supporter/reset-claim  (admin + EARLY_SUPPORTER_DEBUG)
- *   GET  /admin/nft/early-supporter/inventory    (admin + EARLY_SUPPORTER_DEBUG)
+ *   POST /admin/nft/early-supporter/reset-claim  (admin + DEBUG; blocked when HTS live)
+ *   GET  /admin/nft/early-supporter/inventory    (admin + DEBUG)
  *
- * Flags (Edge secrets — all default OFF / safe):
- *   EARLY_SUPPORTER_ENABLED=false       — allow claim writes
- *   EARLY_SUPPORTER_MINT_ENABLED=false  — real HTS (stubbed; never on in Phase 1)
- *   EARLY_SUPPORTER_REQUIRE_ACTIVITY=false
- *   EARLY_SUPPORTER_DEBUG=false
+ * Flags (Edge secrets):
+ *   EARLY_SUPPORTER_ENABLED            — master gate (default false)
+ *   EARLY_SUPPORTER_MINT_ENABLED       — real treasury→wallet transfer (default false)
+ *   EARLY_SUPPORTER_ALLOW_MOCK         — KV-only mock claims (default false; keep off in prod)
+ *   EARLY_SUPPORTER_ALLOW_KV_RESET     — allow admin KV reset while HTS live (default false)
+ *   EARLY_SUPPORTER_REQUIRE_ACTIVITY   — optional activity gate (default false)
+ *   EARLY_SUPPORTER_DEBUG              — admin inventory/reset (default false; off in prod)
  *
- * NO operator private keys in this module.
+ * Secrets (never VITE_ / never commit):
+ *   EARLY_SUPPORTER_TREASURY_PRIVATE_KEY  — preferred
+ *   HEDERA_OPERATOR_KEY                   — fallback only if pubkey matches treasury
  */
 
 import type { Context } from "npm:hono";
@@ -73,6 +77,15 @@ function mintEnabled(): boolean {
   return envFlag("EARLY_SUPPORTER_MINT_ENABLED", false);
 }
 
+/** Explicit opt-in — mock claims must never run on live mainnet by accident. */
+function allowMockClaims(): boolean {
+  return envFlag("EARLY_SUPPORTER_ALLOW_MOCK", false);
+}
+
+function allowKvResetWhileLive(): boolean {
+  return envFlag("EARLY_SUPPORTER_ALLOW_KV_RESET", false);
+}
+
 function requireActivity(): boolean {
   return envFlag("EARLY_SUPPORTER_REQUIRE_ACTIVITY", false);
 }
@@ -94,11 +107,12 @@ function tokenIdEnv(): string | null {
   return DEFAULT_TOKEN_ID;
 }
 
-function treasuryKeyEnv(): string {
-  return (
-    (Deno.env.get("EARLY_SUPPORTER_TREASURY_PRIVATE_KEY") || "").trim() ||
-    (Deno.env.get("HEDERA_OPERATOR_KEY") || "").trim()
-  );
+function treasuryKeyEnv(): { key: string; source: "dedicated" | "operator_fallback" } | null {
+  const dedicated = (Deno.env.get("EARLY_SUPPORTER_TREASURY_PRIVATE_KEY") || "").trim();
+  if (dedicated) return { key: dedicated, source: "dedicated" };
+  const fallback = (Deno.env.get("HEDERA_OPERATOR_KEY") || "").trim();
+  if (fallback) return { key: fallback, source: "operator_fallback" };
+  return null;
 }
 
 function hederaNetwork(): "mainnet" | "testnet" {
@@ -179,9 +193,40 @@ async function mirrorTokenSupply(tokenId: string): Promise<number> {
   }
 }
 
+/** True if account already holds ≥1 Early Supporter NFT on-chain. */
+async function accountOwnsEarlySupporter(accountId: string): Promise<boolean> {
+  const tokenId = tokenIdEnv();
+  if (!tokenId) return false;
+  try {
+    const res = await fetch(
+      `${mirrorBase()}/api/v1/accounts/${accountId}/nfts?token.id=${tokenId}&limit=1`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Array.isArray(data?.nfts) && data.nfts.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function mirrorAccountKeyHex(accountId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${mirrorBase()}/api/v1/accounts/${accountId}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const k = data?.key?.key;
+    return typeof k === "string" ? k.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Transfer one Early Supporter serial from treasury → claimant.
- * Requires EARLY_SUPPORTER_TREASURY_PRIVATE_KEY (or HEDERA_OPERATOR_KEY).
+ * Requires EARLY_SUPPORTER_TREASURY_PRIVATE_KEY (preferred).
  * Claimant must be associated with the token (or have auto-associations).
  */
 async function transferEarlySupporterNft(
@@ -191,11 +236,15 @@ async function transferEarlySupporterNft(
   const tokenId = tokenIdEnv();
   if (!tokenId) throw new Error("EARLY_SUPPORTER_NFT_TOKEN_ID not configured");
   const treasury = treasuryId();
-  const keyStr = treasuryKeyEnv();
-  if (!keyStr) {
+  const keyInfo = treasuryKeyEnv();
+  if (!keyInfo) {
     throw new Error(
-      "Missing EARLY_SUPPORTER_TREASURY_PRIVATE_KEY (or HEDERA_OPERATOR_KEY) Edge secret",
+      "Missing EARLY_SUPPORTER_TREASURY_PRIVATE_KEY Edge secret",
     );
+  }
+
+  if (!isValidHederaAccountId(toAccountId) || toAccountId === treasury) {
+    throw new Error("Invalid claim recipient");
   }
 
   const owner = await mirrorNftAccount(tokenId, serial);
@@ -218,7 +267,30 @@ async function transferEarlySupporterNft(
   const network = hederaNetwork();
   const client = network === "testnet" ? Client.forTestnet() : Client.forMainnet();
   const treasuryIdObj = AccountId.fromString(treasury);
-  const treasuryKey = parseTreasuryPrivateKey(PrivateKey, keyStr);
+  const treasuryKey = parseTreasuryPrivateKey(PrivateKey, keyInfo.key);
+
+  // Refuse wrong key (e.g. Magic operator key that is not the NFT treasury)
+  const mirrorPub = await mirrorAccountKeyHex(treasury);
+  if (mirrorPub) {
+    const derived = treasuryKey.publicKey.toStringRaw().toLowerCase();
+    const der = treasuryKey.publicKey.toStringDer().toLowerCase();
+    const matches =
+      derived === mirrorPub ||
+      der.includes(mirrorPub) ||
+      treasuryKey.publicKey.toString().toLowerCase().includes(mirrorPub);
+    if (!matches) {
+      console.log(
+        `[EARLY-SUPPORTER] REFUSED transfer: treasury key pubkey does not match Mirror for ${treasury} (source=${keyInfo.source})`,
+      );
+      throw new Error("Treasury signing key mismatch — transfer aborted");
+    }
+  }
+  if (keyInfo.source === "operator_fallback") {
+    console.log(
+      "[EARLY-SUPPORTER] Using HEDERA_OPERATOR_KEY fallback (pubkey matched treasury)",
+    );
+  }
+
   client.setOperator(treasuryIdObj, treasuryKey);
 
   try {
@@ -240,6 +312,19 @@ async function transferEarlySupporterNft(
       throw new Error(`Transfer failed: ${statusName}`);
     }
     const txId = submitted.transactionId?.toString?.() || "";
+
+    // Confirm recipient holds the serial (best-effort; Mirror can lag briefly)
+    for (let i = 0; i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 400 + i * 200));
+      const newOwner = await mirrorNftAccount(tokenId, serial);
+      if (newOwner === toAccountId) break;
+      if (i === 3 && newOwner && newOwner !== toAccountId) {
+        throw new Error(
+          `Post-transfer ownership mismatch (expected ${toAccountId}, got ${newOwner})`,
+        );
+      }
+    }
+
     return { txId };
   } catch (err: any) {
     const msg = String(err?.message || err);
@@ -250,6 +335,10 @@ async function transferEarlySupporterNft(
       (e as any).code = "ASSOCIATION_REQUIRED";
       (e as any).tokenId = tokenId;
       throw e;
+    }
+    // Never echo raw SDK/key material to clients
+    if (/key|private|secret|sign/i.test(msg) && !/ASSOCIATION/i.test(msg)) {
+      throw new Error("On-chain transfer failed");
     }
     throw err;
   } finally {
@@ -443,6 +532,23 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
         });
       }
 
+      // On-chain ownership is a second independent one-per-wallet layer
+      if (mintEnabled() && (await accountOwnsEarlySupporter(accountId))) {
+        return c.json({
+          success: true,
+          data: {
+            eligible: false,
+            reason: "This wallet already holds an Early Supporter NFT on-chain.",
+            code: "ALREADY_CLAIMED",
+            claimed: true,
+            claim: null,
+            claimedCount: count,
+            maxSupply: MAX_SUPPLY,
+            remaining,
+          },
+        });
+      }
+
       if (remaining === 0) {
         return c.json({
           success: true,
@@ -562,7 +668,9 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
         }
       }
 
-      const release = await acquireLock(`es-claim:${accountId}`);
+      // Per-wallet lock + global serial lock (prevents double-allocate races)
+      const releaseWallet = await acquireLock(`es-claim:${accountId}`);
+      const releaseGlobal = await acquireLock("es-claim-serial-global");
       try {
         const existing: ClaimRecord | null =
           (await kv.get(claimedKey(accountId))) || null;
@@ -573,6 +681,17 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
               error: "This wallet already claimed an Early Supporter NFT.",
               code: "ALREADY_CLAIMED",
               data: { claim: existing },
+            },
+            409,
+          );
+        }
+
+        if (mintEnabled() && (await accountOwnsEarlySupporter(accountId))) {
+          return c.json(
+            {
+              success: false,
+              error: "This wallet already holds an Early Supporter NFT on-chain.",
+              code: "ALREADY_CLAIMED",
             },
             409,
           );
@@ -657,21 +776,34 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
               /* ignore */
             }
             const code = e?.code || "TRANSFER_FAILED";
-            console.log(`[EARLY-SUPPORTER] transfer failed: ${e?.message || e}`);
+            console.log(`[EARLY-SUPPORTER] transfer failed code=${code}`);
             return c.json(
               {
                 success: false,
-                error: e?.message || "NFT transfer failed",
+                error:
+                  code === "ASSOCIATION_REQUIRED"
+                    ? e?.message || "Token association required"
+                    : "NFT transfer failed. Please try again.",
                 code,
                 data: code === "ASSOCIATION_REQUIRED" ? { tokenId } : undefined,
               },
               code === "ASSOCIATION_REQUIRED" ? 409 : 502,
             );
           }
-        } else {
-          // Mock path — no on-chain movement (local/staging without mint flag)
+        } else if (allowMockClaims()) {
+          // Explicit opt-in only — never default on mainnet
           serial = count + 1;
           mode = "mock";
+        } else {
+          return c.json(
+            {
+              success: false,
+              error:
+                "On-chain delivery is not enabled. Set EARLY_SUPPORTER_MINT_ENABLED=true (mock claims require EARLY_SUPPORTER_ALLOW_MOCK).",
+              code: "MINT_DISABLED",
+            },
+            403,
+          );
         }
 
         const claim: ClaimRecord = {
@@ -718,7 +850,16 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
           },
         });
       } finally {
-        release();
+        try {
+          releaseGlobal();
+        } catch {
+          /* ignore */
+        }
+        try {
+          releaseWallet();
+        } catch {
+          /* ignore */
+        }
       }
     } catch (err) {
       console.log(`[EARLY-SUPPORTER] claim error: ${err}`);
@@ -738,6 +879,18 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
               success: false,
               error: "Debug endpoints disabled (EARLY_SUPPORTER_DEBUG)",
               code: "DEBUG_DISABLED",
+            },
+            403,
+          );
+        }
+        // KV reset while HTS is live enables double-claim (NFT stays in wallet).
+        if (mintEnabled() && !allowKvResetWhileLive()) {
+          return c.json(
+            {
+              success: false,
+              error:
+                "KV claim reset blocked while on-chain delivery is live. Set EARLY_SUPPORTER_ALLOW_KV_RESET=true only if you accept double-claim risk.",
+              code: "RESET_BLOCKED_LIVE",
             },
             403,
           );
@@ -768,9 +921,18 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
         }
         const count = await getClaimedCount();
         await kv.set(COUNT_KEY, Math.max(0, count - 1));
+        console.log(
+          `[EARLY-SUPPORTER] admin KV reset account=${accountId} serial=${existing.serial}`,
+        );
         return c.json({
           success: true,
-          data: { reset: true, accountId, serial: existing.serial },
+          data: {
+            reset: true,
+            accountId,
+            serial: existing.serial,
+            warning:
+              "KV only — does not reclaim on-chain NFT. Wallet may still hold the serial.",
+          },
         });
       } catch (err) {
         console.log(`[EARLY-SUPPORTER] reset error: ${err}`);

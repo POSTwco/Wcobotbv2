@@ -105,7 +105,9 @@ Phase 1 mock on localhost does **not** move real NFTs.
 | `EARLY_SUPPORTER_TREASURY_PRIVATE_KEY` | *(same key as local `.env.hedera` — paste only in Dashboard)* |
 | `HEDERA_NETWORK` | `mainnet` |
 | `EARLY_SUPPORTER_REQUIRE_ACTIVITY` | `false` |
-| `EARLY_SUPPORTER_DEBUG` | `true` (staging only) |
+| `EARLY_SUPPORTER_DEBUG` | `false` on prod (turn OFF if still true from staging) |
+| `EARLY_SUPPORTER_ALLOW_MOCK` | `false` (never true on mainnet) |
+| `EARLY_SUPPORTER_ALLOW_KV_RESET` | `false` (blocks admin KV wipe double-claim) |
 
 Then **redeploy** Edge function `make-server-57fcb0ee`.
 
