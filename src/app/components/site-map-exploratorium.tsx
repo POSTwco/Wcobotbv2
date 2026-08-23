@@ -4,7 +4,7 @@
  * Bottom row = remaining site functions (chat, assets, elite, etc.).
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -30,8 +30,8 @@ import {
 import { useWallet } from "./wallet-context";
 import { isMagicEnabled } from "../lib/wallet-types";
 
-const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
-const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
+const orbitron: CSSProperties = { fontFamily: "Orbitron, sans-serif" };
+const dmSans: CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
 
 interface MapZone {
   id: string;
@@ -264,6 +264,110 @@ function GoldTitle({
   );
 }
 
+const PRIMARY_ZONES = ZONES.filter((z) => !z.mini);
+const UTILITY_ZONES = ZONES.filter((z) => z.mini);
+
+function tileSurface(zone: MapZone, active: boolean): CSSProperties {
+  return {
+    background: active
+      ? `linear-gradient(145deg, ${zone.colorSoft}, rgba(11,17,32,0.92))`
+      : `linear-gradient(160deg, ${zone.colorSoft}, #111827ee)`,
+    border: `1px solid ${active ? zone.color + "88" : zone.color + "33"}`,
+    boxShadow: active
+      ? `0 0 28px ${zone.color}40, inset 0 1px 0 rgba(255,255,255,0.08)`
+      : `inset 0 1px 0 rgba(255,255,255,0.04)`,
+  };
+}
+
+/** Mobile-only card — readable titles, big tap targets, no cramped treemap */
+function MobileZoneCard({
+  zone,
+  active,
+  onHover,
+  featured,
+}: {
+  zone: MapZone;
+  active: boolean;
+  onHover: (id: string | null) => void;
+  featured?: boolean;
+}) {
+  const Icon = zone.Icon;
+  return (
+    <motion.div
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 400, damping: 28 }}
+      className={featured ? "col-span-2" : undefined}
+    >
+      <Link
+        to={zone.to}
+        onMouseEnter={() => onHover(zone.id)}
+        onMouseLeave={() => onHover(null)}
+        onFocus={() => onHover(zone.id)}
+        onBlur={() => onHover(null)}
+        aria-label={`${zone.label}: ${zone.blurb}`}
+        className={`relative flex flex-col items-center justify-center overflow-hidden rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[#6AA3E0] ${
+          featured ? "min-h-[132px] px-3 py-4" : zone.mini ? "min-h-[88px] px-2 py-3" : "min-h-[100px] px-2.5 py-3"
+        }`}
+        style={tileSurface(zone, active)}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage: `linear-gradient(${zone.color} 1px, transparent 1px), linear-gradient(90deg, ${zone.color} 1px, transparent 1px)`,
+            backgroundSize: "14px 14px",
+          }}
+        />
+        {zone.badge && (
+          <span
+            className="absolute top-2 right-2 z-10 px-1.5 py-0.5 rounded-full text-[0.5rem] font-bold tracking-wider text-[#0B1120]"
+            style={{
+              ...orbitron,
+              background: `linear-gradient(135deg, ${zone.color}, #fff8)`,
+            }}
+          >
+            {zone.badge}
+          </span>
+        )}
+        <div
+          className="relative z-10 flex items-center justify-center rounded-xl mb-2 shrink-0"
+          style={{
+            width: featured ? "2.75rem" : "2.25rem",
+            height: featured ? "2.75rem" : "2.25rem",
+            background: `${zone.color}22`,
+            border: `1px solid ${zone.color}55`,
+          }}
+        >
+          <Icon
+            className={featured ? "w-5 h-5" : "w-4 h-4"}
+            style={{ color: zone.color }}
+          />
+        </div>
+        <div className="relative z-10 px-1">
+          <GoldTitle
+            label={zone.label}
+            active={active}
+            sizeClass={
+              featured
+                ? "text-xl"
+                : zone.mini
+                  ? "text-[0.7rem] leading-tight"
+                  : "text-sm"
+            }
+          />
+        </div>
+        {featured && zone.expect && (
+          <p
+            className="relative z-10 mt-1.5 text-[0.65rem] text-center"
+            style={{ ...dmSans, color: zone.color }}
+          >
+            {zone.expect}
+          </p>
+        )}
+      </Link>
+    </motion.div>
+  );
+}
+
 function ZoneTile({
   zone,
   active,
@@ -279,7 +383,7 @@ function ZoneTile({
   const Icon = zone.Icon;
   const showDetail = !zone.mini && (active || layout.w >= 40);
   const titleSize = zone.mini
-    ? "text-[0.55rem] sm:text-[0.7rem] md:text-xs"
+    ? "text-[0.7rem] md:text-xs"
     : layout.w >= 40
       ? "text-lg sm:text-3xl md:text-4xl"
       : layout.w >= 22
@@ -310,15 +414,7 @@ function ZoneTile({
         className={`absolute inset-0 overflow-hidden cursor-pointer group outline-none focus-visible:ring-2 focus-visible:ring-[#6AA3E0] block ${
           zone.mini ? "rounded-lg sm:rounded-xl" : "rounded-xl sm:rounded-2xl"
         }`}
-        style={{
-          background: active
-            ? `linear-gradient(145deg, ${zone.colorSoft}, rgba(11,17,32,0.92))`
-            : `linear-gradient(160deg, ${zone.colorSoft}, #111827ee)`,
-          border: `1px solid ${active ? zone.color + "88" : zone.color + "33"}`,
-          boxShadow: active
-            ? `0 0 28px ${zone.color}40, inset 0 1px 0 rgba(255,255,255,0.08)`
-            : `inset 0 1px 0 rgba(255,255,255,0.04)`,
-        }}
+        style={tileSurface(zone, active)}
       >
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.07]"
@@ -339,18 +435,17 @@ function ZoneTile({
         />
 
         {zone.mini ? (
-          /* Square utility tile — icon + gold title stacked dead-center */
-          <div className="relative h-full flex flex-col items-center justify-center gap-1 sm:gap-1.5 px-1">
+          <div className="relative h-full flex flex-col items-center justify-center gap-1.5 px-1">
             <div
-              className="flex items-center justify-center rounded-md sm:rounded-lg shrink-0"
+              className="flex items-center justify-center rounded-lg shrink-0"
               style={{
-                width: "1.65rem",
-                height: "1.65rem",
+                width: "1.75rem",
+                height: "1.75rem",
                 background: `${zone.color}22`,
                 border: `1px solid ${zone.color}44`,
               }}
             >
-              <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: zone.color }} />
+              <Icon className="w-3.5 h-3.5" style={{ color: zone.color }} />
             </div>
             <GoldTitle label={zone.label} active={active} sizeClass={titleSize} />
           </div>
@@ -403,7 +498,7 @@ function ZoneTile({
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="text-[#8494A7] text-[0.65rem] sm:text-sm mt-1 sm:mt-1.5 line-clamp-2 sm:line-clamp-3 hidden sm:block"
+                    className="text-[#8494A7] text-[0.65rem] sm:text-sm mt-1 sm:mt-1.5 line-clamp-2 sm:line-clamp-3"
                     style={dmSans}
                   >
                     {zone.blurb}
@@ -529,26 +624,36 @@ export function SiteMapExploratorium() {
         >
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#6AA3E0] to-transparent z-10" />
 
-          {/* Slightly taller canvas so the bottom utility row stays square-readable */}
-          <div className="relative w-full aspect-[5/4] sm:aspect-[16/10] min-h-[320px]">
-            {ZONES.map((zone) => (
-              <ZoneTile
-                key={zone.id}
-                zone={zone}
-                active={hovered === zone.id || (!hovered && zone.id === "workout")}
-                onHover={setHovered}
-              />
-            ))}
-          </div>
-
-          <div className="sm:hidden border-t border-[#4274B9]/15 px-3 py-3 bg-[#111827]/90">
+          {/* ── Mobile: readable 2-col grid (no cramped treemap) ── */}
+          <div className="sm:hidden p-2.5 space-y-2.5">
+            <div className="grid grid-cols-2 gap-2.5">
+              {PRIMARY_ZONES.map((zone) => (
+                <MobileZoneCard
+                  key={zone.id}
+                  zone={zone}
+                  featured={zone.id === "workout"}
+                  active={hovered === zone.id || (!hovered && zone.id === "workout")}
+                  onHover={setHovered}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {UTILITY_ZONES.map((zone) => (
+                <MobileZoneCard
+                  key={zone.id}
+                  zone={zone}
+                  active={hovered === zone.id}
+                  onHover={setHovered}
+                />
+              ))}
+            </div>
             <AnimatePresence mode="wait">
               <motion.div
                 key={preview.id}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="flex items-start gap-3"
+                className="flex items-start gap-3 rounded-xl border border-[#4274B9]/15 bg-[#111827]/80 px-3 py-2.5"
               >
                 <div
                   className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
@@ -557,7 +662,7 @@ export function SiteMapExploratorium() {
                   <preview.Icon className="w-4 h-4" style={{ color: preview.color }} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[#E8ECF0] text-xs" style={orbitron}>
+                  <p className="text-[#F0D078] text-xs font-extrabold" style={orbitron}>
                     {preview.label.toUpperCase()}
                   </p>
                   <p className="text-[#8494A7] text-[0.7rem] line-clamp-2" style={dmSans}>
@@ -566,6 +671,18 @@ export function SiteMapExploratorium() {
                 </div>
               </motion.div>
             </AnimatePresence>
+          </div>
+
+          {/* ── Desktop / tablet: Coin360 exploratorium canvas ── */}
+          <div className="hidden sm:block relative w-full aspect-[16/10] min-h-[360px]">
+            {ZONES.map((zone) => (
+              <ZoneTile
+                key={zone.id}
+                zone={zone}
+                active={hovered === zone.id || (!hovered && zone.id === "workout")}
+                onHover={setHovered}
+              />
+            ))}
           </div>
         </motion.div>
       </div>
