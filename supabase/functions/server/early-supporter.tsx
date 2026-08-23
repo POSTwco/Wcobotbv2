@@ -669,9 +669,11 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
       }
 
       // Per-wallet lock + global serial lock (prevents double-allocate races)
-      const releaseWallet = await acquireLock(`es-claim:${accountId}`);
-      const releaseGlobal = await acquireLock("es-claim-serial-global");
+      let releaseWallet: (() => void) | null = null;
+      let releaseGlobal: (() => void) | null = null;
       try {
+        releaseWallet = await acquireLock(`es-claim:${accountId}`);
+        releaseGlobal = await acquireLock("es-claim-serial-global");
         const existing: ClaimRecord | null =
           (await kv.get(claimedKey(accountId))) || null;
         if (existing) {
@@ -851,12 +853,12 @@ export function mountEarlySupporterRoutes(app: Hono, PREFIX: string) {
         });
       } finally {
         try {
-          releaseGlobal();
+          releaseGlobal?.();
         } catch {
           /* ignore */
         }
         try {
-          releaseWallet();
+          releaseWallet?.();
         } catch {
           /* ignore */
         }
