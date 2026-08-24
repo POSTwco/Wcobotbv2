@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import fistLogo from "../../../assets/brand/fist-wco.jpg";
 import { api } from "../../lib/api";
+import { mergeProofData } from "../../lib/cali-share-proof-data";
 import { buildWorkoutShareCaption, CONTEST_TRACKING_HASHTAG } from "../contest/contest-copy";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
@@ -33,7 +34,10 @@ interface ProofData {
   completedAt: string;
   totalSets: number;
   uniqueExercises: number;
+  /** Lifetime PR count */
   prCount: number;
+  /** PRs set in this session (optional badge) */
+  prHitThisSession?: number;
   athleteScore: number;
   athleteTier: string;
   streak: number;
@@ -46,22 +50,24 @@ interface ProofData {
 interface Props {
   open: boolean;
   onClose: () => void;
-  data?: Partial<ProofData>; // real data wired later; falls back to placeholder
+  /** Real workout snapshot — undefined fields are ignored (no placeholder clobber) */
+  data?: Partial<ProofData>;
 }
 
-const PLACEHOLDER: ProofData = {
-  level: 2,
+/** Empty baseline — never invent demo streaks/PRs for real workouts */
+const EMPTY_PROOF: ProofData = {
+  level: 1,
   completedAt: new Date().toISOString(),
-  totalSets: 18,
-  uniqueExercises: 6,
-  prCount: 2,
-  athleteScore: 1240,
-  athleteTier: "PRO",
-  streak: 7,
-  workoutId: "demo-wid-abc123",
-  topMoves: ["Pull-Up", "Dips", "Pistol Squat", "L-Sit Hold", "Muscle-Up Neg.", "Handstand Hold"],
-  pushCount: 5,
-  pullCount: 4,
+  totalSets: 0,
+  uniqueExercises: 0,
+  prCount: 0,
+  prHitThisSession: 0,
+  athleteScore: 0,
+  athleteTier: "UNRANKED",
+  streak: 0,
+  topMoves: [],
+  pushCount: 0,
+  pullCount: 0,
 };
 
 function formatDate(iso: string): string {
@@ -137,13 +143,7 @@ export function CaliShareProof({ open, onClose, data }: Props) {
   const panDragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const proof: ProofData = {
-    ...PLACEHOLDER,
-    ...data,
-    topMoves: data?.topMoves ?? PLACEHOLDER.topMoves,
-    pushCount: data?.pushCount ?? PLACEHOLDER.pushCount,
-    pullCount: data?.pullCount ?? PLACEHOLDER.pullCount,
-  };
+  const proof: ProofData = mergeProofData(EMPTY_PROOF, data ?? null);
 
   // === Camera functions (must be declared early to avoid TDZ in effects that list them in deps) ===
   const startCamera = useCallback(async (requestedMode?: "user" | "environment") => {
@@ -557,13 +557,23 @@ export function CaliShareProof({ open, onClose, data }: Props) {
       ctx.fillText(String(value), x + 18, y + 72);
     }
 
+    const prLabel =
+      (proof.prHitThisSession ?? 0) > 0
+        ? `PRS (+${proof.prHitThisSession})`
+        : "PRS";
     drawStat(92, statsY, "SETS LOGGED", proof.totalSets);
     drawStat(92 + colW + 24, statsY, "EXERCISES", proof.uniqueExercises, COLORS.blueLight);
-    drawStat(92 + (colW + 24) * 2, statsY, "PRS HIT", proof.prCount, "#10b981");
+    drawStat(92 + (colW + 24) * 2, statsY, prLabel, proof.prCount, "#10b981");
 
     drawStat(92, statsY + rowH + 18, "STREAK", `${proof.streak} DAYS`);
     drawStat(92 + colW + 24, statsY + rowH + 18, "ATHLETE SCORE", proof.athleteScore, COLORS.blueLight);
-    drawStat(92 + (colW + 24) * 2, statsY + rowH + 18, "TIER", proof.athleteTier, COLORS.gold);
+    drawStat(
+      92 + (colW + 24) * 2,
+      statsY + rowH + 18,
+      "TIER",
+      (proof.athleteTier || "UNRANKED").toUpperCase(),
+      COLORS.gold,
+    );
 
     // Moves / summary section
     const movesY = statsY + (rowH + 18) * 2 + 30;
@@ -667,16 +677,17 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     ctx.font = `700 22px Orbitron, sans-serif`;
     ctx.fillText("WCO", 162, 88);
 
-    // Main difficulty header (BEGINNER / INTERMEDIATE / ADVANCED)
+    // Tier + difficulty header (accurate athlete identity)
+    const tierLabel = (proof.athleteTier || "UNRANKED").toUpperCase();
     const levelLabel = getLevelLabel(proof.level);
     ctx.fillStyle = COLORS.gold;
-    ctx.font = `900 46px Orbitron, sans-serif`;
-    ctx.fillText(levelLabel, 162, 128);
+    ctx.font = `900 36px Orbitron, sans-serif`;
+    ctx.fillText(`${tierLabel} · ${levelLabel}`, 162, 122);
 
     // Sub: LEVEL + COMPLETE
     ctx.fillStyle = COLORS.white;
-    ctx.font = `700 22px Orbitron, sans-serif`;
-    ctx.fillText(`LEVEL ${proof.level}  •  COMPLETE`, 162, 156);
+    ctx.font = `700 20px Orbitron, sans-serif`;
+    ctx.fillText(`LEVEL ${proof.level}  •  WORKOUT COMPLETE`, 162, 152);
     clearShadow();
 
     // Bottom stats panel — more translucent glass (blue-navy tint), text stays solid
@@ -753,11 +764,15 @@ export function CaliShareProof({ open, onClose, data }: Props) {
     const colW = Math.floor((statsAvail - 2 * colGap) / 3);
     const rowH = 62;
 
+    const prChipLabel =
+      (proof.prHitThisSession ?? 0) > 0
+        ? `PRS +${proof.prHitThisSession}`
+        : "PRS";
     const stats = [
       { label: "SETS", val: String(proof.totalSets), clr: COLORS.gold },
-      { label: "EXERCISES", val: String(proof.uniqueExercises), clr: COLORS.blueLight },
-      { label: "PRS", val: String(proof.prCount), clr: "#10b981" },
-      { label: "STREAK", val: `${proof.streak} DAYS`, clr: COLORS.gold },
+      { label: "MOVES", val: String(proof.uniqueExercises), clr: COLORS.blueLight },
+      { label: prChipLabel, val: String(proof.prCount), clr: "#10b981" },
+      { label: "STREAK", val: `${proof.streak}D`, clr: COLORS.gold },
       { label: "PUSH", val: String(proof.pushCount ?? 0), clr: COLORS.blueLight },
       { label: "PULL", val: String(proof.pullCount ?? 0), clr: "#10b981" },
     ];

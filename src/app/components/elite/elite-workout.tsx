@@ -8,6 +8,7 @@ import { CaliExerciseCard } from "../cali/cali-exercise-card";
 import { CaliLoader } from "../cali/cali-loader";
 import { getAvatarGender } from "../../lib/cali-avatar-prefs";
 import { CaliShareProof } from "../cali/cali-share-proof";
+import { buildShareProofSnapshot } from "../../lib/cali-share-proof-data";
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
 const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" };
@@ -123,19 +124,21 @@ export function EliteWorkout() {
       const topMoves = uniqueExercises.slice(0, 5);
       const totalSets = bulk.length > 0 ? bulk.length : setsTotal;
 
-      const snapshotProof = {
-        level: 3 as const, // Elite sessions treated as Advanced tier work
+      const snapshotProof = buildShareProofSnapshot({
+        level: 3, // Elite sessions treated as Advanced-tier share card
         completedAt,
         totalSets,
         uniqueExercises: Math.max(1, uniqueExercises.length),
-        prCount: 0,
-        athleteScore: 0,
-        athleteTier: "ELITE",
-        streak: 0,
         topMoves,
         pushCount,
         pullCount,
-      };
+        workoutId: plan.workoutId,
+        streakFromLog: res.data?.streak?.current ?? 0,
+        prChangesLength: res.data?.prChanges?.length ?? 0,
+        prCountOverride: res.data?.prCount ?? 0,
+        athleteScoreOverride: res.data?.athleteScore ?? 0,
+        athleteTierOverride: res.data?.athleteTier ?? "ELITE",
+      });
       setProofData(snapshotProof);
       setShowShareProof(true);
     } else {

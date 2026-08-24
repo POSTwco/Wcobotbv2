@@ -1249,7 +1249,14 @@ export const api = {
       sets: Array<{ blockIndex: number; itemIndex: number; setIndex: number; value: number; rpe?: number; note?: string }>,
       opts?: { completed?: boolean; completedAt?: string },
     ) =>
-      request<{ log: any }>(
+      request<{
+        log: any;
+        prChanges?: any[];
+        streak?: { current: number; longest: number; lastDate: string; updatedAt: number } | null;
+        prCount?: number;
+        athleteScore?: number;
+        athleteTier?: string;
+      }>(
         `/elite/workout/${encodeURIComponent(workoutId)}/log`,
         { method: "POST", body: { sets, ...(opts ?? {}) }, eliteSessionToken },
       ),

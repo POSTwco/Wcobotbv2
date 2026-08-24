@@ -18,6 +18,7 @@ import { CaliExerciseCard } from "./cali-exercise-card";
 import { CaliCoachToast } from "./cali-coach-toast";
 import { CaliWorkoutCelebration } from "./cali-workout-celebration";
 import { CaliShareProof } from "./cali-share-proof";
+import { buildShareProofSnapshot } from "../../lib/cali-share-proof-data";
 import { CaliMotionRail } from "./cali-motion-rail";
 import { CaliWorkoutSponsorBanner } from "./cali-workout-sponsor-banner";
 import { getCoachMessage, getIncompleteSetsPrompt } from "../../lib/cali-coach-messages";
@@ -608,19 +609,19 @@ export function CaliWorkout() {
       });
     });
 
-    const snapshotProof = {
+    const snapshotProof = buildShareProofSnapshot({
       level: plan.level,
-      completedAt: completedAt,
+      completedAt,
       totalSets: setsLogged,
       uniqueExercises: uniqueExerciseNames.length,
-      prCount: res.data.prChanges?.length ?? 0,
-      athleteScore: statsRes.success && statsRes.data ? statsRes.data.summary.athleteScore : 0,
-      athleteTier: statsRes.success && statsRes.data ? statsRes.data.summary.athleteTier : undefined,
-      streak: newStreak,
       topMoves,
       pushCount,
       pullCount,
-    };
+      workoutId: plan.workoutId,
+      statsSummary: statsRes.success && statsRes.data ? statsRes.data.summary : null,
+      streakFromLog: newStreak,
+      prChangesLength: res.data.prChanges?.length ?? 0,
+    });
     setProofData(snapshotProof);
 
     completeTutorial();

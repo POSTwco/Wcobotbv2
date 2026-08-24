@@ -629,9 +629,11 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
       lookup: eliteExerciseLookup,
       source: "elite",
     });
+    let streak: { current: number; longest: number; lastDate: string; updatedAt: number } | null =
+      null;
     if (body?.completed === true && log.sets.length > 0) {
       try {
-        await updateStreak(accountId, log.dateKey);
+        streak = await updateStreak(accountId, log.dateKey);
       } catch (err) {
         console.log(`[ELITE-LOG] streak update failed for ${accountId}/${workoutId}: ${err}`);
       }
@@ -645,7 +647,47 @@ export function mountEliteRoutes(app: Hono, PREFIX: string) {
       });
     }
 
-    return c.json({ success: true, data: { log, prChanges } });
+    // Lifetime PR count + score/tier for Share Proof (same KV as Cali analytics)
+    let prCount = 0;
+    let athleteScore = 0;
+    let athleteTier = "ELITE";
+    try {
+      const prs: any[] = (await kv.getByPrefix(`cali:user:${accountId}:pr:`)) ?? [];
+      prCount = prs.filter((p: any) => p && typeof p.value === "number").length;
+    } catch {
+      /* ignore */
+    }
+    try {
+      const summary: any = await kv.get(`cali:user:${accountId}:stats:summary`);
+      if (summary && typeof summary.athleteScore === "number") {
+        athleteScore = summary.athleteScore;
+      }
+      if (summary?.athleteTier && typeof summary.athleteTier === "string") {
+        athleteTier = summary.athleteTier;
+      }
+    } catch {
+      /* ignore */
+    }
+    if (!streak) {
+      try {
+        const raw: any = await kv.get(`cali:user:${accountId}:streak`);
+        if (raw && typeof raw.current === "number") streak = raw;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        log,
+        prChanges,
+        streak,
+        prCount,
+        athleteScore,
+        athleteTier,
+      },
+    });
   });
 
   // GET /elite/featured-athlete — weekly/monthly spotlight (public read for elite zone UI)
