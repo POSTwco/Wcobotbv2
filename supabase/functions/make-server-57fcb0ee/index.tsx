@@ -2077,6 +2077,11 @@ app.post(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
       bracketSeat: sanitizeNumber(body.bracketSeat ?? existing?.bracketSeat, 0, 128, existing?.bracketSeat ?? 0),
       status: (["active", "inactive", "champion", "injured", "retired", "eliminated"].includes(body.status)) ? body.status : (existing?.status || "active"),
       specialMove: sanitizeString(body.specialMove, 200),
+      competitionCategory: (() => {
+        const raw = sanitizeString(body.competitionCategory || existing?.competitionCategory || "", 40);
+        const allowed = ["freestyle", "statics", "freestyle_statics", "reps_sets"];
+        return allowed.includes(raw) ? raw : (existing?.competitionCategory || "");
+      })(),
       skills,
       totalPowerRating,
       nftTokenId: sanitizeString(body.nftTokenId || existing?.nftTokenId, 50),
@@ -4896,7 +4901,7 @@ app.post(`${PREFIX}/applications`, async (c) => {
     }
 
     // Validate required fields
-    const required = ["name", "fullName", "country", "bio", "youtubeRoutine", "weightClass"];
+    const required = ["name", "fullName", "country", "bio", "youtubeRoutine", "weightClass", "competitionCategory"];
     for (const field of required) {
       if (!body[field] || !body[field].trim()) {
         return c.json({ success: false, error: `Missing required field: ${field}` }, 400);
@@ -4909,6 +4914,15 @@ app.post(`${PREFIX}/applications`, async (c) => {
       return c.json({
         success: false,
         error: "Invalid weight class. Select an official WCO division.",
+      }, 400);
+    }
+
+    const competitionCategory = sanitizeString(body.competitionCategory, 40);
+    const ALLOWED_COMP_CATS = ["freestyle", "statics", "freestyle_statics", "reps_sets"];
+    if (!ALLOWED_COMP_CATS.includes(competitionCategory)) {
+      return c.json({
+        success: false,
+        error: "Invalid competition category. Choose FreeStyle, Statics, Freestyle & Statics, or Reps & Sets.",
       }, 400);
     }
 
@@ -4945,6 +4959,7 @@ app.post(`${PREFIX}/applications`, async (c) => {
       pfpUrl: "", // legacy field — actual image lives in private storage; admin gets signed URL on read
 
       specialMove: sanitizeString(body.specialMove, 200),
+      competitionCategory,
       weightClass,
       email: sanitizeString(body.email, 200),
       phone: sanitizeString(body.phone, 50),
@@ -5081,6 +5096,7 @@ app.post(`${PREFIX}/admin/applications/:id/approve`, requireAdminSession, async 
       rank,
       status: "active",
       specialMove: app.specialMove || "",
+      competitionCategory: app.competitionCategory || "",
       skills: { energy: 5, performance: 5, static: 5, aggression: 5, dynamic: 5 },
       totalPowerRating: 25,
       nftTokenId: "",

@@ -18,6 +18,7 @@ import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
 import { api } from "../lib/api";
 import type { Athlete } from "../lib/types";
+import { competitionCategoryLabel } from "../lib/types";
 import { SponsorMarqueeStrip } from "../components/sponsor-showcase";
 import { ArenaChat } from "../components/arena-chat";
 import { ErrorCard } from "../components/error-boundary";
@@ -227,9 +228,24 @@ export function AthletesPage() {
 
                     {/* Info */}
                     <div className="p-3 sm:p-5">
-                      <h3 className="text-[#E8ECF0] mb-0.5 font-bold truncate" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                        {athlete.name}
-                      </h3>
+                      <div className="flex items-center gap-2 mb-0.5 min-w-0">
+                        <h3 className="text-[#E8ECF0] font-bold truncate" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
+                          {athlete.name}
+                        </h3>
+                        {athlete.competitionCategory && (
+                          <span
+                            className="shrink-0 px-1.5 py-0.5 rounded text-[0.45rem] font-bold tracking-wide"
+                            style={{
+                              fontFamily: "Orbitron, sans-serif",
+                              background: "rgba(66,116,185,0.18)",
+                              border: "1px solid rgba(106,163,224,0.4)",
+                              color: "#6AA3E0",
+                            }}
+                          >
+                            {competitionCategoryLabel(athlete.competitionCategory)}
+                          </span>
+                        )}
+                      </div>
                       {athlete.nickname && (
                         <p className="text-[0.65rem] mb-1" style={{ color: borderColor }}>
                           "{athlete.nickname}"

@@ -227,6 +227,16 @@ export function EarlySupporterHomeBanner() {
               </p>
             </div>
 
+            <div
+              className="mb-2.5 rounded-lg border border-[#4274B9]/30 bg-[#4274B9]/10 px-2.5 py-2 text-[0.62rem] leading-snug text-[#C8D6E8]"
+              style={dmSans}
+            >
+              <span className="text-[#E8ECF0] font-semibold">HashPack tip: </span>
+              Associate token{" "}
+              <code className="text-[#F0D078] font-mono">0.0.10821256</code> in
+              your wallet before claiming.
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               {!soldOut ? (
                 <Link

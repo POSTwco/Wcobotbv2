@@ -303,10 +303,25 @@ function ClaimView({
               {EARLY_SUPPORTER_NAME}
             </h3>
           </div>
-          <p className="text-sm text-[#8494A7] leading-relaxed mb-4">
+          <p className="text-sm text-[#8494A7] leading-relaxed mb-3">
             Thank you for being early. Claim one free commemorative NFT for this
-            wallet. Animated art included — no HBAR fee on the mock path.
+            wallet — one per account.
           </p>
+          <div
+            className="mb-4 rounded-xl border border-[#4274B9]/35 bg-[#4274B9]/10 px-3 py-2.5 text-[0.75rem] leading-relaxed text-[#C8D6E8]"
+            style={dmSans}
+          >
+            <p className="font-semibold text-[#E8ECF0] mb-1">
+              Using HashPack / a Hedera wallet?
+            </p>
+            <p>
+              Associate token{" "}
+              <code className="text-[#F0D078] font-mono text-[0.7rem]">
+                0.0.10821256
+              </code>{" "}
+              in your wallet before claiming, then tap Claim.
+            </p>
+          </div>
           {soldOut ? (
             <p className="text-sm text-[#f59e0b]">Sold out — all 5,000 claimed.</p>
           ) : !eligible && reason ? (

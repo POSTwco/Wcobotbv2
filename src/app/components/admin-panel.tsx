@@ -449,7 +449,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
   // Form state
   const [form, setForm] = useState<AthleteFormState>({
     name: "", fullName: "", nickname: "", country: "", bio: "", pfpUrl: "",
-    specialMove: "", status: "active",
+    specialMove: "", competitionCategory: "", status: "active",
     email: "", phone: "",
     instagram: "", twitter: "", youtube: "", website: "",
     energy: 5, performance: 5, static: 5, aggression: 5, dynamic: 5,
@@ -491,7 +491,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
   const resetForm = () => {
     setForm({
       name: "", fullName: "", nickname: "", country: "", bio: "", pfpUrl: "",
-      specialMove: "", status: "active",
+      specialMove: "", competitionCategory: "", status: "active",
       email: "", phone: "",
       instagram: "", twitter: "", youtube: "", website: "",
       energy: 5, performance: 5, static: 5, aggression: 5, dynamic: 5,
@@ -516,6 +516,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
       bio: athlete.bio || "",
       pfpUrl: athlete.pfpUrl || "",
       specialMove: athlete.specialMove || "",
+      competitionCategory: athlete.competitionCategory || "",
       status: athlete.status || "active",
       email: athlete.email || "",
       phone: athlete.phone || "",
@@ -563,6 +564,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
         bio: form.bio,
         pfpUrl: form.pfpUrl || "placeholder",
         specialMove: form.specialMove,
+        competitionCategory: form.competitionCategory || undefined,
         status: form.status,
         bracketSeat: form.bracketSeat,
         email: form.email,
@@ -905,6 +907,11 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                       )}
                       {app.socials?.instagram && <span className="text-[0.55rem] text-pink-400">IG: {app.socials.instagram}</span>}
                       {app.socials?.twitter && <span className="text-[0.55rem] text-sky-400">X: {app.socials.twitter}</span>}
+                      {app.competitionCategory && (
+                        <span className="text-[0.5rem] text-[#6AA3E0] px-1.5 py-0.5 rounded border border-[#4274B9]/30">
+                          {app.competitionCategory}
+                        </span>
+                      )}
                       {app.specialMove && <span className="text-[0.55rem] text-[#D4A843]">★ {app.specialMove}</span>}
                       <span className="text-[0.5rem] text-[#8494A7]">{new Date(app.submittedAt).toLocaleDateString()}</span>
                     </div>

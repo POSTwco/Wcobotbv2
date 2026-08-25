@@ -36,6 +36,32 @@ export interface AthleteSocials {
   website?: string;     // Personal website
 }
 
+/** Competition discipline shown on Pro Card / athlete profile */
+export type AthleteCompetitionCategory =
+  | "freestyle"
+  | "statics"
+  | "freestyle_statics"
+  | "reps_sets";
+
+export const ATHLETE_COMPETITION_CATEGORIES: Array<{
+  id: AthleteCompetitionCategory;
+  label: string;
+}> = [
+  { id: "freestyle", label: "FreeStyle" },
+  { id: "statics", label: "Statics" },
+  { id: "freestyle_statics", label: "Freestyle & Statics" },
+  { id: "reps_sets", label: "Reps & Sets" },
+];
+
+export function competitionCategoryLabel(
+  id?: AthleteCompetitionCategory | string | null,
+): string {
+  if (!id) return "";
+  return (
+    ATHLETE_COMPETITION_CATEGORIES.find((c) => c.id === id)?.label || String(id)
+  );
+}
+
 export interface Athlete {
   id: string;                    // e.g. "ath-001" (auto-generated)
   name: string;                  // Display name e.g. "Tony Gaste"
@@ -55,6 +81,12 @@ export interface Athlete {
   rank: number;                  // Overall ranking (1 = best)
   status: AthleteStatus;
   specialMove?: string;          // Signature move name
+
+  /**
+   * Competition discipline for Pro Card / battles.
+   * freestyle | statics | freestyle_statics | reps_sets
+   */
+  competitionCategory?: AthleteCompetitionCategory;
 
   // Skills — initial set by admin, adjusted by Governor votes
   skills: AthleteSkills;
@@ -398,6 +430,7 @@ export interface AthleteFormData {
   email?: string;                // Contact email
   phone?: string;                // Contact phone number
   specialMove?: string;
+  competitionCategory?: AthleteCompetitionCategory;
   skills: AthleteSkills;
   status: AthleteStatus;
   bracketSeat?: number;

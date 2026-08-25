@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
 import { api } from "../lib/api";
-import { WCO_WEIGHT_CLASSES } from "../lib/types";
+import { ATHLETE_COMPETITION_CATEGORIES, WCO_WEIGHT_CLASSES } from "../lib/types";
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "../components/error-boundary";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
@@ -39,6 +39,7 @@ export function ApplyPage() {
     nickname: "",
     country: "",
     weightClass: "",
+    competitionCategory: "",
     bio: "",
     pfpStoragePath: "",
     pfpPreviewUrl: "",
@@ -69,6 +70,7 @@ export function ApplyPage() {
     form.fullName.trim() &&
     form.country &&
     form.weightClass &&
+    form.competitionCategory &&
     form.bio.trim() &&
     form.pfpStoragePath &&
     form.youtubeRoutine.trim() &&
@@ -279,6 +281,25 @@ export function ApplyPage() {
                   </select>
                   <p className="text-[#8494A7]/50 text-[0.5rem] mt-0.5">
                     Official WCO division (lbs). You must make weight at the competition (within 1 lb of class limit).
+                  </p>
+                </div>
+                <div>
+                  <label className="text-[#8494A7] text-[0.6rem] flex items-center gap-1 mb-1">
+                    <Dumbbell className="w-3 h-3 text-[#4274B9]" />
+                    Competition Category *
+                  </label>
+                  <select
+                    value={form.competitionCategory}
+                    onChange={(e) => updateField("competitionCategory", e.target.value)}
+                    className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#4274B9]/60"
+                  >
+                    <option value="">Select your category...</option>
+                    {ATHLETE_COMPETITION_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-[#8494A7]/50 text-[0.5rem] mt-0.5">
+                    Shown on your Pro Card next to your name. Choose the discipline you compete in.
                   </p>
                 </div>
                 <Field

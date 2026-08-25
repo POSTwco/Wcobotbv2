@@ -22,7 +22,7 @@ import {
   Dumbbell,
 } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-import { WCO_WEIGHT_CLASSES } from "../lib/types";
+import { ATHLETE_COMPETITION_CATEGORIES, WCO_WEIGHT_CLASSES } from "../lib/types";
 import { Checkbox } from "./ui/checkbox";
 import { COUNTRY_OPTIONS } from "../lib/country-flags";
 import { InlineFlag } from "./country-flag";
@@ -39,6 +39,7 @@ export interface AthleteFormState {
   bio: string;
   pfpUrl: string;
   specialMove: string;
+  competitionCategory: string;
   status: string;
   // Contact
   email: string;
@@ -186,6 +187,19 @@ export function AthleteForm({
                 </div>
               </div>
               <Field label="Special Move" value={form.specialMove} onChange={(v) => updateField("specialMove", v)} placeholder="e.g. 360 Muscle-Up to Planche" />
+              <div>
+                <label className="text-[#8494A7] text-[0.6rem] block mb-1">Competition Category</label>
+                <select
+                  value={form.competitionCategory}
+                  onChange={(e) => updateField("competitionCategory", e.target.value)}
+                  className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
+                >
+                  <option value="">Select category...</option>
+                  {ATHLETE_COMPETITION_CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="text-[#8494A7] text-[0.6rem] block mb-1">Status</label>
                 <select
@@ -525,12 +539,28 @@ function LivePreviewCard({ form, totalPower }: { form: AthleteFormState; totalPo
 
       {/* Info */}
       <div className="p-3">
-        <h3
-          className="text-[#E8ECF0] font-bold truncate mb-0.5"
-          style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.75rem" }}
-        >
-          {form.name || "Athlete Name"}
-        </h3>
+        <div className="flex items-center gap-2 mb-0.5 min-w-0">
+          <h3
+            className="text-[#E8ECF0] font-bold truncate"
+            style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.75rem" }}
+          >
+            {form.name || "Athlete Name"}
+          </h3>
+          {form.competitionCategory && (
+            <span
+              className="shrink-0 px-1.5 py-0.5 rounded text-[0.45rem] font-bold tracking-wide"
+              style={{
+                fontFamily: "Orbitron, sans-serif",
+                background: "rgba(66,116,185,0.2)",
+                border: "1px solid rgba(106,163,224,0.4)",
+                color: "#6AA3E0",
+              }}
+            >
+              {ATHLETE_COMPETITION_CATEGORIES.find((c) => c.id === form.competitionCategory)?.label
+                || form.competitionCategory}
+            </span>
+          )}
+        </div>
         {form.nickname && (
           <p className="text-[0.6rem] mb-1.5" style={{ color: borderColor }}>
             "{form.nickname}"
