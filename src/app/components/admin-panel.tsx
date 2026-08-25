@@ -50,6 +50,7 @@ import { api } from "../lib/api";
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "./error-boundary";
 import { AthleteForm, type AthleteFormState } from "./athlete-form";
+import { competitionCategoryLabel } from "../lib/types";
 import { BracketBuilder } from "./bracket-builder";
 import { BattlesTab } from "./battles-tab";
 import { ProposalsTab } from "./proposals-tab";
@@ -909,7 +910,7 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
                       {app.socials?.twitter && <span className="text-[0.55rem] text-sky-400">X: {app.socials.twitter}</span>}
                       {app.competitionCategory && (
                         <span className="text-[0.5rem] text-[#6AA3E0] px-1.5 py-0.5 rounded border border-[#4274B9]/30">
-                          {app.competitionCategory}
+                          {competitionCategoryLabel(app.competitionCategory)}
                         </span>
                       )}
                       {app.specialMove && <span className="text-[0.55rem] text-[#D4A843]">★ {app.specialMove}</span>}
