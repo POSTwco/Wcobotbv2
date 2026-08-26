@@ -257,7 +257,7 @@ export function AthletesPage() {
                         </p>
                       )}
 
-                      <div className="grid grid-cols-3 gap-3 mb-3">
+                      <div className="grid grid-cols-3 gap-3 mb-2">
                         <div className="text-center">
                           <p className="text-lg text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.wins}</p>
                           <p className="text-xs text-[#8494A7]">Wins</p>
@@ -273,6 +273,9 @@ export function AthletesPage() {
                           <p className="text-xs text-[#8494A7]">Power</p>
                         </div>
                       </div>
+                      <p className="text-center text-[0.55rem] text-[#D4A843]/80 mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                        Tournament {(athlete.tournamentWins || 0)}W-{(athlete.tournamentLosses || 0)}L
+                      </p>
 
                       {/* Skill bars (compact) */}
                       {athlete.skills && (

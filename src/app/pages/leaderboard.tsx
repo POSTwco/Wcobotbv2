@@ -350,6 +350,7 @@ export function LeaderboardPage() {
                       <div className="hidden sm:flex items-center gap-5 text-sm">
                         <div className="text-center min-w-[50px]">
                           <p className="text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.wins}W-{athlete.losses}L</p>
+                          <p className="text-[0.55rem] text-[#D4A843]">T {(athlete.tournamentWins || 0)}-{(athlete.tournamentLosses || 0)}</p>
                           <p className="text-[0.6rem] text-[#8494A7]">Record</p>
                         </div>
                         <div className="text-center min-w-[40px]">

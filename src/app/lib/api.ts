@@ -416,6 +416,39 @@ export const api = {
     nonce: string;
   }, walletSessionToken?: string) => request<ProposalVote>("/vote/proposal", { method: "POST", body: vote, walletSessionToken }),
 
+  /** Tournament champion-pick vote (one pick per event) */
+  voteTournament: (vote: {
+    eventId: string;
+    wallet: string;
+    athleteId: string;
+    stakeAmount: number;
+    signature: string;
+    signedMessage: string;
+    nonce: string;
+  }, walletSessionToken?: string) =>
+    request<{
+      vote: import("./types").TournamentVote;
+      tallies: Record<string, { count: number; weighted: number }>;
+      totalVotes: number;
+      totalWeighted: number;
+      votingStatus: string;
+    }>("/vote/tournament", { method: "POST", body: vote, walletSessionToken }),
+
+  getTournamentVotes: (eventId: string) =>
+    request<{
+      eventId: string;
+      votingStatus: string;
+      championId: string | null;
+      athleteIds: string[];
+      voteTallies: Record<string, { count: number; weighted: number }>;
+      totalVotes: number;
+      totalWeighted: number;
+      tournamentMatches: import("./types").TournamentMatch[];
+    }>(`/votes/tournament/${eventId}`),
+
+  getMyTournamentVotes: (wallet: string) =>
+    request<import("./types").TournamentVote[]>(`/votes/tournament/mine/${wallet}`),
+
   // NOTE: voteSkill() was REMOVED. Athlete skills are now admin-only.
   // Governors may propose skill changes via governance proposals.
 
@@ -669,11 +702,53 @@ export const api = {
       endDate?: string;
       totalPrizePool?: number;
       bracket: { seat: number; athleteId: string }[];
+      format?: "pvp" | "tournament";
+      elimination?: "single" | "double";
     }, adminWallet: string, sessionToken?: string) =>
       request<{ event: BattleEvent; battles: Battle[]; message: string }>(
         "/admin/events/generate",
         { method: "POST", body: data, adminWallet, sessionToken }
       ),
+
+    setTournamentStatus: (
+      eventId: string,
+      status: string,
+      adminWallet: string,
+      sessionToken?: string,
+      extras?: { startDate?: string; endDate?: string },
+    ) =>
+      request<BattleEvent>(`/admin/tournaments/${eventId}/status`, {
+        method: "POST",
+        body: { status, ...extras },
+        adminWallet,
+        sessionToken,
+      }),
+
+    advanceTournamentMatch: (
+      eventId: string,
+      matchId: string,
+      winnerId: string,
+      adminWallet: string,
+      sessionToken?: string,
+    ) =>
+      request<{ event: BattleEvent; match: import("./types").TournamentMatch }>(
+        `/admin/tournaments/${eventId}/advance`,
+        { method: "POST", body: { matchId, winnerId }, adminWallet, sessionToken },
+      ),
+
+    declareTournamentChampion: (
+      eventId: string,
+      championId: string,
+      adminWallet: string,
+      sessionToken?: string,
+    ) =>
+      request<{ event: BattleEvent; snapshot: any; message: string }>(
+        `/admin/tournaments/${eventId}/champion`,
+        { method: "POST", body: { championId }, adminWallet, sessionToken },
+      ),
+
+    getTournamentSnapshot: (eventId: string, adminWallet: string, sessionToken?: string) =>
+      request<any>(`/admin/snapshots/tournament/${eventId}`, { adminWallet, sessionToken }),
 
     createBattle: (data: BattleFormData, adminWallet: string, sessionToken?: string) =>
       request<Battle>("/admin/battles", { method: "POST", body: data, adminWallet, sessionToken }),

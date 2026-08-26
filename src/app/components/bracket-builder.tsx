@@ -22,16 +22,19 @@ import {
 import { api } from "../lib/api";
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "./error-boundary";
-import type { Athlete, BattleEvent } from "../lib/types";
+import type { Athlete, BattleEvent, EventCompetitionFormat, EventElimination } from "../lib/types";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { getCountryFlag } from "../lib/country-flags";
 import { InlineFlag } from "./country-flag";
+import { TournamentAdminPanel } from "./tournament-admin-panel";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const DND_TYPE = "ATHLETE";
+const PVP_SIZES = [2, 4, 6, 8, 10, 12];
+const TOURNAMENT_SIZES = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 interface SeatAssignment {
   seat: number;
@@ -57,6 +60,8 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   const [saving, setSaving] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
   const [bracketSize, setBracketSize] = useState(12);
+  const [competitionFormat, setCompetitionFormat] = useState<EventCompetitionFormat>("pvp");
+  const [elimination, setElimination] = useState<EventElimination>("single");
 
   // Seat assignments — array of { seat, athleteId }
   const [seats, setSeats] = useState<SeatAssignment[]>([]);
@@ -68,6 +73,15 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [prizePool, setPrizePool] = useState(0);
+
+  const sizeOptions = competitionFormat === "tournament" ? TOURNAMENT_SIZES : PVP_SIZES;
+
+  // Keep size valid when switching format
+  useEffect(() => {
+    if (!sizeOptions.includes(bracketSize)) {
+      setBracketSize(competitionFormat === "tournament" ? 8 : 12);
+    }
+  }, [competitionFormat, sizeOptions, bracketSize]);
 
   // Load athletes + existing events
   const loadData = useCallback(async () => {
@@ -188,6 +202,8 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
           startDate,
           endDate,
           totalPrizePool: prizePool,
+          format: competitionFormat,
+          elimination: competitionFormat === "tournament" ? elimination : "single",
           bracket: seats.map((s) => ({
             seat: s.seat,
             athleteId: s.athleteId!,
@@ -208,6 +224,8 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
         setStartDate("");
         setEndDate("");
         setPrizePool(0);
+        setCompetitionFormat("pvp");
+        setElimination("single");
         clearAll();
       } else {
         toast.error(res.error || "Failed to generate bracket");
@@ -220,6 +238,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   }, [
     eventName, eventDescription, eventLocation, startDate, endDate,
     prizePool, seats, allSeatsAssigned, wallet, loadData, clearAll, sessionToken,
+    competitionFormat, elimination,
   ]);
 
   if (loading) {
@@ -269,21 +288,39 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                   <div className="min-w-0">
                     <p className="text-[#E8ECF0] text-sm font-semibold truncate">{evt.name}</p>
                     <p className="text-[#8494A7] text-[0.6rem] truncate">
-                      {evt.bracketSize}-athlete bracket · {evt.rounds?.length || 0} rounds ·{" "}
-                      {evt.location || "TBD"}
+                      {(evt.format === "tournament" ? "TOURNAMENT" : "1v1 PvP")} · {evt.bracketSize}-athlete
+                      {evt.format === "tournament"
+                        ? ` · ${evt.votingStatus || "draft"}`
+                        : ` · ${evt.rounds?.length || 0} rounds`}
+                      {" · "}{evt.location || "TBD"}
                     </p>
                   </div>
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[0.55rem] ${
-                  evt.status === "active" ? "bg-[#10b981]/10 text-[#10b981]" :
-                  evt.status === "completed" ? "bg-[#4274B9]/10 text-[#4274B9]" :
-                  "bg-[#D4A843]/10 text-[#D4A843]"
+                  evt.format === "tournament"
+                    ? "bg-[#D4A843]/10 text-[#D4A843]"
+                    : evt.status === "active" ? "bg-[#10b981]/10 text-[#10b981]" :
+                      evt.status === "completed" ? "bg-[#4274B9]/10 text-[#4274B9]" :
+                      "bg-[#D4A843]/10 text-[#D4A843]"
                 }`}>
-                  {evt.status?.toUpperCase() || "DRAFT"}
+                  {evt.format === "tournament"
+                    ? (evt.votingStatus || evt.status || "draft").toUpperCase()
+                    : (evt.status?.toUpperCase() || "DRAFT")}
                 </span>
               </div>
             ))}
           </div>
+        )}
+
+        {/* Tournament admin controls (open voting / advance / champion) */}
+        {!showBuilder && (
+          <TournamentAdminPanel
+            events={events.filter((e) => e.format === "tournament")}
+            athletes={athletes}
+            wallet={wallet}
+            sessionToken={sessionToken}
+            onRefresh={loadData}
+          />
         )}
 
         {/* No events state */}
@@ -318,6 +355,65 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                 </div>
 
                 <div className="p-4 sm:p-5 space-y-5">
+                  {/* Competition format */}
+                  <div>
+                    <SectionHeader icon={<Swords className="w-3.5 h-3.5" />} title="COMPETITION FORMAT" />
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setCompetitionFormat("pvp")}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                          competitionFormat === "pvp"
+                            ? "bg-[#4274B9] text-white border-[#4274B9]"
+                            : "bg-[#162033] text-[#8494A7] border-[#4274B9]/20 hover:border-[#4274B9]/40"
+                        }`}
+                        style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.55rem" }}
+                      >
+                        1v1 MATCHUPS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCompetitionFormat("tournament")}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                          competitionFormat === "tournament"
+                            ? "bg-[#D4A843] text-[#0B1120] border-[#D4A843]"
+                            : "bg-[#162033] text-[#8494A7] border-[#4274B9]/20 hover:border-[#D4A843]/40"
+                        }`}
+                        style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.55rem" }}
+                      >
+                        TOURNAMENT (CHAMPION PICK)
+                      </button>
+                    </div>
+                    <p className="text-[#8494A7] text-[0.55rem] mt-2 leading-relaxed">
+                      {competitionFormat === "tournament"
+                        ? "Fans pick one overall champion. Creates a single-elim bracket for display — no 1v1 voting battles. Uses tournament wins/losses only."
+                        : "Existing flow: generates Round 1 1v1 battles fans vote on. Uses battle wins/losses."}
+                    </p>
+                    {competitionFormat === "tournament" && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => setElimination("single")}
+                          className={`px-2.5 py-1.5 rounded-lg text-[0.55rem] font-bold border ${
+                            elimination === "single"
+                              ? "bg-[#10b981]/15 text-[#10b981] border-[#10b981]/40"
+                              : "bg-[#162033] text-[#8494A7] border-[#4274B9]/15"
+                          }`}
+                        >
+                          Single Elimination
+                        </button>
+                        <button
+                          type="button"
+                          disabled
+                          title="Coming soon"
+                          className="px-2.5 py-1.5 rounded-lg text-[0.55rem] font-bold border bg-[#162033] text-[#8494A7]/40 border-[#4274B9]/10 cursor-not-allowed"
+                        >
+                          Double Elimination (Phase 2)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Event Metadata */}
                   <div>
                     <SectionHeader icon={<Calendar className="w-3.5 h-3.5" />} title="EVENT DETAILS" />
@@ -393,7 +489,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                   <div>
                     <SectionHeader icon={<Users className="w-3.5 h-3.5" />} title="BRACKET SIZE" />
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {[2, 4, 6, 8, 10, 12].map((size) => (
+                      {sizeOptions.map((size) => (
                         <button
                           key={size}
                           onClick={() => setBracketSize(size)}
@@ -411,7 +507,9 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         </button>
                       ))}
                       <span className="flex items-center text-[#8494A7] text-[0.55rem]">
-                        athletes · {bracketSize / 2} R1 matches
+                        {competitionFormat === "tournament"
+                          ? `athletes · single-elim (byes pad to ${Math.pow(2, Math.ceil(Math.log2(Math.max(bracketSize, 2))))})`
+                          : `athletes · ${bracketSize / 2} R1 matches`}
                       </span>
                     </div>
                     {athletes.length < bracketSize && (

@@ -17,6 +17,8 @@ import {
   Loader2, User, Shield, Crown, AlertCircle, Timer, Pencil,
   Fingerprint, Trophy, Flame, Hash, Target, CalendarClock,
 } from "lucide-react";
+import { TournamentCard } from "../components/tournament-card";
+import type { TournamentVote } from "../lib/types";
 import { useWallet } from "../components/wallet-context";
 import { useVIP } from "../components/vip/vip-context";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
@@ -34,9 +36,10 @@ import { useBattleTheme, resolveAthleteColors } from "../components/battle-theme
 import { CountryFlag, InlineFlag } from "../components/country-flag";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-type BattleFilter = "all" | "voting_open" | "upcoming" | "completed";
+type BattleFilter = "all" | "voting_open" | "upcoming" | "completed" | "tournaments";
 
 function matchesFilter(status: string, filter: BattleFilter): boolean {
+  if (filter === "tournaments") return false; // 1v1 battles hidden on tournaments tab
   if (filter === "all") return true;
   if (filter === "voting_open") return status === "voting_open";
   if (filter === "upcoming") return status === "upcoming" || status === "draft";
@@ -139,7 +142,34 @@ export function BattlesPage() {
   const { map: athleteMap, loading: athletesLoading } = useAthleteMap();
   const { voteMap, refresh: refreshMyVotes } = useMyVotes(connected ? accountId : null);
   const { allocations, refresh: refreshAllocations } = useAllocations(connected ? accountId : null);
-  const { data: events } = useEvents();
+  const { data: events, refresh: refreshEvents } = useEvents();
+  const [myTournamentVotes, setMyTournamentVotes] = useState<Map<string, TournamentVote>>(new Map());
+
+  const tournamentEvents = useMemo(
+    () => (events || []).filter((e) => e.format === "tournament" && e.votingStatus && e.votingStatus !== "draft"),
+    [events],
+  );
+
+  const refreshMyTournamentVotes = useCallback(async () => {
+    if (!accountId) {
+      setMyTournamentVotes(new Map());
+      return;
+    }
+    try {
+      const res = await api.getMyTournamentVotes(accountId);
+      if (res.success && Array.isArray(res.data)) {
+        const map = new Map<string, TournamentVote>();
+        for (const v of res.data) map.set(v.eventId, v);
+        setMyTournamentVotes(map);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [accountId]);
+
+  useEffect(() => {
+    void refreshMyTournamentVotes();
+  }, [refreshMyTournamentVotes]);
 
   const loading = battlesLoading || athletesLoading;
 
@@ -506,11 +536,15 @@ export function BattlesPage() {
 
   // ─── Filters ────────────────────────────────────────────────────────────
   const FILTERS: { key: BattleFilter; label: string; icon: typeof Swords }[] = [
-    { key: "all", label: "All Battles", icon: Swords },
-    { key: "voting_open", label: "Live", icon: Zap },
+    { key: "all", label: "All", icon: Swords },
+    { key: "tournaments", label: "Tournaments", icon: Trophy },
+    { key: "voting_open", label: "Live 1v1", icon: Zap },
     { key: "upcoming", label: "Upcoming", icon: Clock },
     { key: "completed", label: "Completed", icon: CheckCircle },
   ];
+
+  const showTournaments = filter === "all" || filter === "tournaments";
+  const showBattles = filter !== "tournaments";
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
@@ -590,7 +624,30 @@ export function BattlesPage() {
             <ErrorCard error={battlesError || "Failed to load battles"} />
           )}
 
-          {!loading && !battlesHasError && filteredBattles.length === 0 ? (
+          {!loading && showTournaments && tournamentEvents.length > 0 && (
+            <div className="space-y-6 sm:space-y-8 mb-8">
+              {tournamentEvents.map((evt) => (
+                <TournamentCard
+                  key={evt.id}
+                  event={evt}
+                  athleteMap={athleteMap}
+                  myVote={myTournamentVotes.get(evt.id)}
+                  connected={connected}
+                  accountId={accountId}
+                  votingPower={votingPower}
+                  walletSessionToken={walletSessionToken}
+                  walletProvider={walletProvider}
+                  signMessage={signMessage}
+                  onVoted={() => {
+                    void refreshEvents();
+                    void refreshMyTournamentVotes();
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {!loading && !battlesHasError && showBattles && filteredBattles.length === 0 && tournamentEvents.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -598,12 +655,14 @@ export function BattlesPage() {
             >
               <Swords className="w-10 h-10 mx-auto text-[#4274B9]/20 mb-4" />
               <p className="text-[#8494A7] text-sm max-w-sm mx-auto">
-                {filter === "all"
+                {filter === "tournaments"
+                  ? "No live tournaments yet. Admins create them under Brackets → Tournament (Champion Pick)."
+                  : filter === "all"
                   ? "Battles will appear here once the WCO admin creates matchups via the Admin Command Center."
                   : "No battles match this filter. Try another category."}
               </p>
             </motion.div>
-          ) : (
+          ) : showBattles && filteredBattles.length > 0 ? (
             <div className="space-y-6 sm:space-y-8">
               {filteredBattles.map((battle, i) => {
                 const status = statusLabel(battle.status);
@@ -1080,7 +1139,7 @@ export function BattlesPage() {
                 );
               })}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -1376,6 +1435,9 @@ function BattleAthleteCard({
                 <span className="text-[#10b981]">{athlete.wins}</span>
                 <span className="text-[#8494A7]">-</span>
                 <span className="text-[#EF4444]">{athlete.losses}</span>
+                <span className="text-[#D4A843] text-[0.45rem] ml-1">
+                  T{(athlete.tournamentWins || 0)}-{(athlete.tournamentLosses || 0)}
+                </span>
               </span>
             </div>
             <div className="flex flex-col items-center p-1.5 rounded-lg bg-[#0B1120]/60 border border-[#1e293b]/40">

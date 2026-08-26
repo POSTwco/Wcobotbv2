@@ -74,9 +74,12 @@ export interface Athlete {
   email?: string;                // Contact email (admin-only, not public)
   phone?: string;                // Contact phone number (admin-only, not public)
 
-  // Competition data
+  // Competition data — 1v1 battle record (unchanged by tournaments)
   wins: number;
   losses: number;
+  /** Separate tournament ranking — champion pick events only */
+  tournamentWins?: number;
+  tournamentLosses?: number;
   streak: number;                // Current win/loss streak
   rank: number;                  // Overall ranking (1 = best)
   status: AthleteStatus;
@@ -128,8 +131,20 @@ export interface Athlete {
 export type AthleteStatus = "active" | "eliminated" | "champion" | "inactive";
 
 // ---------------------------------------------------------------------------
-// Battle Event (a tournament/competition containing multiple battles)
+// Battle Event (PvP bracket of 1v1 battles OR tournament champion-pick)
 // ---------------------------------------------------------------------------
+/** PvP = existing 1v1 voting matchups. Tournament = fans pick one overall champion. */
+export type EventCompetitionFormat = "pvp" | "tournament";
+export type EventElimination = "single" | "double";
+
+export type TournamentVotingStatus =
+  | "draft"
+  | "upcoming"
+  | "voting_open"
+  | "voting_closed"
+  | "champion_declared"
+  | "rewards_distributed";
+
 export interface BattleEvent {
   id: string;                    // e.g. "evt-001"
   name: string;                  // e.g. "BOTB World Championship 2026"
@@ -139,9 +154,25 @@ export interface BattleEvent {
   endDate: string;               // ISO date
   totalPrizePool: number;        // Total WCO/BOTB tokens in pool
   status: EventStatus;
-  bracketSize: number;           // 2, 4, 6, 8, 10, or 12
+  bracketSize: number;           // PvP: 2–12 even; Tournament: 3–12
   bracket: BracketSeat[];        // Ordered seat assignments
-  rounds: BracketRound[];        // Generated matchup rounds
+  rounds: BracketRound[];        // Generated matchup rounds (PvP battle IDs; tournament may be empty)
+
+  /** Defaults to "pvp" for legacy events */
+  format?: EventCompetitionFormat;
+  /** Tournament only — v1 uses single; double reserved */
+  elimination?: EventElimination;
+  /** Tournament entrant ids (denormalized from bracket) */
+  athleteIds?: string[];
+  /** Tournament fan-vote lifecycle (independent of event.status) */
+  votingStatus?: TournamentVotingStatus;
+  championId?: string;
+  voteTallies?: Record<string, { count: number; weighted: number }>;
+  totalVotes?: number;
+  totalWeighted?: number;
+  /** Single-elim (and future double) match tree for display / admin advance */
+  tournamentMatches?: TournamentMatch[];
+
   createdAt: string;
   updatedAt: string;
 }
@@ -156,7 +187,39 @@ export interface BracketSeat {
 export interface BracketRound {
   roundNumber: number;           // 1, 2, 3, 4 (finals)
   roundName: string;             // "Round 1", "Quarter-Finals", "Semi-Finals", "Finals"
-  battleIds: string[];           // IDs of battles in this round
+  battleIds: string[];           // IDs of battles in this round (PvP only)
+}
+
+/** Structural match in a tournament bracket (not a public 1v1 Battle vote target) */
+export interface TournamentMatch {
+  id: string;
+  round: number;
+  roundName: string;
+  bracketSide: "winners" | "losers";
+  position: number;
+  athlete1Id: string | null;
+  athlete2Id: string | null;
+  winnerId?: string | null;
+  isBye?: boolean;
+  nextMatchId?: string | null;
+  nextSlot?: 1 | 2 | null;
+}
+
+/** Fan champion-pick vote on a tournament event */
+export interface TournamentVote {
+  eventId: string;
+  wallet: string;
+  athleteId: string;
+  stakeAmount: number;
+  votingPower: number;
+  weightedVote: number;
+  hasGovernorNFT: boolean;
+  hasSigmaNFT: boolean;
+  timestamp: string;
+  signature: string;
+  signedMessage: string;
+  nonce: string;
+  isUpdate?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +576,8 @@ export interface EventFormData {
   totalPrizePool: number;
   bracketSize: number;
   bracket: BracketSeat[];
+  format?: EventCompetitionFormat;
+  elimination?: EventElimination;
 }
 
 // ---------------------------------------------------------------------------

@@ -45,6 +45,9 @@
  *   POST /vote/battles/batch  Batch vote on 2-12 battles in one event (X-Wallet-Session + single sig)
  *   GET  /vote/allocations/:w Get token allocations per event for a wallet
  *   POST /vote/proposal       Cast a proposal vote (requires X-Wallet-Session + wallet signature)
+ *   POST /vote/tournament     Cast/update tournament champion pick (headcount/token-ready)
+ *   GET  /votes/tournament/:eventId  Tournament tallies + bracket matches
+ *   GET  /votes/tournament/mine/:wallet  Wallet's tournament picks
  *
  *   NOTE: POST /vote/skill was REMOVED. Athlete skills are now admin-only.
  *         Governors may propose skill changes via governance proposals.
@@ -63,7 +66,11 @@
  *   DELETE /admin/athletes/:id            Delete athlete
  *   POST   /admin/battles/batch-status    Batch-update multiple battles' status
  *   POST   /admin/events             Create or update event
- *   POST   /admin/events/generate    Create event + auto-generate bracket battles
+ *   POST   /admin/events/generate    Create event + auto-generate bracket battles (or tournament)
+ *   POST   /admin/tournaments/:id/status   Open/close tournament voting
+ *   POST   /admin/tournaments/:id/advance  Advance a tournament bracket match
+ *   POST   /admin/tournaments/:id/champion Declare tournament champion + snapshot
+ *   GET    /admin/snapshots/tournament/:id Tournament reward snapshot
  *   POST   /admin/battles            Create or update battle
  *   POST   /admin/battles/:id/status Update battle status
  *   POST   /admin/battles/:id/winner Declare winner + generate snapshot
@@ -169,6 +176,7 @@ import {
 import { mountCaliRoutes } from "./cali.tsx";
 import { mountEliteRoutes } from "./elite.tsx";
 import { mountContestRoutes } from "./contest.tsx";
+import { createTournamentEvent, mountTournamentRoutes } from "./tournament.tsx";
 import { mountMagicRoutes } from "./magic-accounts.tsx";
 import { mountEarlySupporterRoutes } from "./early-supporter.tsx";
 
@@ -2072,6 +2080,18 @@ app.post(`${PREFIX}/admin/athletes`, requireAdminSession, async (c) => {
       phone: sanitizeString(body.phone ?? existing?.phone, 50),
       wins: sanitizeNumber(body.wins ?? existing?.wins, 0, 9999, existing?.wins ?? 0),
       losses: sanitizeNumber(body.losses ?? existing?.losses, 0, 9999, existing?.losses ?? 0),
+      tournamentWins: sanitizeNumber(
+        body.tournamentWins ?? existing?.tournamentWins,
+        0,
+        9999,
+        existing?.tournamentWins ?? 0,
+      ),
+      tournamentLosses: sanitizeNumber(
+        body.tournamentLosses ?? existing?.tournamentLosses,
+        0,
+        9999,
+        existing?.tournamentLosses ?? 0,
+      ),
       streak: sanitizeNumber(body.streak ?? existing?.streak, 0, 999, existing?.streak ?? 0),
       rank: sanitizeNumber(rank ?? existing?.rank, 1, 9999, existing?.rank ?? 999),
       bracketSeat: sanitizeNumber(body.bracketSeat ?? existing?.bracketSeat, 0, 128, existing?.bracketSeat ?? 0),
@@ -2212,6 +2232,26 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       }
     }
 
+    // ── Tournament format (champion-pick) — no public 1v1 battles ──
+    const format = body.format === "tournament" ? "tournament" : "pvp";
+    if (format === "tournament") {
+      try {
+        const { event, message } = await createTournamentEvent(body);
+        console.log(`[ADMIN] Generated TOURNAMENT event ${event.id} "${event.name}". Admin: ${adminWallet}`);
+        return c.json({
+          success: true,
+          data: { event, battles: [], message },
+        });
+      } catch (err: any) {
+        const status = err?.status || 500;
+        return c.json({
+          success: false,
+          error: err?.message || "Failed to create tournament",
+          code: err?.code,
+        }, status);
+      }
+    }
+
     const eventId = generateId("evt");
     const bracketSize = body.bracket.length;
 
@@ -2313,7 +2353,7 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       roundNum++;
     }
 
-    // Save the event
+    // Save the event (explicit format: pvp — legacy 1v1 path)
     const event = {
       id: eventId,
       name: body.name,
@@ -2323,6 +2363,8 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       endDate: body.endDate || "",
       totalPrizePool: body.totalPrizePool ?? 0,
       status: "draft",
+      format: "pvp",
+      elimination: "single",
       bracketSize,
       bracket: seats,
       rounds,
@@ -2333,7 +2375,7 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
     await kv.set(`event:${eventId}`, event);
 
     console.log(
-      `[ADMIN] Generated bracket event ${eventId} "${body.name}" with ${bracketSize} athletes, ` +
+      `[ADMIN] Generated PvP bracket event ${eventId} "${body.name}" with ${bracketSize} athletes, ` +
       `${round1Battles.length} R1 battles, ${rounds.length} total rounds. Admin: ${adminWallet}`
     );
 
@@ -3608,6 +3650,8 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         socials: { instagram: "", twitter: "", youtube: "", website: "" },
         wins: 0,
         losses: 0,
+        tournamentWins: 0,
+        tournamentLosses: 0,
         streak: 0,
         rank: 1,
         status: "active",
@@ -3639,6 +3683,8 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         socials: { instagram: "", twitter: "", youtube: "", website: "" },
         wins: 0,
         losses: 0,
+        tournamentWins: 0,
+        tournamentLosses: 0,
         streak: 0,
         rank: 2,
         status: "active",
@@ -3670,6 +3716,8 @@ app.post(`${PREFIX}/admin/seed`, requireAdminSession, async (c) => {
         socials: { instagram: "", twitter: "", youtube: "", website: "" },
         wins: 0,
         losses: 0,
+        tournamentWins: 0,
+        tournamentLosses: 0,
         streak: 0,
         rank: 3,
         status: "active",
@@ -5092,6 +5140,8 @@ app.post(`${PREFIX}/admin/applications/:id/approve`, requireAdminSession, async 
       },
       wins: 0,
       losses: 0,
+      tournamentWins: 0,
+      tournamentLosses: 0,
       streak: 0,
       rank,
       status: "active",
@@ -6277,6 +6327,7 @@ mountMagicRoutes(app, PREFIX);
 mountCaliRoutes(app, PREFIX);
 mountEliteRoutes(app, PREFIX);
 mountContestRoutes(app, PREFIX);
+mountTournamentRoutes(app, PREFIX);
 // Early Supporter claim — defaults DISABLED (EARLY_SUPPORTER_ENABLED=false)
 mountEarlySupporterRoutes(app, PREFIX);
 
