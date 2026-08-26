@@ -116,16 +116,12 @@ export function ApplyPage() {
         >
           <img src={botbShield} alt="BOTB" className="h-20 w-auto mx-auto mb-6 drop-shadow-2xl" />
           <h1
-            className="text-2xl sm:text-3xl mb-4"
+            className="text-2xl sm:text-3xl mb-8"
             style={{ fontFamily: "Orbitron, sans-serif" }}
           >
             <span className="text-white">ENTER THE </span>
             <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">ARENA</span>
           </h1>
-          <p className="text-[#8494A7] text-sm mb-8 leading-relaxed">
-            Connect your Hedera wallet to apply as a BOTB athlete.
-            Your wallet identity verifies your application and links you to the platform.
-          </p>
           <button
             onClick={connect}
             disabled={isConnecting}
