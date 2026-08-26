@@ -358,7 +358,7 @@ app.use(`/*`, rateLimit({
 }));
 
 // ---------------------------------------------------------------------------
-// Calisthenics tab — HBAR-gated workout routes (mounted under PREFIX/cali/*)
+// Calisthenics tab — wallet-gated free workout routes (mounted under PREFIX/cali/*)
 // Sits behind the global CORS + rate-limit middleware above.
 // ---------------------------------------------------------------------------
 // Note: mountCaliRoutes moved to the very end (after all other routes) so that

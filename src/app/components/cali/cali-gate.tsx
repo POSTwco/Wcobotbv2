@@ -1,10 +1,11 @@
 /**
- * Cali Gate — Wallet connect + HBAR check + signature verification.
+ * Cali Gate — Wallet connect + signature verification (free play).
  * Supports HashPack (WalletConnect) and Magic email wallets.
+ * No HBAR balance required to generate or log workouts.
  */
 
 import { useEffect, useRef } from "react";
-import { Dumbbell, Loader2, Wallet, ShieldCheck, AlertCircle, Coins, Mail } from "lucide-react";
+import { Dumbbell, Loader2, Wallet, ShieldCheck, AlertCircle, Mail } from "lucide-react";
 import { useCaliSession } from "./cali-context";
 import { useWallet } from "../wallet-context";
 import { isMagicEnabled } from "../../lib/wallet-types";
@@ -53,9 +54,9 @@ export function CaliGate() {
       wallet.walletProvider === "magic"
         ? "Waiting for Magic signature…"
         : "Waiting for wallet signature…",
-    verifying: "Verifying HBAR balance…",
+    verifying: "Verifying wallet…",
     eligible: "You're in.",
-    revoked: "Access revoked — HBAR balance dropped below the gate.",
+    revoked: "Session expired — reconnect and verify again.",
     error: "Something went wrong.",
   };
 
@@ -94,25 +95,20 @@ export function CaliGate() {
               WCO CALISTHENICS
             </p>
             <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight" style={orbitron}>
-              Free Workout Plans for HBAR Holders
+              Free Workout Plans
             </h1>
           </div>
         </div>
 
         <p className="text-sm text-[#A3B0C2] mb-6 leading-relaxed" style={dmSans}>
-          Auto-generated calisthenics sessions for verified HBAR holders. Connect with{" "}
+          Auto-generated calisthenics sessions — free to play. Connect with{" "}
           <strong className="text-[#E8ECF0]">HashPack</strong> or{" "}
-          <strong className="text-[#E8ECF0]">email (Magic)</strong> — both sign the gate
-          challenge on this site. Keep at least 1 HBAR.
+          <strong className="text-[#E8ECF0]">email (Magic)</strong>, sign once, then generate
+          workouts and score. No HBAR required. Chain anchoring may add a fee later.
         </p>
 
         <div className="space-y-2.5 mb-6">
           <ChecklistItem ok={wallet.connected} label={connectLabel} icon={<Wallet className="w-4 h-4" />} />
-          <ChecklistItem
-            ok={cali.phase === "eligible"}
-            label="Hold at least 1 HBAR (verified live)"
-            icon={<Coins className="w-4 h-4" />}
-          />
           <ChecklistItem
             ok={cali.phase === "eligible"}
             label={signLabel}

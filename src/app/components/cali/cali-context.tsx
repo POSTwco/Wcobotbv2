@@ -8,7 +8,7 @@
  *   error ←──────────────────────────────────────────── revoked
  *
  * The cali session token is *separate* from any other wallet session token
- * in the app — it's specifically scoped to the cali HBAR-gate. It lives in
+ * in the app — it's specifically scoped to the cali wallet gate. It lives in
  * localStorage (key: botb-cali-session) and is silently restored on mount,
  * then validated against /cali/session/me before the UI commits.
  *
@@ -61,7 +61,7 @@ interface CaliContextValue {
   minTinybars: number;
   /** Kick off the full sign-and-verify flow. Wallet must already be connected. */
   enter: () => Promise<void>;
-  /** Re-check HBAR balance + extend session. */
+  /** Re-check session (optional balance) + extend. */
   refresh: () => Promise<void>;
   /** Wipe local token (server eligibility KV will time out on its own). */
   signOut: () => void;

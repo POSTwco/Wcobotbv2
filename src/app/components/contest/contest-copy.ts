@@ -75,7 +75,7 @@ export const CONTEST_DETAILS_SECTIONS = [
   {
     title: "Eligibility",
     body:
-      "You must be of legal age of majority in your jurisdiction. A valid Hedera wallet connection is required. Contest entry does not require holding HBAR (the free workout tab may still require ≥1 HBAR separately). Void where prohibited. WCO may disqualify bots, multi-accounting abuse, or fraudulent activity.",
+      "You must be of legal age of majority in your jurisdiction. A valid Hedera wallet connection is required. Contest entry, free workouts, and battle votes do not require holding HBAR. Void where prohibited. WCO may disqualify bots, multi-accounting abuse, or fraudulent activity.",
   },
   {
     title: "How winners are chosen",

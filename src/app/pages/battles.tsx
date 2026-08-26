@@ -547,7 +547,9 @@ export function BattlesPage() {
                   BATTLES
                 </h1>
                 <p className="text-[0.65rem] sm:text-xs text-[#8494A7] mt-0.5">
-                  Token-weighted voting &bull; ED25519 signature verified
+                  {tokenLive
+                    ? "Token-weighted voting · signature verified"
+                    : "Free headcount votes · no token rewards yet · signature verified"}
                 </p>
               </div>
             </div>
@@ -1053,7 +1055,7 @@ export function BattlesPage() {
 
                                 {!tokenLive && (
                                   <p className="text-[0.5rem] text-[#8494A7]">
-                                    Pre-launch: counts as 1 headcount vote
+                                    Free headcount vote · no token rewards yet
                                   </p>
                                 )}
                               </div>

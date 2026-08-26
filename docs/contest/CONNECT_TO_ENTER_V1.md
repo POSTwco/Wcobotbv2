@@ -5,7 +5,7 @@
 - **Goal:** 5,000 unique eligible wallets
 - **Main prizes:** $150 / $75 / $25 ($250)
 - **Social prize:** $100 (share workout on X via CaliShareProof)
-- **Eligibility:** WalletConnect session (unique wallet). **No HBAR required for contest entry.** Workout engine still gates at ≥1 HBAR.
+- **Eligibility:** WalletConnect session (unique wallet). **No HBAR required for contest entry.** Workout engine and battle votes are also free-play (wallet + signature only; no HBAR).
 - **Privacy:** Full wallets admin-only; never publish public wallet lists
 
 ## Status machine

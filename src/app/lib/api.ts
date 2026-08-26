@@ -1040,7 +1040,7 @@ export const api = {
       "/admin/cali/featured-athlete", { method: "POST", body: featured, adminWallet, sessionToken }),
 
   // ---------------------------------------------------------------------------
-  // Calisthenics (HBAR-gated workout tab)
+  // Calisthenics (wallet-gated free workout tab)
   // ---------------------------------------------------------------------------
   //
   // Auth shape:

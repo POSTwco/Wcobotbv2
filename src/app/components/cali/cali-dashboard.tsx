@@ -172,7 +172,7 @@ export function CaliDashboard() {
             Today's Session
           </h1>
           <p className="text-xs text-[#8494A7] mt-1" style={dmSans}>
-            {cali.accountId} · {((cali.eligibility?.tinybars ?? 0) / 1e8).toFixed(4)} ℏ
+            {cali.accountId} · Free play
           </p>
         </div>
         <button

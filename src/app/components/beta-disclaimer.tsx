@@ -207,7 +207,8 @@ export function BetaDisclaimer() {
             By connecting a wallet while a contest is open you may be automatically entered if you meet
             eligibility rules published in-app (typically a unique Hedera wallet connection —{" "}
             <strong className="text-[#E8ECF0]">no HBAR balance is required for contest entry</strong>).
-            Separate features such as free calisthenics workouts may still require ≥1 HBAR. Key terms:
+            Free calisthenics workouts and battle votes likewise require only a connected wallet
+            (no HBAR). A future fee may apply only when anchoring workouts to chain. Key terms:
             <ul className="mt-2 ml-4 space-y-1 list-disc marker:text-[#4274B9]/50">
               <li>
                 Main prizes may total <strong className="text-[#E8ECF0]">$250 USD</strong> (e.g. $150 / $75 / $25)

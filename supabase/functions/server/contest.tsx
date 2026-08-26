@@ -445,7 +445,7 @@ async function tryEnter(
     }
 
     // Contest entry: any connected wallet qualifies (no HBAR gate).
-    // Calisthenics workout engine keeps its own ≥1 HBAR gate in cali.tsx.
+    // Calisthenics workouts are also free-play (MIN_HBAR_TINYBARS = 0 in cali.tsx).
     // Optional balance snapshot for ops analytics only — never blocks entry.
     let tinybars = 0;
     try {

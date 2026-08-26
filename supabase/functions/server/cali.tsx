@@ -3,7 +3,7 @@
  * ========================================================
  *
  * SCOPE OF THIS SLICE:
- *   - HBAR-gated wallet authentication for the /calisthenics tab
+ *   - Wallet-gated authentication for the /calisthenics tab (free play)
  *   - Reuses admin-auth's mirror-node, rate-limit, signature, and sanitization
  *     helpers verbatim — no duplicated crypto code
  *   - Stateless HMAC session token (revocable by deleting the eligibility KV
@@ -12,7 +12,10 @@
  * GATE REQUIREMENTS (all enforced server-side, never trusted from client):
  *   1. Wallet ID matches Hedera account-ID format
  *   2. Wallet exists on Hedera mainnet (mirror node)
- *   3. Wallet HBAR balance >= MIN_HBAR_TINYBARS (1 HBAR = 100_000_000 tinybars)
+ *   3. (Optional) HBAR balance >= MIN_HBAR_TINYBARS — currently DISABLED (0).
+ *      Free workouts + scoring need only a connected wallet + signature.
+ *      A future fee may apply only when anchoring workouts to chain — not for
+ *      generate / log / play.
  *   4. Wallet signed a fresh, single-use challenge nonce via WalletConnect
  *   5. Signature payload is non-trivially long (proves wallet UI approval)
  *   6. (Post-launch when BOTB_TOKEN_ID is set) Full ED25519 crypto verify
@@ -111,8 +114,13 @@ function getExerciseSafe(id: string) {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** 1 HBAR in tinybars — gate threshold (per product spec, stricter than dust). */
-const MIN_HBAR_TINYBARS = 100_000_000;
+/**
+ * HBAR gate threshold in tinybars.
+ * 0 = free play (anyone with a verified wallet can generate/log workouts).
+ * Re-enable (e.g. 100_000_000 = 1 HBAR) only if product requires a balance
+ * gate again. Chain-anchor fees are a separate future charge — not this gate.
+ */
+const MIN_HBAR_TINYBARS = 0;
 
 /** Challenge nonce TTL — mirrors admin-auth (5 min). */
 const CALI_CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -444,7 +452,7 @@ async function getEligibility(accountId: string): Promise<EligibilityRecord | nu
  * AND that the wallet still has an unexpired eligibility record in KV.
  * Either failing the HMAC (expired/tampered) OR a missing/expired
  * eligibility record results in 401. The eligibility record is the
- * revocable layer — deleting it forces the user to re-verify HBAR balance.
+ * revocable layer — deleting it forces the user to re-verify wallet ownership.
  */
 export async function requireCaliSession(c: Context, next: Next) {
   // Read from X-Cali-Session header (not Authorization — that stays the
@@ -475,36 +483,39 @@ export async function requireCaliSession(c: Context, next: Next) {
     );
   }
 
-  // Live mirror HBAR re-check (cached via getAccountBalanceTinybars — 60s KV / 10s mem)
-  let tinybars: number;
-  try {
-    tinybars = await getAccountBalanceTinybars(payload.accountId);
-  } catch (err) {
-    console.log(`[CALI-SESSION] Balance fetch failed for ${payload.accountId}: ${err}`);
-    return c.json(
-      {
-        success: false,
-        error: "Unable to verify HBAR balance right now. Please retry shortly.",
-        code: "MIRROR_NODE_UNAVAILABLE",
-      },
-      502,
-    );
-  }
-  if (tinybars < MIN_HBAR_TINYBARS) {
-    await kv.del(`cali:eligible:${payload.accountId}`).catch(() => {});
-    console.log(
-      `[CALI-SESSION] Balance below gate (${tinybars} < ${MIN_HBAR_TINYBARS}) for ${payload.accountId} — revoking`,
-    );
-    return c.json(
-      {
-        success: false,
-        error: `HBAR balance fell below 1 HBAR. Re-verify after topping up.`,
-        code: "INSUFFICIENT_HBAR",
-        tinybars,
-        requiredTinybars: MIN_HBAR_TINYBARS,
-      },
-      403,
-    );
+  // Optional live HBAR re-check (only when MIN_HBAR_TINYBARS > 0).
+  // Free-play mode (MIN=0): skip balance enforcement; still attach eligibility.
+  if (MIN_HBAR_TINYBARS > 0) {
+    let tinybars: number;
+    try {
+      tinybars = await getAccountBalanceTinybars(payload.accountId);
+    } catch (err) {
+      console.log(`[CALI-SESSION] Balance fetch failed for ${payload.accountId}: ${err}`);
+      return c.json(
+        {
+          success: false,
+          error: "Unable to verify HBAR balance right now. Please retry shortly.",
+          code: "MIRROR_NODE_UNAVAILABLE",
+        },
+        502,
+      );
+    }
+    if (tinybars < MIN_HBAR_TINYBARS) {
+      await kv.del(`cali:eligible:${payload.accountId}`).catch(() => {});
+      console.log(
+        `[CALI-SESSION] Balance below gate (${tinybars} < ${MIN_HBAR_TINYBARS}) for ${payload.accountId} — revoking`,
+      );
+      return c.json(
+        {
+          success: false,
+          error: `HBAR balance fell below the required gate. Re-verify after topping up.`,
+          code: "INSUFFICIENT_HBAR",
+          tinybars,
+          requiredTinybars: MIN_HBAR_TINYBARS,
+        },
+        403,
+      );
+    }
   }
 
   c.set("caliAccountId", payload.accountId);
@@ -636,7 +647,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       `Wallet: ${accountId}\n` +
       `Nonce: ${nonce}\n` +
       `Timestamp: ${issuedAt}\n` +
-      `Action: Verify HBAR holder for free workout access\n` +
+      `Action: Verify wallet for free workout access\n` +
       `Expires: 5 minutes`;
 
     try {
@@ -660,7 +671,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // POST /cali/verify — verify signature, check HBAR balance, issue session
+  // POST /cali/verify — verify signature (+ optional HBAR gate), issue session
   // ─────────────────────────────────────────────────────────────────────────
   app.post(`${PREFIX}/cali/verify`, async (c) => {
     let body: any;
@@ -742,29 +753,33 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       );
     }
 
-    // 3. HBAR balance gate (>= 1 HBAR)
-    let tinybars: number;
+    // 3. Optional HBAR balance gate (disabled when MIN_HBAR_TINYBARS === 0)
+    let tinybars = 0;
     try {
       tinybars = await getAccountBalanceTinybars(accountId);
     } catch (err) {
       console.log(`[CALI-VERIFY] Balance fetch failed for ${accountId}: ${err}`);
-      return c.json(
-        {
-          success: false,
-          error: "Unable to verify HBAR balance right now. Please retry in a moment.",
-          code: "MIRROR_NODE_UNAVAILABLE",
-        },
-        502,
-      );
+      if (MIN_HBAR_TINYBARS > 0) {
+        return c.json(
+          {
+            success: false,
+            error: "Unable to verify HBAR balance right now. Please retry in a moment.",
+            code: "MIRROR_NODE_UNAVAILABLE",
+          },
+          502,
+        );
+      }
+      // Free-play: balance is informational only — continue with 0 on mirror outage.
+      tinybars = 0;
     }
-    if (tinybars < MIN_HBAR_TINYBARS) {
+    if (MIN_HBAR_TINYBARS > 0 && tinybars < MIN_HBAR_TINYBARS) {
       console.log(
         `[CALI-VERIFY] Balance ${tinybars} tinybars (<${MIN_HBAR_TINYBARS}) for ${accountId} — gate failed`,
       );
       return c.json(
         {
           success: false,
-          error: `Calisthenics access requires at least 1 HBAR in your wallet. Current balance: ${(
+          error: `Calisthenics access requires at least ${(MIN_HBAR_TINYBARS / 100_000_000).toFixed(0)} HBAR in your wallet. Current balance: ${(
             tinybars / 100_000_000
           ).toFixed(8)} ℏ.`,
           code: "INSUFFICIENT_HBAR",
@@ -843,9 +858,8 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   // POST /cali/session/refresh — re-check balance, extend session
   // ─────────────────────────────────────────────────────────────────────────
   //
-  // Requires a still-valid (HMAC + eligibility) session. Re-fetches the live
-  // balance from Mirror Node — if the wallet has drained below the gate
-  // threshold, eligibility is revoked and the session becomes useless.
+  // Requires a still-valid (HMAC + eligibility) session. Optionally re-fetches
+  // live balance when MIN_HBAR_TINYBARS > 0; free-play mode always extends.
   // ─────────────────────────────────────────────────────────────────────────
   app.post(`${PREFIX}/cali/session/refresh`, requireCaliSession, async (c) => {
     const accountId = c.get("caliAccountId") as string;
@@ -863,22 +877,25 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       );
     }
 
-    let tinybars: number;
+    let tinybars = 0;
     try {
       tinybars = await getAccountBalanceTinybars(accountId);
     } catch (err) {
       console.log(`[CALI-REFRESH] Balance fetch failed for ${accountId}: ${err}`);
-      return c.json(
-        {
-          success: false,
-          error: "Unable to verify HBAR balance right now. Please retry shortly.",
-          code: "MIRROR_NODE_UNAVAILABLE",
-        },
-        502,
-      );
+      if (MIN_HBAR_TINYBARS > 0) {
+        return c.json(
+          {
+            success: false,
+            error: "Unable to verify HBAR balance right now. Please retry shortly.",
+            code: "MIRROR_NODE_UNAVAILABLE",
+          },
+          502,
+        );
+      }
+      tinybars = 0;
     }
 
-    if (tinybars < MIN_HBAR_TINYBARS) {
+    if (MIN_HBAR_TINYBARS > 0 && tinybars < MIN_HBAR_TINYBARS) {
       // Revoke eligibility immediately
       await kv.del(`cali:eligible:${accountId}`).catch(() => {});
       console.log(
@@ -887,7 +904,7 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
       return c.json(
         {
           success: false,
-          error: `HBAR balance fell below 1 HBAR (currently ${(tinybars / 100_000_000).toFixed(8)} ℏ). Access revoked until you top up.`,
+          error: `HBAR balance fell below the required gate (currently ${(tinybars / 100_000_000).toFixed(8)} ℏ). Access revoked until you top up.`,
           code: "INSUFFICIENT_HBAR",
           tinybars,
           requiredTinybars: MIN_HBAR_TINYBARS,
@@ -1553,11 +1570,10 @@ export function mountCaliRoutes(app: Hono, PREFIX: string) {
   // POST /cali/workout/:id/anchor — STUB until HCS operator keys are set
   // ─────────────────────────────────────────────────────────────────────────
   //
-  // The frontend can wire the "Anchor to Hedera" button immediately. While
-  // HEDERA_OPERATOR_ID / HEDERA_OPERATOR_KEY are unset, this returns 503 with
-  // a friendly code so the UI can show "Anchoring coming soon — your workout
-  // is saved locally and will be anchorable later" without bespoke handling.
-  // Replaced with real HCS submission in the final slice.
+  // Free play today: generate/log workouts with no HBAR fee.
+  // Future: charge a small fee when anchoring a completed workout to chain.
+  // While HEDERA_OPERATOR_ID / HEDERA_OPERATOR_KEY are unset, this returns a
+  // friendly "coming soon" anchor status — workout data is still saved.
   // ─────────────────────────────────────────────────────────────────────────
   app.post(`${PREFIX}/cali/workout/:id/anchor`, requireCaliSession, async (c) => {
     const accountId = c.get("caliAccountId") as string;

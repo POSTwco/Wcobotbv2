@@ -12,7 +12,7 @@ export type CaliLoaderVariant = "session" | "dashboard" | "workout" | "list";
 const MESSAGES: Record<CaliLoaderVariant, string[]> = {
   session: [
     "Checking your session...",
-    "Verifying HBAR eligibility...",
+    "Verifying wallet...",
     "Restoring workout data...",
     "Preparing calisthenics...",
   ],

@@ -1,5 +1,5 @@
 /**
- * /calisthenics — HBAR-gated free workout plans.
+ * /calisthenics — Wallet-gated free workout plans (no HBAR required).
  *
  * Provider mounted at the page level so other tabs don't pay the cost of the
  * session probe + 24h localStorage restore. Gate component handles the
