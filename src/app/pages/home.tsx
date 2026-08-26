@@ -449,26 +449,38 @@ export function HomePage() {
               <img src={botbShield} alt="BOTB Shield" className="h-full w-auto object-contain" />
             </div>
             <h2 className="text-2xl sm:text-4xl mb-4 sm:mb-6" style={{ fontFamily: "Orbitron, sans-serif" }}>
-              <span className="text-white">READY TO </span>
-              <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">COMPETE?</span>
+              <span className="text-white">JOIN THE </span>
+              <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">COMPETITION</span>
             </h2>
-            <p className="text-[#8494A7] text-sm sm:text-lg mb-6 sm:mb-8 max-w-xl mx-auto">
-              Join {tokenStats.totalVoters > 0 ? `${(tokenStats.totalVoters / 1000).toFixed(0)}K+` : ""} fans and athletes in the world's first decentralized calisthenics ecosystem on Hedera.
-            </p>
+            <div
+              className="text-[#8494A7] text-sm sm:text-base mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed space-y-3"
+              style={{ fontFamily: "'DM Sans', sans-serif" }}
+            >
+              <p className="text-[#E8ECF0] font-semibold sm:text-lg">
+                Apply for your Calisthenics Athlete Pro Card.
+              </p>
+              <p>
+                Recognized national and international competitors enter the official WCO roster,
+                unlock Battle of the Bars® selection potential, and build rankings across Pro/Elite
+                Comps Like Battle of the Bars®, SWUB, WSWCF Worlds, and other recognized competitions.
+                Wins, losses, and power levels update automatically on Hashgraph when each event
+                concludes.
+              </p>
+            </div>
             <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:gap-4">
               <Link
                 to="/apply"
                 className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all"
                 style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
               >
-                <Swords className="w-5 h-5" /> PRO CARD APPLICATION
+                <Swords className="w-5 h-5" /> APPLY FOR ATHLETE PRO CARD
               </Link>
               <Link
                 to="/battles"
                 className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-4 border border-[#4274B9]/30 text-[#4274B9] rounded-xl hover:bg-[#4274B9]/10 transition-all"
                 style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
               >
-                PLAY BATTLES <ArrowRight className="w-5 h-5" />
+                VIEW BATTLES <ArrowRight className="w-5 h-5" />
               </Link>
               <Link
                 to="/calisthenics"

@@ -202,13 +202,24 @@ export function ApplyPage() {
             className="text-2xl sm:text-3xl mb-3"
             style={{ fontFamily: "Orbitron, sans-serif" }}
           >
-            <span className="text-white">ATHLETE </span>
-            <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">APPLICATION</span>
+            <span className="text-white">JOIN THE </span>
+            <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">COMPETITION</span>
           </h1>
-          <p className="text-[#8494A7] text-sm max-w-xl mx-auto leading-relaxed">
-            Apply to compete in Battle of the Bars. Fill out your details below and submit for WCO admin review.
-            Once approved, you'll be added to the official athlete roster.
-          </p>
+          <div
+            className="text-[#8494A7] text-sm max-w-2xl mx-auto leading-relaxed space-y-3"
+            style={{ fontFamily: "'DM Sans', sans-serif" }}
+          >
+            <p className="text-[#E8ECF0] font-semibold">
+              Apply for your Calisthenics Athlete Pro Card.
+            </p>
+            <p>
+              Recognized national and international competitors enter the official WCO roster,
+              unlock Battle of the Bars® selection potential, and build rankings across Pro/Elite
+              Comps Like Battle of the Bars®, SWUB, WSWCF Worlds, and other recognized competitions.
+              Wins, losses, and power levels update automatically on Hashgraph when each event
+              concludes.
+            </p>
+          </div>
           <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-full bg-[#162033] border border-[#4274B9]/20">
             <div className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
             <span className="text-[#6AA3E0] text-xs font-mono">{accountId}</span>
