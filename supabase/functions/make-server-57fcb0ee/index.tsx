@@ -177,6 +177,7 @@ import { mountCaliRoutes } from "./cali.tsx";
 import { mountEliteRoutes } from "./elite.tsx";
 import { mountContestRoutes } from "./contest.tsx";
 import { createTournamentEvent, mountTournamentRoutes } from "./tournament.tsx";
+import { validateChatMedia } from "./chat-media.tsx";
 import { mountMagicRoutes } from "./magic-accounts.tsx";
 import { mountEarlySupporterRoutes } from "./early-supporter.tsx";
 
@@ -5526,7 +5527,7 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
     try { body = JSON.parse(rawBody); } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
-    const { wallet, text } = body;
+    const { wallet, text, media: mediaInput } = body;
 
     // ── 2. INPUT VALIDATION ──
     if (!wallet || typeof wallet !== "string" || !isValidHederaAccountId(wallet.trim())) {
@@ -5534,22 +5535,20 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
     }
     const cleanWallet = wallet.trim();
 
-    if (!text || typeof text !== "string") {
-      return c.json({ success: false, error: "Message text is required" }, 400);
+    const hasText = typeof text === "string" && text.trim().length > 0;
+    const hasMediaInput = mediaInput != null && typeof mediaInput === "object";
+    if (!hasText && !hasMediaInput) {
+      return c.json({ success: false, error: "Message text or media is required" }, 400);
     }
-    if (text.length > CHAT_MAX_CHARS * 2) {
+    if (hasText && text.length > CHAT_MAX_CHARS * 2) {
       // Reject obviously oversized payloads before sanitization
       return c.json({ success: false, error: `Message exceeds maximum length (${CHAT_MAX_CHARS} chars)` }, 400);
     }
 
     // ── 3. SANITIZE ──
-    const sanitizedText = sanitizeString(text.trim(), CHAT_MAX_CHARS);
-    if (!sanitizedText || sanitizedText.length === 0) {
+    const sanitizedText = hasText ? sanitizeString(text.trim(), CHAT_MAX_CHARS) : "";
+    if (hasText && (!sanitizedText || sanitizedText.replace(/\s/g, "").length === 0) && !hasMediaInput) {
       return c.json({ success: false, error: "Message cannot be empty after sanitization" }, 400);
-    }
-    // Reject whitespace-only or invisible-char-only messages
-    if (sanitizedText.replace(/\s/g, "").length === 0) {
-      return c.json({ success: false, error: "Message cannot be only whitespace" }, 400);
     }
 
     // ── 3b. WALLET SESSION VERIFICATION ──
@@ -5601,18 +5600,44 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
     // This flag is the single source of truth for rendering the admin badge.
     const isAdminWallet = isAdmin(cleanWallet);
 
+    // ── 7b. MEDIA ATTACHMENT (athletes + admins only) ──
+    let mediaAttachment: ReturnType<typeof validateChatMedia>["media"] = null;
+    if (hasMediaInput) {
+      if (!isAthleteWallet && !isAdminWallet) {
+        return c.json({
+          success: false,
+          error: "Only verified athletes and admins can share YouTube or Instagram clips.",
+          code: "MEDIA_PRIVILEGE_REQUIRED",
+        }, 403);
+      }
+      const validated = validateChatMedia(mediaInput);
+      if (validated.error || !validated.media) {
+        return c.json({
+          success: false,
+          error: validated.error || "Invalid media attachment",
+          code: "MEDIA_INVALID",
+        }, 400);
+      }
+      mediaAttachment = validated.media;
+    }
+
+    if (!sanitizedText && !mediaAttachment) {
+      return c.json({ success: false, error: "Message cannot be empty" }, 400);
+    }
+
     // ── 8. BUILD MESSAGE ──
     const msgId = `msg-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
     const message = {
       id: msgId,
       wallet: cleanWallet,
-      text: sanitizedText,
+      text: sanitizedText || (mediaAttachment ? "" : ""),
       reactions: {} as Record<string, string[]>,
       timestamp: new Date().toISOString(),
       isAthlete: isAthleteWallet,
       athleteName,
       isGovernor,
       isAdmin: isAdminWallet,
+      ...(mediaAttachment ? { media: mediaAttachment } : {}),
     };
 
     // ── 9. ATOMIC APPEND + FIFO TRIM ──

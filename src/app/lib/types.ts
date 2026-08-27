@@ -541,6 +541,17 @@ export interface EliteFeaturedAthlete {
 // ---------------------------------------------------------------------------
 // Arena Chat
 // ---------------------------------------------------------------------------
+export type ChatMediaType = "youtube" | "instagram";
+
+/** Athlete/admin-only media attachment on a chat message */
+export interface ChatMediaAttachment {
+  type: ChatMediaType;
+  url: string;
+  id: string;
+  thumbUrl?: string;
+  title?: string;
+}
+
 export interface ChatMessage {
   id: string;
   wallet: string;
@@ -552,6 +563,8 @@ export interface ChatMessage {
   isGovernor?: boolean;
   /** Server-side flag — true when the sender is a verified WCO admin wallet */
   isAdmin?: boolean;
+  /** YouTube / Instagram share — only athletes & admins may attach */
+  media?: ChatMediaAttachment | null;
 }
 
 export interface VerifiedAthleteChatInfo {

@@ -964,8 +964,21 @@ export const api = {
     getMessages: (wallet: string) =>
       request<ChatMessage[]>(`/chat/messages?wallet=${encodeURIComponent(wallet)}`),
 
-    sendMessage: (wallet: string, text: string, walletSessionToken?: string) =>
-      request<ChatMessage>("/chat/messages", { method: "POST", body: { wallet, text }, walletSessionToken }),
+    sendMessage: (
+      wallet: string,
+      text: string,
+      walletSessionToken?: string,
+      media?: import("./types").ChatMediaAttachment | null,
+    ) =>
+      request<ChatMessage>("/chat/messages", {
+        method: "POST",
+        body: {
+          wallet,
+          text,
+          ...(media ? { media } : {}),
+        },
+        walletSessionToken,
+      }),
 
     toggleReaction: (messageId: string, wallet: string, emoji: string, walletSessionToken?: string) =>
       request<ChatMessage>(`/chat/messages/${messageId}/react`, {

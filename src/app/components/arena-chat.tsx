@@ -25,15 +25,22 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   MessageSquare, Send, X, ChevronDown, Loader2,
   Shield, Flame, Zap, Crown, Sparkles, Volume2, VolumeX,
+  Youtube, Instagram, Play, ExternalLink, Link2,
 } from "lucide-react";
 import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
 import { api } from "../lib/api";
-import type { ChatMessage, VerifiedAthleteChatInfo } from "../lib/types";
+import type { ChatMessage, ChatMediaAttachment, VerifiedAthleteChatInfo } from "../lib/types";
 import {
   playSendSound, playReceiveSound, playReactionSound,
   playEmotionSound, playGovernorEntrance, playErrorSound,
 } from "../lib/chat-sounds";
+import {
+  parseChatMediaUrl,
+  extractFirstMediaUrl,
+  youtubeEmbedUrl,
+  type ParsedChatMedia,
+} from "../lib/chat-media";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -260,6 +267,104 @@ function GovernorBadge({ small = false }: { small?: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
+// Media card (YouTube thumb→play, Instagram thumb→open)
+// ---------------------------------------------------------------------------
+
+function ChatMediaCard({ media, accent = "#4274B9" }: { media: ChatMediaAttachment; accent?: string }) {
+  const [playing, setPlaying] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
+
+  if (media.type === "youtube") {
+    return (
+      <div className="mt-2 rounded-xl overflow-hidden border border-white/10 bg-black/40 max-w-full">
+        <div className="relative aspect-video bg-[#0B1120]">
+          {playing ? (
+            <iframe
+              title="YouTube"
+              src={youtubeEmbedUrl(media.id)}
+              className="absolute inset-0 w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              sandbox="allow-scripts allow-same-origin allow-presentation"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPlaying(true)}
+              className="absolute inset-0 w-full h-full group"
+            >
+              {!thumbFailed && media.thumbUrl ? (
+                <img
+                  src={media.thumbUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={() => setThumbFailed(true)}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a1030] to-[#0B1120]">
+                  <Youtube className="w-10 h-10 text-red-500/80" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/25 group-hover:bg-black/35 transition-colors flex items-center justify-center">
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+                  style={{ background: "rgba(255,0,0,0.9)" }}
+                >
+                  <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+                </div>
+              </div>
+              <span className="absolute bottom-1.5 left-1.5 text-[0.45rem] font-bold tracking-wider text-white/90 bg-black/50 px-1.5 py-0.5 rounded">
+                YOUTUBE
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Instagram
+  return (
+    <a
+      href={media.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-2 block rounded-xl overflow-hidden border border-white/10 max-w-full group"
+      style={{
+        background: "linear-gradient(135deg, rgba(131,58,180,0.25), rgba(253,29,29,0.2), rgba(252,176,69,0.15))",
+      }}
+    >
+      <div className="relative aspect-[4/5] max-h-56 bg-[#0B1120]">
+        {!thumbFailed && media.thumbUrl ? (
+          <img
+            src={media.thumbUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={() => setThumbFailed(true)}
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#833ab4]/40 via-[#fd1d1d]/30 to-[#fcb045]/20">
+            <Instagram className="w-10 h-10 text-white/90" />
+            <span className="text-[0.55rem] text-white/70 font-bold tracking-wider">INSTAGRAM</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[0.55rem] font-bold text-white truncate">{media.title || "Instagram"}</p>
+            <p className="text-[0.45rem] text-white/60 truncate">@{media.id}</p>
+          </div>
+          <span className="shrink-0 flex items-center gap-1 text-[0.45rem] font-bold text-white bg-white/15 backdrop-blur px-2 py-1 rounded-full group-hover:bg-white/25">
+            Open <ExternalLink className="w-2.5 h-2.5" />
+          </span>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Message Bubble (Governor-enhanced)
 // ---------------------------------------------------------------------------
 
@@ -383,8 +488,23 @@ function MessageBubble({ message, myWallet, athleteMap, onReact, isGovernorViewe
       </div>
 
       {/* Message body */}
-      <div className={getBubbleClasses()} style={{ fontFamily: "'DM Sans', sans-serif" }}>
-        {message.text}
+      <div
+        className={`${getBubbleClasses()} ${message.media ? "min-w-[min(100%,240px)] sm:min-w-[260px]" : ""}`}
+        style={{ fontFamily: "'DM Sans', sans-serif" }}
+      >
+        {message.media && (
+          <div className="mb-1.5 flex items-center gap-1 text-[0.45rem] font-bold tracking-wider opacity-80" style={{ color: isAdminWallet ? "#D4A843" : "#6AA3E0" }}>
+            {message.media.type === "youtube" ? <Youtube className="w-3 h-3" /> : <Instagram className="w-3 h-3" />}
+            SHARED CLIP
+          </div>
+        )}
+        {message.text ? <p className="whitespace-pre-wrap break-words">{message.text}</p> : null}
+        {message.media && (
+          <ChatMediaCard
+            media={message.media}
+            accent={isAdminWallet ? "#D4A843" : "#4274B9"}
+          />
+        )}
 
         {/* Reaction trigger */}
         <button
@@ -467,12 +587,15 @@ function MessageBubble({ message, myWallet, athleteMap, onReact, isGovernorViewe
 // ---------------------------------------------------------------------------
 
 export function ArenaChat() {
-  const { connected, accountId, walletSessionToken } = useWallet();
+  const { connected, accountId, walletSessionToken, isAdmin } = useWallet();
   const { vipActive } = useVIP();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [athleteMap, setAthleteMap] = useState<Record<string, VerifiedAthleteChatInfo>>({});
   const [input, setInput] = useState("");
+  const [pendingMedia, setPendingMedia] = useState<ParsedChatMedia | null>(null);
+  const [mediaUrlDraft, setMediaUrlDraft] = useState("");
+  const [mediaTool, setMediaTool] = useState<"youtube" | "instagram" | null>(null);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -497,6 +620,25 @@ export function ArenaChat() {
   const pinnedToBottomRef = useRef(true);
 
   const wallet = accountId || "";
+  const isVerifiedAthlete = !!(wallet && athleteMap[wallet]);
+  const canShareMedia = isVerifiedAthlete || !!isAdmin;
+
+  const attachMediaFromUrl = useCallback((raw: string, expect?: "youtube" | "instagram") => {
+    const parsed = parseChatMediaUrl(raw.trim());
+    if (!parsed) {
+      setError("Paste a valid YouTube or Instagram Reel/post link");
+      return false;
+    }
+    if (expect && parsed.type !== expect) {
+      setError(expect === "youtube" ? "That doesn’t look like a YouTube link" : "That doesn’t look like an Instagram link");
+      return false;
+    }
+    setPendingMedia(parsed);
+    setMediaTool(null);
+    setMediaUrlDraft("");
+    setError(null);
+    return true;
+  }, []);
 
   // ── Restore persisted cooldown on mount / wallet change ─────────────
   useEffect(() => {
@@ -690,17 +832,41 @@ export function ArenaChat() {
   // ── Send message ────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || !wallet || sending || cooldownSeconds > 0) return;
+    if (!wallet || sending || cooldownSeconds > 0) return;
+    if (!text && !pendingMedia) return;
     if (text.length > MAX_CHARS) return;
+
+    // Auto-attach media if privileged user pasted a link and forgot to attach
+    let media = pendingMedia;
+    if (!media && canShareMedia && text) {
+      const detected = extractFirstMediaUrl(text);
+      if (detected) media = detected;
+    }
+
+    const attachment: ChatMediaAttachment | null = media
+      ? {
+          type: media.type,
+          url: media.url,
+          id: media.id,
+          thumbUrl: media.thumbUrl,
+          title: media.title,
+        }
+      : null;
 
     // Own messages should always land in view at the bottom
     pinnedToBottomRef.current = true;
     setSending(true);
     setError(null);
     try {
-      const res = await api.chat.sendMessage(wallet, text, walletSessionToken || undefined) as any;
+      const res = await api.chat.sendMessage(
+        wallet,
+        text,
+        walletSessionToken || undefined,
+        attachment,
+      ) as any;
       if (res.success && res.data) {
         setInput("");
+        setPendingMedia(null);
         setMessages((prev) => [...prev, res.data!]);
         lastMessageCountRef.current += 1;
         if (soundEnabled) playSendSound(isGovernor);
@@ -722,7 +888,7 @@ export function ArenaChat() {
     } finally {
       setSending(false);
     }
-  }, [input, wallet, sending, soundEnabled, isGovernor, cooldownSeconds]);
+  }, [input, wallet, sending, soundEnabled, isGovernor, cooldownSeconds, pendingMedia, canShareMedia, walletSessionToken]);
 
   // ── Handle reaction ─────────────────────────────────────────────────
   const handleReact = useCallback(async (msgId: string, emoji: string) => {
@@ -1103,7 +1269,7 @@ export function ArenaChat() {
                   : "border-[#4274B9]/10 bg-[#0a0e18]"
             }`}>
               {/* Identity bar */}
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
                   isGovernor
                     ? "bg-[#D4A843]/20 border border-[#D4A843]/30"
@@ -1125,8 +1291,134 @@ export function ArenaChat() {
                       <Shield className="w-2.5 h-2.5 inline" /> {athleteMap[wallet].name}
                     </span>
                   )}
+                  {isAdmin && (
+                    <span className="ml-1 text-[#D4A843] font-bold">ADMIN</span>
+                  )}
                 </span>
+                {canShareMedia && (
+                  <span className={`ml-auto text-[0.4rem] font-bold tracking-wider px-1.5 py-0.5 rounded ${
+                    isAdmin ? "bg-[#D4A843]/15 text-[#D4A843]" : "bg-[#4274B9]/15 text-[#6AA3E0]"
+                  }`}>
+                    {isAdmin ? "ADMIN SHARE" : "ATHLETE SHARE"}
+                  </span>
+                )}
               </div>
+
+              {/* Athlete / Admin media tools */}
+              {canShareMedia && (
+                <div className="mb-2 space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setMediaTool(mediaTool === "youtube" ? null : "youtube")}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[0.55rem] font-bold border transition-all ${
+                        mediaTool === "youtube" || pendingMedia?.type === "youtube"
+                          ? "bg-red-500/20 border-red-500/40 text-red-300"
+                          : "bg-[#162033] border-[#4274B9]/20 text-[#8494A7] hover:border-red-500/30 hover:text-red-300"
+                      }`}
+                    >
+                      <Youtube className="w-3.5 h-3.5" /> YouTube
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMediaTool(mediaTool === "instagram" ? null : "instagram")}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[0.55rem] font-bold border transition-all ${
+                        mediaTool === "instagram" || pendingMedia?.type === "instagram"
+                          ? "bg-pink-500/20 border-pink-500/40 text-pink-300"
+                          : "bg-[#162033] border-[#4274B9]/20 text-[#8494A7] hover:border-pink-500/30 hover:text-pink-300"
+                      }`}
+                    >
+                      <Instagram className="w-3.5 h-3.5" /> Instagram
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const detected = extractFirstMediaUrl(input);
+                        if (detected) {
+                          setPendingMedia(detected);
+                          setError(null);
+                        } else {
+                          setError("Paste a YouTube or Instagram link in your message first");
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[0.55rem] font-bold border bg-[#162033] border-[#4274B9]/20 text-[#8494A7] hover:border-[#6AA3E0]/40 hover:text-[#6AA3E0]"
+                    >
+                      <Link2 className="w-3.5 h-3.5" /> Detect link
+                    </button>
+                  </div>
+
+                  {mediaTool && (
+                    <div className="flex gap-1.5">
+                      <input
+                        type="url"
+                        value={mediaUrlDraft}
+                        onChange={(e) => setMediaUrlDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            attachMediaFromUrl(mediaUrlDraft, mediaTool);
+                          }
+                        }}
+                        placeholder={
+                          mediaTool === "youtube"
+                            ? "Paste YouTube URL…"
+                            : "Paste Instagram Reel / post URL…"
+                        }
+                        className="flex-1 min-w-0 rounded-lg bg-[#0B1120] border border-[#4274B9]/25 px-2.5 py-1.5 text-xs text-[#E8ECF0] outline-none focus:border-[#6AA3E0]/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => attachMediaFromUrl(mediaUrlDraft, mediaTool)}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-[#4274B9] text-white text-[0.55rem] font-bold"
+                      >
+                        Attach
+                      </button>
+                    </div>
+                  )}
+
+                  {pendingMedia && (
+                    <div className="relative rounded-xl border border-[#4274B9]/25 overflow-hidden bg-[#0B1120]/80">
+                      <div className="flex items-center gap-2 p-2">
+                        <div className="w-16 h-12 rounded-md overflow-hidden bg-black/40 shrink-0">
+                          {pendingMedia.thumbUrl ? (
+                            <img
+                              src={pendingMedia.thumbUrl}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              {pendingMedia.type === "youtube" ? (
+                                <Youtube className="w-5 h-5 text-red-400" />
+                              ) : (
+                                <Instagram className="w-5 h-5 text-pink-400" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[0.55rem] font-bold text-[#E8ECF0] truncate">
+                            {pendingMedia.title || pendingMedia.type}
+                          </p>
+                          <p className="text-[0.45rem] text-[#8494A7] truncate">{pendingMedia.url}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPendingMedia(null)}
+                          className="p-1 rounded-md text-[#8494A7] hover:text-white"
+                          aria-label="Remove media"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Cooldown indicator */}
               <AnimatePresence>
@@ -1167,8 +1459,25 @@ export function ArenaChat() {
                   <textarea
                     value={input}
                     onChange={(e) => setInput(e.target.value.slice(0, MAX_CHARS + 10))}
+                    onPaste={(e) => {
+                      if (!canShareMedia) return;
+                      const pasted = e.clipboardData.getData("text");
+                      const detected = parseChatMediaUrl(pasted.trim()) || extractFirstMediaUrl(pasted);
+                      if (detected) {
+                        // Don't block paste into textarea; offer attach
+                        setTimeout(() => {
+                          if (!pendingMedia) setPendingMedia(detected);
+                        }, 0);
+                      }
+                    }}
                     onKeyDown={handleKeyDown}
-                    placeholder={isGovernor ? "Speak with authority, Governor..." : "Drop a message in the arena..."}
+                    placeholder={
+                      canShareMedia
+                        ? "Share a tip, Reel, or fight clip…"
+                        : isGovernor
+                          ? "Speak with authority, Governor..."
+                          : "Drop a message in the arena..."
+                    }
                     rows={1}
                     maxLength={MAX_CHARS + 10}
                     className={`w-full border rounded-xl px-3 py-2.5 text-[#E8ECF0] text-sm outline-none resize-none transition-colors ${
@@ -1191,9 +1500,9 @@ export function ArenaChat() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.92 }}
                   onClick={handleSend}
-                  disabled={sending || !input.trim() || charOver || cooldownSeconds > 0}
+                  disabled={sending || (!input.trim() && !pendingMedia) || charOver || cooldownSeconds > 0}
                   className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    sending || !input.trim() || charOver || cooldownSeconds > 0
+                    sending || (!input.trim() && !pendingMedia) || charOver || cooldownSeconds > 0
                       ? "bg-[#162033] text-[#8494A7]/30 cursor-not-allowed"
                       : isGovernor
                         ? "bg-gradient-to-br from-[#D4A843] to-[#B8902E] text-[#0B1120] hover:shadow-lg hover:shadow-[#D4A843]/25"
