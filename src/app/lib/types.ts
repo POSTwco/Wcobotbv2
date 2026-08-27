@@ -133,8 +133,12 @@ export type AthleteStatus = "active" | "eliminated" | "champion" | "inactive";
 // ---------------------------------------------------------------------------
 // Battle Event (PvP bracket of 1v1 battles OR tournament champion-pick)
 // ---------------------------------------------------------------------------
-/** PvP = existing 1v1 voting matchups. Tournament = fans pick one overall champion. */
-export type EventCompetitionFormat = "pvp" | "tournament";
+/**
+ * PvP = 1v1 voting matchups.
+ * Tournament = bracket + fans pick one champion.
+ * Field = flat pool (no matchups), judged best-in-field; fans pick one champion.
+ */
+export type EventCompetitionFormat = "pvp" | "tournament" | "field";
 export type EventElimination = "single" | "double";
 
 export type TournamentVotingStatus =
@@ -160,17 +164,21 @@ export interface BattleEvent {
 
   /** Defaults to "pvp" for legacy events */
   format?: EventCompetitionFormat;
-  /** Tournament only — v1 uses single; double reserved */
+  /** Tournament only — v1 uses single; double reserved. Unused for field. */
   elimination?: EventElimination;
-  /** Tournament entrant ids (denormalized from bracket) */
+  /** Field / Best in Field: judged performance rounds (1 or 2) */
+  performanceRounds?: 1 | 2;
+  /** Optional admin scores: round key → athleteId → points */
+  fieldScores?: Record<string, Record<string, number>>;
+  /** Tournament/field entrant ids (denormalized from bracket seats) */
   athleteIds?: string[];
-  /** Tournament fan-vote lifecycle (independent of event.status) */
+  /** Fan-vote lifecycle for tournament + field (independent of event.status) */
   votingStatus?: TournamentVotingStatus;
   championId?: string;
   voteTallies?: Record<string, { count: number; weighted: number }>;
   totalVotes?: number;
   totalWeighted?: number;
-  /** Single-elim (and future double) match tree for display / admin advance */
+  /** Bracket match tree (tournament only; empty for field) */
   tournamentMatches?: TournamentMatch[];
 
   createdAt: string;
@@ -578,6 +586,7 @@ export interface EventFormData {
   bracket: BracketSeat[];
   format?: EventCompetitionFormat;
   elimination?: EventElimination;
+  performanceRounds?: 1 | 2;
 }
 
 // ---------------------------------------------------------------------------

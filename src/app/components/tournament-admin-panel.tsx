@@ -51,7 +51,7 @@ export function TournamentAdminPanel({
       <div className="flex items-center gap-2">
         <Crown className="w-4 h-4 text-[#D4A843]" />
         <h4 className="text-[#D4A843] font-bold text-xs tracking-wider" style={orbitron}>
-          TOURNAMENT CONTROLS
+          TOURNAMENT &amp; FIELD CONTROLS
         </h4>
       </div>
       {events.map((evt) => {
@@ -75,10 +75,24 @@ export function TournamentAdminPanel({
               className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-white/[0.02]"
             >
               <div className="min-w-0">
-                <p className="text-[#E8ECF0] text-sm font-semibold truncate">{evt.name}</p>
+                <p className="text-[#E8ECF0] text-sm font-semibold truncate">
+                  <span
+                    className={`mr-1.5 px-1.5 py-0.5 rounded text-[0.45rem] font-bold ${
+                      evt.format === "field"
+                        ? "bg-[#10b981]/15 text-[#10b981]"
+                        : "bg-[#D4A843]/15 text-[#D4A843]"
+                    }`}
+                  >
+                    {evt.format === "field" ? "FIELD" : "BRACKET"}
+                  </span>
+                  {evt.name}
+                </p>
                 <p className="text-[#8494A7] text-[0.55rem]">
                   {evt.bracketSize} athletes · {(evt.votingStatus || "draft").replace(/_/g, " ")} ·{" "}
                   {evt.totalVotes || 0} votes
+                  {evt.format === "field" && evt.performanceRounds
+                    ? ` · ${evt.performanceRounds} judged round${evt.performanceRounds > 1 ? "s" : ""}`
+                    : ""}
                   {evt.championId ? ` · Champ: ${athMap.get(evt.championId)?.name || evt.championId}` : ""}
                 </p>
               </div>
@@ -200,8 +214,8 @@ export function TournamentAdminPanel({
                   </div>
                 )}
 
-                {/* Advance matches */}
-                {matches.length > 0 && evt.votingStatus !== "champion_declared" && (
+                {/* Advance matches — bracket tournaments only */}
+                {evt.format !== "field" && matches.length > 0 && evt.votingStatus !== "champion_declared" && (
                   <div className="space-y-2">
                     <p className="text-[#8494A7] text-[0.55rem] flex items-center gap-1">
                       <Swords className="w-3 h-3" /> Bracket advance (display only — does not change W/L)

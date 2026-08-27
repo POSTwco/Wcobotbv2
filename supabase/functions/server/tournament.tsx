@@ -215,8 +215,12 @@ async function validateWalletSession(c: Context, wallet: string): Promise<boolea
   return validateWalletSessionToken(token, wallet);
 }
 
+function isChampPickFormat(format: unknown): boolean {
+  return format === "tournament" || format === "field";
+}
+
 /**
- * Create a tournament event record (no public battles).
+ * Create a tournament (bracket) or field (no matchups) event — no public 1v1 battles.
  * Caller must already have validated athletes exist.
  */
 export async function createTournamentEvent(body: {
@@ -228,14 +232,56 @@ export async function createTournamentEvent(body: {
   totalPrizePool?: number;
   bracket: { seat: number; athleteId: string }[];
   elimination?: string;
+  format?: string;
+  performanceRounds?: number;
 }): Promise<{ event: any; message: string }> {
+  const format = body.format === "field" ? "field" : "tournament";
   const bracket = [...body.bracket].sort((a, b) => a.seat - b.seat);
   const size = bracket.length;
   if (size < TOURNAMENT_MIN || size > TOURNAMENT_MAX) {
-    throw Object.assign(new Error(`Tournament size must be ${TOURNAMENT_MIN}–${TOURNAMENT_MAX}`), {
-      status: 400,
-    });
+    throw Object.assign(
+      new Error(`${format === "field" ? "Field" : "Tournament"} size must be ${TOURNAMENT_MIN}–${TOURNAMENT_MAX}`),
+      { status: 400 },
+    );
   }
+
+  const athleteIds = bracket.map((s) => s.athleteId);
+  const eventId = generateId("evt");
+
+  if (format === "field") {
+    const rounds = body.performanceRounds === 2 ? 2 : 1;
+    const event = {
+      id: eventId,
+      name: sanitizeString(body.name, 200),
+      description: sanitizeString(body.description || "", 2000),
+      location: sanitizeString(body.location || "", 200),
+      startDate: body.startDate || "",
+      endDate: body.endDate || "",
+      totalPrizePool: sanitizeNumber(body.totalPrizePool, 0, 1e12, 0),
+      status: "draft",
+      format: "field",
+      performanceRounds: rounds,
+      fieldScores: {},
+      bracketSize: size,
+      bracket,
+      athleteIds,
+      rounds: [],
+      tournamentMatches: [],
+      votingStatus: "draft" as TournamentVotingStatus,
+      championId: "",
+      voteTallies: emptyTallies(athleteIds),
+      totalVotes: 0,
+      totalWeighted: 0,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    await kv.set(`event:${eventId}`, event);
+    return {
+      event,
+      message: `Created Field / Best in Field "${event.name}" with ${size} athletes (${rounds} judged round${rounds > 1 ? "s" : ""}, no matchups). Fans pick one winner.`,
+    };
+  }
+
   const elimination = body.elimination === "double" ? "double" : "single";
   if (elimination === "double" && !DOUBLE_ELIM_ENABLED) {
     throw Object.assign(
@@ -244,9 +290,7 @@ export async function createTournamentEvent(body: {
     );
   }
 
-  const athleteIds = bracket.map((s) => s.athleteId);
   const matches = buildSingleElimMatches(bracket);
-  const eventId = generateId("evt");
 
   const event = {
     id: eventId,
@@ -306,7 +350,7 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
     try {
       const eventId = sanitizeString(c.req.param("eventId"), 64);
       const event: any = await kv.get(`event:${eventId}`);
-      if (!event || event.format !== "tournament") {
+      if (!event || !isChampPickFormat(event.format)) {
         return c.json({ success: false, error: "Tournament not found" }, 404);
       }
       return c.json({
@@ -411,7 +455,7 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
       const release = await acquireLock(`tournament:${eventId}`);
       try {
         const event: any = await kv.get(`event:${eventId}`);
-        if (!event || event.format !== "tournament") {
+        if (!event || !isChampPickFormat(event.format)) {
           return c.json({ success: false, error: "Tournament not found" }, 404);
         }
         if (event.votingStatus !== "voting_open") {
@@ -509,7 +553,7 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
       }
 
       const event: any = await kv.get(`event:${eventId}`);
-      if (!event || event.format !== "tournament") {
+      if (!event || !isChampPickFormat(event.format)) {
         return c.json({ success: false, error: "Tournament not found" }, 404);
       }
       if (
@@ -545,8 +589,15 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
       const winnerId = sanitizeString(body.winnerId, 64);
 
       const event: any = await kv.get(`event:${eventId}`);
-      if (!event || event.format !== "tournament") {
+      if (!event || !isChampPickFormat(event.format)) {
         return c.json({ success: false, error: "Tournament not found" }, 404);
+      }
+      if (event.format === "field") {
+        return c.json({
+          success: false,
+          error: "Field / Best in Field events have no matchups to advance.",
+          code: "FIELD_NO_MATCHUPS",
+        }, 400);
       }
 
       const matches: TournamentMatch[] = event.tournamentMatches || [];
@@ -591,7 +642,7 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
       const release = await acquireLock(`tournament:${eventId}`);
       try {
         const event: any = await kv.get(`event:${eventId}`);
-        if (!event || event.format !== "tournament") {
+        if (!event || !isChampPickFormat(event.format)) {
           return c.json({ success: false, error: "Tournament not found" }, 404);
         }
         if (
@@ -677,7 +728,7 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
         });
 
         const snapshot = {
-          type: "tournament",
+          type: event.format === "field" ? "field" : "tournament",
           eventId,
           championId,
           championName: champ?.name || championId,

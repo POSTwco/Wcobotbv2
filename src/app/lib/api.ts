@@ -702,8 +702,9 @@ export const api = {
       endDate?: string;
       totalPrizePool?: number;
       bracket: { seat: number; athleteId: string }[];
-      format?: "pvp" | "tournament";
+      format?: "pvp" | "tournament" | "field";
       elimination?: "single" | "double";
+      performanceRounds?: 1 | 2;
     }, adminWallet: string, sessionToken?: string) =>
       request<{ event: BattleEvent; battles: Battle[]; message: string }>(
         "/admin/events/generate",

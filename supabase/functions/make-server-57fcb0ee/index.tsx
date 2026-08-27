@@ -2232,12 +2232,15 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       }
     }
 
-    // ── Tournament format (champion-pick) — no public 1v1 battles ──
-    const format = body.format === "tournament" ? "tournament" : "pvp";
-    if (format === "tournament") {
+    // ── Tournament / Field (champion-pick) — no public 1v1 battles ──
+    const format =
+      body.format === "tournament" || body.format === "field" ? body.format : "pvp";
+    if (format === "tournament" || format === "field") {
       try {
-        const { event, message } = await createTournamentEvent(body);
-        console.log(`[ADMIN] Generated TOURNAMENT event ${event.id} "${event.name}". Admin: ${adminWallet}`);
+        const { event, message } = await createTournamentEvent({ ...body, format });
+        console.log(
+          `[ADMIN] Generated ${String(format).toUpperCase()} event ${event.id} "${event.name}". Admin: ${adminWallet}`,
+        );
         return c.json({
           success: true,
           data: { event, battles: [], message },
@@ -2246,7 +2249,7 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
         const status = err?.status || 500;
         return c.json({
           success: false,
-          error: err?.message || "Failed to create tournament",
+          error: err?.message || "Failed to create event",
           code: err?.code,
         }, status);
       }

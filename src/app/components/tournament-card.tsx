@@ -127,9 +127,14 @@ export function TournamentCard({
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <Crown className="w-4 h-4 text-[#D4A843]" />
-              <span className="text-[0.55rem] font-bold tracking-widest text-[#D4A843]" style={ORBITRON}>
-                TOURNAMENT
+              <Crown className={`w-4 h-4 ${event.format === "field" ? "text-[#10b981]" : "text-[#D4A843]"}`} />
+              <span
+                className={`text-[0.55rem] font-bold tracking-widest ${
+                  event.format === "field" ? "text-[#10b981]" : "text-[#D4A843]"
+                }`}
+                style={ORBITRON}
+              >
+                {event.format === "field" ? "FIELD / BEST IN FIELD" : "TOURNAMENT"}
               </span>
               <span
                 className="text-[0.5rem] font-bold px-2 py-0.5 rounded-full"
@@ -142,7 +147,9 @@ export function TournamentCard({
               {event.name}
             </h3>
             <p className="text-[0.65rem] text-[#8494A7] mt-0.5">
-              {entrantIds.length} athletes · single elimination · pick one champion
+              {event.format === "field"
+                ? `${entrantIds.length} athletes · no matchups · pick one winner · ${event.performanceRounds || 1} judged round${(event.performanceRounds || 1) > 1 ? "s" : ""}`
+                : `${entrantIds.length} athletes · single elimination · pick one champion`}
               {event.location ? ` · ${event.location}` : ""}
             </p>
           </div>
@@ -262,16 +269,20 @@ export function TournamentCard({
           <p className="text-center text-[0.65rem] text-[#8494A7]">Connect wallet to pick a champion</p>
         )}
 
-        <button
-          type="button"
-          onClick={() => setShowBracket((v) => !v)}
-          className="text-[0.55rem] text-[#6AA3E0] hover:underline"
-        >
-          {showBracket ? "Hide bracket" : "Show bracket"}
-        </button>
+        {event.format !== "field" && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowBracket((v) => !v)}
+              className="text-[0.55rem] text-[#6AA3E0] hover:underline"
+            >
+              {showBracket ? "Hide bracket" : "Show bracket"}
+            </button>
 
-        {showBracket && (
-          <TournamentBracketView matches={event.tournamentMatches || []} athleteMap={athleteMap} />
+            {showBracket && (
+              <TournamentBracketView matches={event.tournamentMatches || []} athleteMap={athleteMap} />
+            )}
+          </>
         )}
       </div>
     </motion.div>

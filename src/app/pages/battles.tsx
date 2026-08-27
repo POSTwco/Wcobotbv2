@@ -146,7 +146,13 @@ export function BattlesPage() {
   const [myTournamentVotes, setMyTournamentVotes] = useState<Map<string, TournamentVote>>(new Map());
 
   const tournamentEvents = useMemo(
-    () => (events || []).filter((e) => e.format === "tournament" && e.votingStatus && e.votingStatus !== "draft"),
+    () =>
+      (events || []).filter(
+        (e) =>
+          (e.format === "tournament" || e.format === "field") &&
+          e.votingStatus &&
+          e.votingStatus !== "draft",
+      ),
     [events],
   );
 
