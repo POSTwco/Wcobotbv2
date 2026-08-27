@@ -21,11 +21,12 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   MessageSquare, Send, X, ChevronDown, Loader2,
   Shield, Flame, Zap, Crown, Sparkles, Volume2, VolumeX,
-  Youtube, Instagram, Play, ExternalLink, Link2,
+  Youtube, Instagram, Play, ExternalLink, Link2, Maximize2,
 } from "lucide-react";
 import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
@@ -267,100 +268,199 @@ function GovernorBadge({ small = false }: { small?: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Media card (YouTube thumb→play, Instagram thumb→open)
+// Media card — clean thumb; click opens lightbox with NO text over the media
 // ---------------------------------------------------------------------------
 
-function ChatMediaCard({ media, accent = "#4274B9" }: { media: ChatMediaAttachment; accent?: string }) {
-  const [playing, setPlaying] = useState(false);
-  const [thumbFailed, setThumbFailed] = useState(false);
+function ChatMediaLightbox({
+  media,
+  thumbFailed,
+  onClose,
+  onThumbFail,
+}: {
+  media: ChatMediaAttachment;
+  thumbFailed: boolean;
+  onClose: () => void;
+  onThumbFail: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
 
-  if (media.type === "youtube") {
-    return (
-      <div className="mt-2 rounded-xl overflow-hidden border border-white/10 bg-black/40 max-w-full">
-        <div className="relative aspect-video bg-[#0B1120]">
-          {playing ? (
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm p-3 sm:p-6"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Expanded clip"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-3 right-3 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+        aria-label="Close"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
+      {/* Media only — no captions / titles overlaid on the frame */}
+      <motion.div
+        initial={{ scale: 0.92, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 280, damping: 24 }}
+        className="relative w-full max-w-3xl max-h-[min(80vh,720px)] rounded-xl overflow-hidden shadow-2xl bg-black"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {media.type === "youtube" ? (
+          <div className="relative w-full aspect-video bg-black">
             <iframe
               title="YouTube"
               src={youtubeEmbedUrl(media.id)}
               className="absolute inset-0 w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
-              sandbox="allow-scripts allow-same-origin allow-presentation"
             />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPlaying(true)}
-              className="absolute inset-0 w-full h-full group"
-            >
-              {!thumbFailed && media.thumbUrl ? (
-                <img
-                  src={media.thumbUrl}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  onError={() => setThumbFailed(true)}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a1030] to-[#0B1120]">
-                  <Youtube className="w-10 h-10 text-red-500/80" />
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/25 group-hover:bg-black/35 transition-colors flex items-center justify-center">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
-                  style={{ background: "rgba(255,0,0,0.9)" }}
-                >
-                  <Play className="w-6 h-6 text-white fill-white ml-0.5" />
-                </div>
-              </div>
-              <span className="absolute bottom-1.5 left-1.5 text-[0.45rem] font-bold tracking-wider text-white/90 bg-black/50 px-1.5 py-0.5 rounded">
-                YOUTUBE
-              </span>
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Instagram
-  return (
-    <a
-      href={media.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-2 block rounded-xl overflow-hidden border border-white/10 max-w-full group"
-      style={{
-        background: "linear-gradient(135deg, rgba(131,58,180,0.25), rgba(253,29,29,0.2), rgba(252,176,69,0.15))",
-      }}
-    >
-      <div className="relative aspect-[4/5] max-h-56 bg-[#0B1120]">
-        {!thumbFailed && media.thumbUrl ? (
-          <img
-            src={media.thumbUrl}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={() => setThumbFailed(true)}
-            referrerPolicy="no-referrer"
-          />
+          </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#833ab4]/40 via-[#fd1d1d]/30 to-[#fcb045]/20">
-            <Instagram className="w-10 h-10 text-white/90" />
-            <span className="text-[0.55rem] text-white/70 font-bold tracking-wider">INSTAGRAM</span>
+          <div className="relative w-full max-h-[min(75vh,680px)] bg-black flex items-center justify-center min-h-[240px]">
+            {!thumbFailed && media.thumbUrl ? (
+              <img
+                src={media.thumbUrl}
+                alt=""
+                className="max-w-full max-h-[min(75vh,680px)] w-auto h-auto object-contain"
+                referrerPolicy="no-referrer"
+                onError={onThumbFail}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 py-16 px-6 bg-gradient-to-br from-[#833ab4]/50 via-[#fd1d1d]/40 to-[#fcb045]/30 w-full aspect-[4/5] max-h-[min(75vh,680px)]">
+                <Instagram className="w-14 h-14 text-white/90" />
+              </div>
+            )}
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
-        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[0.55rem] font-bold text-white truncate">{media.title || "Instagram"}</p>
-            <p className="text-[0.45rem] text-white/60 truncate">@{media.id}</p>
-          </div>
-          <span className="shrink-0 flex items-center gap-1 text-[0.45rem] font-bold text-white bg-white/15 backdrop-blur px-2 py-1 rounded-full group-hover:bg-white/25">
-            Open <ExternalLink className="w-2.5 h-2.5" />
-          </span>
-        </div>
+      </motion.div>
+
+      {/* Actions sit BELOW the media — never covering it */}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {media.type === "instagram" && (
+          <a
+            href={media.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white text-xs font-bold shadow-lg"
+          >
+            <Instagram className="w-4 h-4" /> Watch on Instagram
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
+        {media.type === "youtube" && (
+          <a
+            href={media.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/20"
+          >
+            <Youtube className="w-4 h-4 text-red-400" /> Open on YouTube
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-white/80 text-xs font-bold border border-white/15"
+        >
+          Close
+        </button>
       </div>
-    </a>
+    </motion.div>,
+    document.body,
+  );
+}
+
+function ChatMediaCard({ media }: { media: ChatMediaAttachment; accent?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
+
+  const isYt = media.type === "youtube";
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="mt-2 block w-full rounded-xl overflow-hidden border border-white/10 bg-black/40 max-w-full text-left group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6AA3E0]/50"
+        aria-label={isYt ? "Enlarge YouTube clip" : "Enlarge Instagram clip"}
+      >
+        <div
+          className={`relative bg-[#0B1120] overflow-hidden ${
+            isYt ? "aspect-video" : "aspect-[4/5] max-h-52"
+          }`}
+        >
+          {!thumbFailed && media.thumbUrl ? (
+            <img
+              src={media.thumbUrl}
+              alt=""
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              referrerPolicy="no-referrer"
+              onError={() => setThumbFailed(true)}
+            />
+          ) : (
+            <div
+              className={`w-full h-full flex items-center justify-center ${
+                isYt
+                  ? "bg-gradient-to-br from-[#1a1030] to-[#0B1120]"
+                  : "bg-gradient-to-br from-[#833ab4]/40 via-[#fd1d1d]/30 to-[#fcb045]/20"
+              }`}
+            >
+              {isYt ? (
+                <Youtube className="w-10 h-10 text-red-500/80" />
+              ) : (
+                <Instagram className="w-10 h-10 text-white/90" />
+              )}
+            </div>
+          )}
+
+          {/* Hover: dim + enlarge cue only — no text labels over the image */}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity scale-90 group-hover:scale-100 duration-200">
+              {isYt ? (
+                <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg bg-red-600/95">
+                  <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg bg-white/20 backdrop-blur-md border border-white/30">
+                  <Maximize2 className="w-5 h-5 text-white" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <ChatMediaLightbox
+            media={media}
+            thumbFailed={thumbFailed}
+            onClose={() => setExpanded(false)}
+            onThumbFail={() => setThumbFailed(true)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
