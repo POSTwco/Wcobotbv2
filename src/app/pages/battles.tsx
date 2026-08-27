@@ -15,10 +15,11 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Swords, Clock, CheckCircle, Zap, TrendingUp, Users, Lock,
   Loader2, User, Shield, Crown, AlertCircle, Timer, Pencil,
-  Fingerprint, Trophy, Flame, Hash, Target, CalendarClock,
+  Fingerprint, Trophy, Flame, Hash, Target, CalendarClock, Check,
 } from "lucide-react";
 import { TournamentCard } from "../components/tournament-card";
 import type { TournamentVote } from "../lib/types";
+import { formatPower } from "../lib/format";
 import { useWallet } from "../components/wallet-context";
 import { useVIP } from "../components/vip/vip-context";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
@@ -554,7 +555,7 @@ export function BattlesPage() {
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative overflow-x-hidden">
 
       {/* Ambient background — shifts with Dynamic Theme Engine */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ transition: "all var(--botb-transition)" }}>
@@ -568,8 +569,8 @@ export function BattlesPage() {
         />
       </div>
 
-      <div className="relative z-10 py-8 sm:py-12">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="relative z-10 py-8 sm:py-12 overflow-x-hidden">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 min-w-0">
 
           {/* ── Header ── */}
           <motion.div
@@ -594,8 +595,8 @@ export function BattlesPage() {
               </div>
             </div>
 
-            {/* Filter pills */}
-            <div className="flex gap-2 flex-wrap">
+            {/* Filter pills — wrap on mobile; never force page width */}
+            <div className="flex gap-2 flex-wrap max-w-full min-w-0">
               {FILTERS.map((f) => {
                 const active = filter === f.key;
                 const Icon = f.icon;
@@ -603,7 +604,7 @@ export function BattlesPage() {
                   <button
                     key={f.key}
                     onClick={() => setFilter(f.key)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.6rem] font-bold tracking-wider transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-[0.55rem] sm:text-[0.6rem] font-bold tracking-wider transition-all duration-200 shrink-0 ${
                       active
                         ? "bg-[#4274B9]/15 text-[#6AA3E0] border border-[#4274B9]/30"
                         : "bg-[#0B1120] text-[#8494A7] border border-[#1e293b] hover:border-[#4274B9]/20 hover:text-[#6AA3E0]"
@@ -873,9 +874,10 @@ export function BattlesPage() {
                       </div>
 
                       {/* ── Athlete Matchup ── */}
-                      <div className="px-5 sm:px-6 pb-5 sm:pb-6">
-                        <div className="grid grid-cols-[1fr_auto_1fr] gap-3 sm:gap-5 items-stretch mb-5">
+                      <div className="px-3 sm:px-6 pb-5 sm:pb-6 min-w-0">
+                        <div className="grid grid-cols-[1fr_auto_1fr] gap-1.5 sm:gap-5 items-stretch mb-5 min-w-0">
                           {/* Athlete 1 */}
+                          <div className="min-w-0">
                           <BattleAthleteCard
                             athlete={a1}
                             athleteId={battle.athlete1Id}
@@ -889,12 +891,13 @@ export function BattlesPage() {
                             side="left"
                             accentColor={c1.primary}
                           />
+                          </div>
 
                           {/* VS Orb — gradient between both athlete brand colors */}
-                          <div className="flex flex-col items-center justify-center gap-2">
+                          <div className="flex flex-col items-center justify-center gap-1 sm:gap-2 shrink-0">
                             <div className="relative">
                               <div
-                                className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center relative z-10 ${
+                                className={`w-9 h-9 sm:w-14 sm:h-14 rounded-full flex items-center justify-center relative z-10 ${
                                   isLive
                                     ? "bg-gradient-to-br from-[#1a1030] to-[#0d1526] border-2 border-[#EF4444]/30"
                                     : "bg-gradient-to-br from-[#111d30] to-[#0d1526]"
@@ -905,7 +908,7 @@ export function BattlesPage() {
                                 } : undefined}
                               >
                                 <Swords
-                                  className="w-5 h-5 sm:w-6 sm:h-6"
+                                  className="w-4 h-4 sm:w-6 sm:h-6"
                                   style={{ color: isLive ? "#EF4444" : c1.primary, transition: "color var(--botb-transition)" }}
                                 />
                               </div>
@@ -920,10 +923,11 @@ export function BattlesPage() {
                                 }}
                               />
                             </div>
-                            <span className="text-[0.5rem] text-[#8494A7]/60 font-bold tracking-widest" style={ORBITRON}>VS</span>
+                            <span className="text-[0.45rem] sm:text-[0.5rem] text-[#8494A7]/60 font-bold tracking-widest" style={ORBITRON}>VS</span>
                           </div>
 
                           {/* Athlete 2 */}
+                          <div className="min-w-0">
                           <BattleAthleteCard
                             athlete={a2}
                             athleteId={battle.athlete2Id}
@@ -937,6 +941,7 @@ export function BattlesPage() {
                             side="right"
                             accentColor={c2.primary}
                           />
+                          </div>
                         </div>
 
                         {/* ── Vote Progress Bar ── */}
@@ -1157,14 +1162,14 @@ export function BattlesPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-20 sm:bottom-6 left-0 right-0 z-50 px-4 sm:px-6"
+            className="fixed bottom-20 sm:bottom-6 left-0 right-0 z-50 px-3 sm:px-6 pointer-events-none"
           >
-            <div className="max-w-2xl mx-auto">
-              <div className="relative rounded-2xl overflow-hidden">
+            <div className="max-w-2xl mx-auto pointer-events-auto min-w-0">
+              <div className="relative rounded-2xl overflow-hidden max-w-full">
                 {/* Glow */}
                 <div className="absolute -inset-[1px] rounded-[18px] bg-gradient-to-r from-[#4274B9]/40 via-[#6AA3E0]/30 to-[#4274B9]/40 blur-sm pointer-events-none" />
 
-                <div className="relative bg-[#0d1526]/95 backdrop-blur-xl border border-[#4274B9]/30 rounded-2xl p-4 sm:p-5">
+                <div className="relative bg-[#0d1526]/95 backdrop-blur-xl border border-[#4274B9]/30 rounded-2xl p-3 sm:p-5">
                   <div className="flex items-center justify-between gap-4">
                     {/* Left: Summary */}
                     <div className="flex items-center gap-3 min-w-0">
@@ -1289,9 +1294,9 @@ function BattleAthleteCard({
       onClick={canSelect ? onSelect : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      whileHover={canSelect ? { scale: 1.03 } : {}}
-      whileTap={canSelect ? { scale: 0.97 } : {}}
-      className={`relative rounded-2xl p-3 sm:p-4 transition-all duration-300 ${
+      whileHover={canSelect ? { scale: 1.02 } : {}}
+      whileTap={canSelect ? { scale: 0.98 } : {}}
+      className={`relative rounded-2xl p-2.5 sm:p-4 transition-all duration-300 overflow-hidden min-w-0 ${
         canSelect ? "cursor-pointer" : ""
       } ${side === "right" ? "text-right" : "text-left"}`}
       style={{
@@ -1301,7 +1306,7 @@ function BattleAthleteCard({
           ? `linear-gradient(135deg, ${accentColor}08, transparent)`
           : "#0a101e",
         boxShadow: isWinner
-          ? `0 0 30px rgba(212,168,67,0.15), inset 0 0 0 1px rgba(212,168,67,0.25)`
+          ? `0 0 24px rgba(212,168,67,0.18), inset 0 0 0 1.5px rgba(212,168,67,0.45)`
           : isSelected
           ? `0 0 30px ${accentColor}20, inset 0 0 0 2px ${accentColor}`
           : isMyPick
@@ -1311,58 +1316,51 @@ function BattleAthleteCard({
           : "inset 0 0 0 1px rgba(30,41,59,0.5)",
       }}
     >
-      {/* ── Winner Trophy Overlay ── */}
+      {/* ── Winner cup — corner badge (does not cover stats) ── */}
       {isWinner && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: "spring", stiffness: 160, damping: 14, delay: 0.2 }}
-          className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center rounded-2xl overflow-hidden"
+          initial={{ opacity: 0, scale: 0.8, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 200, damping: 16, delay: 0.15 }}
+          className="absolute top-1.5 right-1.5 z-30 pointer-events-none flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#0B1120]/92 border border-[#D4A843]/50 shadow-[0_0_12px_rgba(212,168,67,0.25)]"
         >
-          {/* Soft gold radial glow behind trophy */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#D4A843]/10 via-transparent to-[#D4A843]/05 rounded-2xl" />
-          {/* Pulsing trophy + WINNER text */}
-          <motion.div
-            animate={{
-              scale: [1, 1.08, 1],
-              opacity: [0.25, 0.4, 0.25],
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            className="relative flex flex-col items-center gap-1"
-          >
-            <Trophy className="w-16 h-16 sm:w-20 sm:h-20 text-[#D4A843] drop-shadow-[0_0_24px_rgba(212,168,67,0.35)]" />
-            <span
-              className="text-[0.6rem] sm:text-xs font-black tracking-[0.25em] text-[#D4A843] drop-shadow-[0_0_12px_rgba(212,168,67,0.4)]"
-              style={ORBITRON}
-            >
-              WINNER
-            </span>
-          </motion.div>
-          {/* Gold border glow */}
-          <div className="absolute inset-0 rounded-2xl border-2 border-[#D4A843]/25" />
+          <Trophy className="w-3 h-3 text-[#D4A843]" />
+          <span className="text-[0.4rem] font-black tracking-wider text-[#D4A843]" style={ORBITRON}>
+            WIN
+          </span>
         </motion.div>
       )}
 
+      {/* Selected check — voting clarity on mobile */}
+      {isSelected && canSelect && (
+        <div
+          className="absolute top-1.5 left-1.5 z-30 w-5 h-5 rounded-full flex items-center justify-center"
+          style={{ background: accentColor }}
+        >
+          <Check className="w-3 h-3 text-[#0B1120]" strokeWidth={3} />
+        </div>
+      )}
+
       {/* Layout: avatar + info stacked, centered per side */}
-      <div className={`flex flex-col items-center gap-3`}>
+      <div className={`flex flex-col items-center gap-2 sm:gap-3 min-w-0`}>
         {/* Avatar with flag + weight class badges */}
         <div className="relative">
-          {/* Country flag badge — left side of avatar */}
+          {/* Country flag — inside card bounds */}
           {athlete?.country && (
-            <div className="absolute -left-2 sm:-left-3 top-0 z-20">
-              <CountryFlag country={athlete.country} size="md" showCode />
+            <div className="absolute left-0 top-0 z-20 scale-90 sm:scale-100 origin-top-left">
+              <CountryFlag country={athlete.country} size="sm" showCode />
             </div>
           )}
 
-          {/* Weight class badge — right side */}
+          {/* Weight class badge — inside card bounds */}
           {athlete?.weightClass && (
             <div
-              className="absolute -right-2 sm:-right-2.5 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center h-6 sm:h-7 px-1.5 rounded-full bg-[#0B1120]/90 backdrop-blur-sm border shadow-lg"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center h-5 sm:h-7 px-1 sm:px-1.5 rounded-full bg-[#0B1120]/90 backdrop-blur-sm border shadow-lg"
               style={{ borderColor: `${accentColor}35` }}
               title={athlete.weightClass}
             >
               <span
-                className="text-[0.4rem] sm:text-[0.45rem] font-bold tracking-wider whitespace-nowrap"
+                className="text-[0.35rem] sm:text-[0.45rem] font-bold tracking-wider whitespace-nowrap"
                 style={{ ...ORBITRON, color: accentColor }}
               >
                 {getWeightClassAbbr(athlete.weightClass)}
@@ -1371,7 +1369,7 @@ function BattleAthleteCard({
           )}
 
           <div
-            className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden transition-all duration-300 ${
+            className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden transition-all duration-300 ${
               isSelected ? "ring-2 ring-offset-2 ring-offset-[#0a101e]" : ""
             }`}
             style={{
@@ -1428,28 +1426,28 @@ function BattleAthleteCard({
 
         {/* Athlete real stats — rank, W-L record, power rating */}
         {athlete && (
-          <div className="w-full grid grid-cols-3 gap-1">
-            <div className="flex flex-col items-center p-1.5 rounded-lg bg-[#0B1120]/60 border border-[#1e293b]/40">
-              <span className="text-[0.4rem] text-[#8494A7] uppercase tracking-wider">Rank</span>
-              <span className="text-[0.6rem] sm:text-xs font-bold" style={{ ...ORBITRON, color: accentColor }}>
+          <div className="w-full grid grid-cols-3 gap-0.5 sm:gap-1 min-w-0">
+            <div className="flex flex-col items-center p-1 sm:p-1.5 rounded-lg bg-[#0B1120]/60 border border-[#1e293b]/40 min-w-0">
+              <span className="text-[0.35rem] sm:text-[0.4rem] text-[#8494A7] uppercase tracking-wider">Rank</span>
+              <span className="text-[0.55rem] sm:text-xs font-bold truncate max-w-full" style={{ ...ORBITRON, color: accentColor }}>
                 #{athlete.rank || "—"}
               </span>
             </div>
-            <div className="flex flex-col items-center p-1.5 rounded-lg bg-[#0B1120]/60 border border-[#1e293b]/40">
-              <span className="text-[0.4rem] text-[#8494A7] uppercase tracking-wider">Record</span>
-              <span className="text-[0.6rem] sm:text-xs font-bold text-[#E8ECF0]" style={ORBITRON}>
+            <div className="flex flex-col items-center p-1 sm:p-1.5 rounded-lg bg-[#0B1120]/60 border border-[#1e293b]/40 min-w-0">
+              <span className="text-[0.35rem] sm:text-[0.4rem] text-[#8494A7] uppercase tracking-wider">Record</span>
+              <span className="text-[0.55rem] sm:text-xs font-bold text-[#E8ECF0] leading-tight" style={ORBITRON}>
                 <span className="text-[#10b981]">{athlete.wins}</span>
                 <span className="text-[#8494A7]">-</span>
                 <span className="text-[#EF4444]">{athlete.losses}</span>
-                <span className="text-[#D4A843] text-[0.45rem] ml-1">
-                  T{(athlete.tournamentWins || 0)}-{(athlete.tournamentLosses || 0)}
-                </span>
+              </span>
+              <span className="text-[0.35rem] text-[#D4A843] mt-0.5" style={ORBITRON}>
+                T{(athlete.tournamentWins || 0)}-{(athlete.tournamentLosses || 0)}
               </span>
             </div>
-            <div className="flex flex-col items-center p-1.5 rounded-lg bg-[#0B1120]/60 border border-[#1e293b]/40">
-              <span className="text-[0.4rem] text-[#8494A7] uppercase tracking-wider">Power</span>
-              <span className="text-[0.6rem] sm:text-xs font-bold" style={{ ...ORBITRON, color: accentColor }}>
-                {athlete.totalPowerRating || 0}
+            <div className="flex flex-col items-center p-1 sm:p-1.5 rounded-lg bg-[#0B1120]/60 border border-[#1e293b]/40 min-w-0">
+              <span className="text-[0.35rem] sm:text-[0.4rem] text-[#8494A7] uppercase tracking-wider">Power</span>
+              <span className="text-[0.55rem] sm:text-xs font-bold truncate max-w-full" style={{ ...ORBITRON, color: accentColor }}>
+                {formatPower(athlete.totalPowerRating)}
               </span>
             </div>
           </div>

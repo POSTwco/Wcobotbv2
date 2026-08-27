@@ -26,6 +26,7 @@ import { BOTBSpinner, SkeletonAthleteCard } from "../components/botb-spinner";
 import { getCountryFlag } from "../lib/country-flags";
 import { InlineFlag } from "../components/country-flag";
 import { TiltCard, BlurImage, FadeInWhenVisible } from "../components/ui-enhancements";
+import { formatPower } from "../lib/format";
 
 // ---------------------------------------------------------------------------
 // Skill bar colors (matches admin form)
@@ -92,8 +93,8 @@ export function AthletesPage() {
   }, [location.hash, loading]);
 
   return (
-    <div className="min-h-screen py-6 sm:py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen py-6 sm:py-8 overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-w-0">
         <div className="mb-6 sm:mb-10">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-2">
             <div className="min-w-0">
@@ -268,7 +269,7 @@ export function AthletesPage() {
                         </div>
                         <div className="text-center">
                           <p className="text-lg text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                            {athlete.totalPowerRating?.toFixed(1) || "—"}
+                            {formatPower(athlete.totalPowerRating)}
                           </p>
                           <p className="text-xs text-[#8494A7]">Power</p>
                         </div>

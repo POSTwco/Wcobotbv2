@@ -120,12 +120,12 @@ export function TournamentCard({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-[#D4A843]/25 bg-gradient-to-br from-[#111d30] to-[#0B1120] overflow-hidden"
+      className="rounded-2xl border border-[#D4A843]/25 bg-gradient-to-br from-[#111d30] to-[#0B1120] overflow-hidden min-w-0 w-full"
       style={{ boxShadow: "0 0 40px rgba(212,168,67,0.08)" }}
     >
-      <div className="px-4 sm:px-5 py-4 border-b border-[#D4A843]/15">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
+      <div className="px-3 sm:px-5 py-4 border-b border-[#D4A843]/15">
+        <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
               <Crown className={`w-4 h-4 ${event.format === "field" ? "text-[#10b981]" : "text-[#D4A843]"}`} />
               <span
@@ -175,8 +175,8 @@ export function TournamentCard({
         )}
       </div>
 
-      <div className="p-4 sm:p-5 space-y-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+      <div className="p-3 sm:p-5 space-y-3 min-w-0">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 min-w-0">
           {entrantIds.map((id) => {
             const ath = athleteMap.get(id);
             if (!ath) return null;
@@ -192,9 +192,9 @@ export function TournamentCard({
                 type="button"
                 disabled={!canVote || submitting}
                 onClick={() => canVote && setPicked(id)}
-                className={`relative text-left rounded-xl border p-2.5 transition-all ${
+                className={`relative text-left rounded-xl border p-2 sm:p-2.5 transition-all min-w-0 overflow-hidden min-h-[5.5rem] ${
                   selected
-                    ? "border-[#D4A843] bg-[#D4A843]/10"
+                    ? "border-[#D4A843] bg-[#D4A843]/10 ring-1 ring-[#D4A843]/40"
                     : "border-[#1e293b] bg-white/[0.02] hover:border-[#4274B9]/40"
                 } ${!canVote ? "cursor-default" : "cursor-pointer"}`}
                 style={isChamp ? { boxShadow: `0 0 20px ${color}44` } : undefined}
@@ -220,8 +220,8 @@ export function TournamentCard({
                       <span className="text-[#10b981]">{ath.wins}W</span>-
                       <span className="text-[#EF4444]">{ath.losses}L</span>
                       <span className="text-[#8494A7]">·</span>
-                      <span className="text-[#D4A843]">
-                        T {(ath.tournamentWins || 0)}-{(ath.tournamentLosses || 0)}
+                      <span className="text-[#D4A843] whitespace-nowrap">
+                        T{(ath.tournamentWins || 0)}-{(ath.tournamentLosses || 0)}
                       </span>
                     </p>
                   </div>

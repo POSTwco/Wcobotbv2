@@ -29,6 +29,7 @@ import { ErrorCard } from "../components/error-boundary";
 import { BOTBSpinner, SkeletonLeaderboardRow } from "../components/botb-spinner";
 import { getCountryFlag } from "../lib/country-flags";
 import { InlineFlag } from "../components/country-flag";
+import { formatPower } from "../lib/format";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -177,8 +178,8 @@ export function LeaderboardPage() {
   const myVoterStats = voters.find((v) => v.wallet === accountId) || null;
 
   return (
-    <div className="min-h-screen py-6 sm:py-8">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen py-6 sm:py-8 overflow-x-hidden">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 min-w-0">
         {/* Header */}
         <div className="mb-6 sm:mb-10">
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -359,7 +360,7 @@ export function LeaderboardPage() {
                         </div>
                         <div className="text-center min-w-[40px]">
                           <p className="text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                            {athlete.totalPowerRating?.toFixed(1)}
+                            {formatPower(athlete.totalPowerRating)}
                           </p>
                           <p className="text-[0.6rem] text-[#8494A7]">Power</p>
                         </div>
@@ -401,7 +402,7 @@ export function LeaderboardPage() {
                                 <p className="text-[0.5rem] text-[#8494A7]">Win Rate Bonus</p>
                               </div>
                               <div className="bg-[#0B1120] rounded-lg p-2 text-center">
-                                <p className="text-[#4274B9] text-sm" style={{ fontFamily: "Orbitron, sans-serif" }}>{(athlete.totalPowerRating * 2).toFixed(1)}</p>
+                                <p className="text-[#4274B9] text-sm" style={{ fontFamily: "Orbitron, sans-serif" }}>{formatPower((athlete.totalPowerRating || 0) * 2)}</p>
                                 <p className="text-[0.5rem] text-[#8494A7]">Skill Rating</p>
                               </div>
                               <div className="bg-[#0B1120] rounded-lg p-2 text-center">

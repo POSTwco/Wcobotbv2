@@ -53,7 +53,7 @@ export function HomePage() {
   const heroVideoSrc = resolveHeroVideoUrl(config.heroVideoUrl);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-hidden">
       {/* Hero Section — items-start so tall contest column doesn't collide with absolute title sponsor */}
       <section className="relative min-h-[70vh] sm:min-h-[90vh] flex items-start sm:items-center overflow-hidden">
         {/* Background - athlete image, very subtle */}
