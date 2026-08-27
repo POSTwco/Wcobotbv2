@@ -389,6 +389,34 @@ function MessageBubble({ message, myWallet, athleteMap, onReact, isGovernorViewe
 
   const isAdminWallet = !!message.isAdmin;
 
+  // Prefer structured media; fall back to parsing YT/IG URLs in the text
+  // (covers Edge versions that stored the link but dropped the media field).
+  const displayMedia: ChatMediaAttachment | null = useMemo(() => {
+    if (message.media?.type && message.media?.url && message.media?.id) {
+      return message.media;
+    }
+    const parsed = extractFirstMediaUrl(message.text || "");
+    if (!parsed) return null;
+    return {
+      type: parsed.type,
+      url: parsed.url,
+      id: parsed.id,
+      thumbUrl: parsed.thumbUrl,
+      title: parsed.title,
+    };
+  }, [message.media, message.text]);
+
+  const captionText = useMemo(() => {
+    const raw = (message.text || "").trim();
+    if (!displayMedia) return raw;
+    // Hide the raw URL from caption when we're already showing a media card
+    const cleaned = raw
+      .replace(displayMedia.url, "")
+      .replace(/https?:\/\/(?:www\.)?(?:youtube\.com\/[^\s]+|youtu\.be\/[^\s]+|instagram\.com\/[^\s]+)/gi, "")
+      .trim();
+    return cleaned;
+  }, [message.text, displayMedia]);
+
   const reactionEntries = useMemo(() => {
     return Object.entries(message.reactions || {})
       .filter(([_, wallets]) => wallets.length > 0)
@@ -489,19 +517,19 @@ function MessageBubble({ message, myWallet, athleteMap, onReact, isGovernorViewe
 
       {/* Message body */}
       <div
-        className={`${getBubbleClasses()} ${message.media ? "min-w-[min(100%,240px)] sm:min-w-[260px]" : ""}`}
+        className={`${getBubbleClasses()} ${displayMedia ? "min-w-[min(100%,240px)] sm:min-w-[260px]" : ""}`}
         style={{ fontFamily: "'DM Sans', sans-serif" }}
       >
-        {message.media && (
+        {displayMedia && (
           <div className="mb-1.5 flex items-center gap-1 text-[0.45rem] font-bold tracking-wider opacity-80" style={{ color: isAdminWallet ? "#D4A843" : "#6AA3E0" }}>
-            {message.media.type === "youtube" ? <Youtube className="w-3 h-3" /> : <Instagram className="w-3 h-3" />}
+            {displayMedia.type === "youtube" ? <Youtube className="w-3 h-3" /> : <Instagram className="w-3 h-3" />}
             SHARED CLIP
           </div>
         )}
-        {message.text ? <p className="whitespace-pre-wrap break-words">{message.text}</p> : null}
-        {message.media && (
+        {captionText ? <p className="whitespace-pre-wrap break-words">{captionText}</p> : null}
+        {displayMedia && (
           <ChatMediaCard
-            media={message.media}
+            media={displayMedia}
             accent={isAdminWallet ? "#D4A843" : "#4274B9"}
           />
         )}
@@ -853,6 +881,16 @@ export function ArenaChat() {
         }
       : null;
 
+    // Always keep the media URL in the text payload so even an older Edge
+    // build (that ignores `media`) still stores a recoverable link.
+    let textToSend = text;
+    if (attachment && !textToSend.includes(attachment.url)) {
+      textToSend = textToSend ? `${textToSend}\n${attachment.url}` : attachment.url;
+      if (textToSend.length > MAX_CHARS) {
+        textToSend = attachment.url.slice(0, MAX_CHARS);
+      }
+    }
+
     // Own messages should always land in view at the bottom
     pinnedToBottomRef.current = true;
     setSending(true);
@@ -860,14 +898,20 @@ export function ArenaChat() {
     try {
       const res = await api.chat.sendMessage(
         wallet,
-        text,
+        textToSend,
         walletSessionToken || undefined,
         attachment,
       ) as any;
       if (res.success && res.data) {
         setInput("");
         setPendingMedia(null);
-        setMessages((prev) => [...prev, res.data!]);
+        // Merge media locally — server may omit it until Edge is redeployed
+        const saved: ChatMessage = {
+          ...res.data,
+          media: res.data.media || attachment || undefined,
+          text: res.data.text || textToSend,
+        };
+        setMessages((prev) => [...prev, saved]);
         lastMessageCountRef.current += 1;
         if (soundEnabled) playSendSound(isGovernor);
         // Start client-side cooldown from server response

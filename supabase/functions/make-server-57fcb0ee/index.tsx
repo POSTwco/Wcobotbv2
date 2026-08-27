@@ -5462,13 +5462,16 @@ async function chatAtomicUpdate(updateFn: (messages: any[]) => any[]): Promise<a
   throw new Error("Chat write conflict — please retry");
 }
 
-/** Build a set of verified athlete wallets with names */
+/** Build a set of verified athlete wallets with names (wallet + applicantWallet). */
 async function getAthleteWalletMap(): Promise<Record<string, string>> {
   const allAthletes: any[] = await kv.getByPrefix("athlete:");
   const map: Record<string, string> = {};
   for (const athlete of allAthletes) {
-    if (athlete?.wallet && isValidHederaAccountId(athlete.wallet)) {
-      map[athlete.wallet] = athlete.name || "Athlete";
+    const name = athlete?.name || "Athlete";
+    for (const key of [athlete?.wallet, athlete?.applicantWallet]) {
+      if (key && isValidHederaAccountId(String(key))) {
+        map[String(key)] = name;
+      }
     }
   }
   return map;
@@ -5546,7 +5549,7 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
     }
 
     // ── 3. SANITIZE ──
-    const sanitizedText = hasText ? sanitizeString(text.trim(), CHAT_MAX_CHARS) : "";
+    let sanitizedText = hasText ? sanitizeString(text.trim(), CHAT_MAX_CHARS) : "";
     if (hasText && (!sanitizedText || sanitizedText.replace(/\s/g, "").length === 0) && !hasMediaInput) {
       return c.json({ success: false, error: "Message cannot be empty after sanitization" }, 400);
     }
@@ -5621,6 +5624,14 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
       mediaAttachment = validated.media;
     }
 
+    // Persist URL in text as well so older clients / display fallbacks still recover the clip
+    if (mediaAttachment && !sanitizedText.includes(mediaAttachment.url)) {
+      const withUrl = sanitizedText
+        ? `${sanitizedText}\n${mediaAttachment.url}`
+        : mediaAttachment.url;
+      sanitizedText = sanitizeString(withUrl, CHAT_MAX_CHARS);
+    }
+
     if (!sanitizedText && !mediaAttachment) {
       return c.json({ success: false, error: "Message cannot be empty" }, 400);
     }
@@ -5630,7 +5641,7 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
     const message = {
       id: msgId,
       wallet: cleanWallet,
-      text: sanitizedText || (mediaAttachment ? "" : ""),
+      text: sanitizedText,
       reactions: {} as Record<string, string[]>,
       timestamp: new Date().toISOString(),
       isAthlete: isAthleteWallet,
@@ -5754,11 +5765,14 @@ app.get(`${PREFIX}/chat/verified-athletes`, async (c) => {
     const allAthletes: any[] = await kv.getByPrefix("athlete:");
     const enriched: Record<string, { name: string; pfpUrl?: string }> = {};
     for (const athlete of allAthletes) {
-      if (athlete?.wallet && isValidHederaAccountId(athlete.wallet)) {
-        enriched[athlete.wallet] = {
-          name: athlete.name || "Athlete",
-          pfpUrl: athlete.pfpUrl || undefined,
-        };
+      const info = {
+        name: athlete.name || "Athlete",
+        pfpUrl: athlete.pfpUrl || undefined,
+      };
+      for (const key of [athlete?.wallet, athlete?.applicantWallet]) {
+        if (key && isValidHederaAccountId(String(key))) {
+          enriched[String(key)] = info;
+        }
       }
     }
     return c.json({ success: true, data: enriched });
