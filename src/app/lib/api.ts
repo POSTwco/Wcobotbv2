@@ -668,11 +668,17 @@ export const api = {
         dailySeries: Array<{ date: string; count: number }>;
       }>("/admin/contest/metrics", { adminWallet, sessionToken }),
 
-    /** Batch-update multiple battles' status at once (e.g., open voting on all R1 battles) */
-    batchBattleStatus: (battleIds: string[], status: string, adminWallet: string, sessionToken?: string) =>
+    /** Batch-update multiple battles' status and/or shared schedule */
+    batchBattleStatus: (
+      battleIds: string[],
+      status: string | null | undefined,
+      adminWallet: string,
+      sessionToken?: string,
+      extras?: { votingOpensAt?: string; votingClosesAt?: string; totalPool?: number },
+    ) =>
       request<{ results: { id: string; success: boolean; prev?: string; error?: string }[]; updated: number; total: number }>(
         "/admin/battles/batch-status",
-        { method: "POST", body: { battleIds, status }, adminWallet, sessionToken }
+        { method: "POST", body: { battleIds, status, ...extras }, adminWallet, sessionToken }
       ),
 
     /** Full athlete records (email, phone, wallet) — admin session required */
@@ -693,6 +699,34 @@ export const api = {
 
     updateEvent: (id: string, data: Partial<EventFormData>, adminWallet: string, sessionToken?: string) =>
       request<BattleEvent>("/admin/events", { method: "POST", body: { id, ...data }, adminWallet, sessionToken }),
+
+    /** Archive / unarchive / set status / dates for an event */
+    eventLifecycle: (
+      eventId: string,
+      body: {
+        archive?: boolean;
+        status?: "draft" | "active" | "completed" | "cancelled";
+        votingStatus?: string;
+        startDate?: string;
+        endDate?: string;
+        complete?: boolean;
+      },
+      adminWallet: string,
+      sessionToken?: string,
+    ) =>
+      request<BattleEvent>(`/admin/events/${eventId}/lifecycle`, {
+        method: "POST",
+        body,
+        adminWallet,
+        sessionToken,
+      }),
+
+    /** Production cascade delete (draft/cancelled/archived; force for others) */
+    deleteEvent: (eventId: string, adminWallet: string, sessionToken?: string, force?: boolean) =>
+      request<{ eventId: string; battlesRemoved: number; votesRemoved: number; tournamentVotesRemoved: number }>(
+        `/admin/events/${eventId}${force ? "?force=true" : ""}`,
+        { method: "DELETE", adminWallet, sessionToken },
+      ),
 
     generateBracket: (data: {
       name: string;

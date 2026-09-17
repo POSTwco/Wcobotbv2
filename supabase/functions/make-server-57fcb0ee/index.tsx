@@ -64,9 +64,11 @@
  *   GET    /admin/athletes                List athletes (full admin fields + wallet backfill)
  *   POST   /admin/athletes                Create or update athlete
  *   DELETE /admin/athletes/:id            Delete athlete
- *   POST   /admin/battles/batch-status    Batch-update multiple battles' status
+ *   POST   /admin/battles/batch-status    Batch-update multiple battles' status (+ optional schedule)
  *   POST   /admin/events             Create or update event
  *   POST   /admin/events/generate    Create event + auto-generate bracket battles (or tournament)
+ *   POST   /admin/events/:id/lifecycle  Archive / unarchive / set status / complete
+ *   DELETE /admin/events/:id         Production cascade delete (draft/cancelled/archived)
  *   POST   /admin/tournaments/:id/status   Open/close tournament voting
  *   POST   /admin/tournaments/:id/advance  Advance a tournament bracket match
  *   POST   /admin/tournaments/:id/champion Declare tournament champion + snapshot
@@ -402,6 +404,91 @@ function generateId(prefix: string): string {
 
 function now(): string {
   return new Date().toISOString();
+}
+
+const BATTLE_TERMINAL = new Set(["winner_declared", "rewards_distributed", "cancelled"]);
+const BATTLE_LIVEISH = new Set(["upcoming", "voting_open", "voting_closed", "winner_declared", "rewards_distributed"]);
+
+/** Keep parent PvP event.status in sync with child battles (kills lingering DRAFT). */
+async function syncParentEventFromBattles(eventId: string | undefined | null): Promise<void> {
+  if (!eventId) return;
+  try {
+    const event: any = await kv.get(`event:${eventId}`);
+    if (!event) return;
+    // Champ-pick formats use votingStatus — do not clobber from battles
+    if (event.format === "tournament" || event.format === "field") return;
+
+    const allBattles: any[] = (await kv.getByPrefix("battle:")) || [];
+    const children = allBattles.filter((b: any) => b?.eventId === eventId);
+    if (children.length === 0) return;
+
+    const allCancelled = children.every((b: any) => b.status === "cancelled");
+    const allTerminal = children.every((b: any) => BATTLE_TERMINAL.has(b.status));
+    const anyPastDraft = children.some((b: any) => BATTLE_LIVEISH.has(b.status));
+
+    let next = event.status;
+    if (allCancelled) next = "cancelled";
+    else if (allTerminal) next = "completed";
+    else if (anyPastDraft) next = "active";
+    else next = "draft";
+
+    if (next !== event.status) {
+      event.status = next;
+      event.updatedAt = now();
+      await kv.set(`event:${eventId}`, event);
+      console.log(`[ADMIN] Synced event ${eventId} status → '${next}' from ${children.length} battles`);
+    }
+  } catch (err) {
+    console.log(`[ADMIN] syncParentEventFromBattles failed for ${eventId}: ${err}`);
+  }
+}
+
+/** Cascade-delete an event + battles + votes + tournament votes/snapshots. */
+async function cascadeDeleteEvent(eventId: string): Promise<{
+  battlesRemoved: number;
+  votesRemoved: number;
+  tournamentVotesRemoved: number;
+}> {
+  const allBattles: any[] = (await kv.getByPrefix("battle:")) || [];
+  const eventBattles = allBattles.filter((b: any) => b?.eventId === eventId);
+  const keysToDelete: string[] = [`event:${eventId}`, `snapshot:tournament:${eventId}`];
+  let totalVotesRemoved = 0;
+  let tournamentVotesRemoved = 0;
+
+  for (const battle of eventBattles) {
+    const battleId = battle.id;
+    keysToDelete.push(`battle:${battleId}`);
+    const votes: any[] = (await kv.getByPrefix(`vote:battle:${battleId}:`)) || [];
+    for (const v of votes) {
+      if (v?.wallet) {
+        keysToDelete.push(`vote:battle:${battleId}:${v.wallet}`);
+        keysToDelete.push(`wvote:${v.wallet}:${battleId}`);
+        if (v.nonce) keysToDelete.push(`vote-nonce:${v.nonce}`);
+        removeAllocationBattle(v.wallet, eventId, battleId).catch(() => {});
+      }
+    }
+    totalVotesRemoved += votes.length;
+    const snap = await kv.get(`snapshot:${battleId}`);
+    if (snap) keysToDelete.push(`snapshot:${battleId}`);
+  }
+
+  const tVotes: any[] = (await kv.getByPrefix(`vote:tournament:${eventId}:`)) || [];
+  for (const v of tVotes) {
+    if (v?.wallet) {
+      keysToDelete.push(`vote:tournament:${eventId}:${v.wallet}`);
+      if (v.nonce) keysToDelete.push(`vote-nonce:${v.nonce}`);
+    }
+  }
+  tournamentVotesRemoved = tVotes.length;
+
+  await kv.mdel(keysToDelete);
+  invalidateCache("leaderboard:voters");
+  invalidateCache("leaderboard:athletes");
+  return {
+    battlesRemoved: eventBattles.length,
+    votesRemoved: totalVotesRemoved,
+    tournamentVotesRemoved,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1754,7 +1841,7 @@ app.get(`${PREFIX}/admin/dashboard`, requireAdminSession, async (c) => {
 app.post(`${PREFIX}/admin/battles/batch-status`, requireAdminSession, async (c) => {
   try {
     const body = await c.req.json();
-    const { battleIds, status } = body;
+    const { battleIds, status, votingOpensAt, votingClosesAt, totalPool } = body;
     const adminWallet = c.get("adminWallet");
 
     if (!Array.isArray(battleIds) || battleIds.length === 0) {
@@ -1764,13 +1851,15 @@ app.post(`${PREFIX}/admin/battles/batch-status`, requireAdminSession, async (c) 
       return c.json({ success: false, error: "Maximum 50 battles per batch" }, 400);
     }
 
+    // status optional when only applying schedule extras
     const validStatuses = ["draft", "upcoming", "voting_open", "voting_closed", "cancelled"];
-    if (!validStatuses.includes(status)) {
+    if (status != null && status !== "" && !validStatuses.includes(status)) {
       return c.json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` }, 400);
     }
 
     const statusOrder = ["draft", "upcoming", "voting_open", "voting_closed", "winner_declared", "rewards_distributed"];
     const results: { id: string; success: boolean; prev?: string; error?: string }[] = [];
+    const touchedEvents = new Set<string>();
 
     for (const bid of battleIds) {
       const battle: any = await kv.get(`battle:${bid}`);
@@ -1778,23 +1867,34 @@ app.post(`${PREFIX}/admin/battles/batch-status`, requireAdminSession, async (c) 
         results.push({ id: bid, success: false, error: "Not found" });
         continue;
       }
-      // Validate forward-only transition (except cancelled)
-      const currentIdx = statusOrder.indexOf(battle.status);
-      const targetIdx = statusOrder.indexOf(status);
-      if (status !== "cancelled" && currentIdx >= 0 && targetIdx >= 0 && targetIdx < currentIdx) {
-        results.push({ id: bid, success: false, prev: battle.status, error: `Cannot go backwards to '${status}'` });
-        continue;
+
+      if (status != null && status !== "") {
+        const currentIdx = statusOrder.indexOf(battle.status);
+        const targetIdx = statusOrder.indexOf(status);
+        if (status !== "cancelled" && currentIdx >= 0 && targetIdx >= 0 && targetIdx < currentIdx) {
+          results.push({ id: bid, success: false, prev: battle.status, error: `Cannot go backwards to '${status}'` });
+          continue;
+        }
+        battle.status = status;
       }
 
+      if (votingOpensAt !== undefined) battle.votingOpensAt = votingOpensAt;
+      if (votingClosesAt !== undefined) battle.votingClosesAt = votingClosesAt;
+      if (totalPool !== undefined) battle.totalPool = sanitizeNumber(totalPool, 0, 1e12, battle.totalPool || 0);
+
       const prev = battle.status;
-      battle.status = status;
       battle.updatedAt = now();
       await kv.set(`battle:${bid}`, battle);
+      if (battle.eventId) touchedEvents.add(battle.eventId);
       results.push({ id: bid, success: true, prev });
     }
 
+    for (const eid of touchedEvents) {
+      await syncParentEventFromBattles(eid);
+    }
+
     const succeeded = results.filter(r => r.success).length;
-    console.log(`[ADMIN] Batch status update: ${succeeded}/${battleIds.length} battles → '${status}'. Admin: ${adminWallet}`);
+    console.log(`[ADMIN] Batch status update: ${succeeded}/${battleIds.length} battles → '${status || "schedule"}'. Admin: ${adminWallet}`);
 
     return c.json({ success: true, data: { results, updated: succeeded, total: battleIds.length } });
   } catch (error) {
@@ -2190,11 +2290,13 @@ app.post(`${PREFIX}/admin/events`, requireAdminSession, async (c) => {
       startDate: body.startDate || existing?.startDate || "",
       endDate: body.endDate || existing?.endDate || "",
       totalPrizePool: sanitizeNumber(body.totalPrizePool ?? existing?.totalPrizePool, 0, 3_000_000_000, existing?.totalPrizePool ?? 0),
-      status: (["draft", "upcoming", "live", "completed", "cancelled"].includes(body.status))
-        ? body.status : (existing?.status || "draft"),
+      status: (["draft", "active", "upcoming", "live", "completed", "cancelled"].includes(body.status))
+        ? (body.status === "live" || body.status === "upcoming" ? "active" : body.status)
+        : (existing?.status || "draft"),
       bracketSize: sanitizeNumber(body.bracketSize ?? existing?.bracketSize, 2, 128, existing?.bracketSize ?? 2),
       bracket: body.bracket || existing?.bracket || [],
       rounds: body.rounds || existing?.rounds || [],
+      archivedAt: body.archivedAt !== undefined ? body.archivedAt : (existing?.archivedAt || undefined),
       createdAt: existing?.createdAt || now(),
       updatedAt: now(),
     };
@@ -2205,6 +2307,102 @@ app.post(`${PREFIX}/admin/events`, requireAdminSession, async (c) => {
   } catch (error) {
     console.log(`[ADMIN] Error saving event: ${error}`);
     return c.json({ success: false, error: safeErrorMsg("Failed to save event") }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/events/:id/lifecycle — Archive / unarchive / set status
+// ---------------------------------------------------------------------------
+app.post(`${PREFIX}/admin/events/:id/lifecycle`, requireAdminSession, async (c) => {
+  try {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    const adminWallet = c.get("adminWallet");
+    const event: any = await kv.get(`event:${id}`);
+    if (!event) return c.json({ success: false, error: `Event ${id} not found` }, 404);
+
+    if (body.archive === true) {
+      event.archivedAt = now();
+    } else if (body.archive === false) {
+      delete event.archivedAt;
+    }
+
+    if (typeof body.status === "string") {
+      const allowed = ["draft", "active", "completed", "cancelled"];
+      if (!allowed.includes(body.status)) {
+        return c.json({ success: false, error: `Invalid status. Must be: ${allowed.join(", ")}` }, 400);
+      }
+      event.status = body.status;
+    }
+
+    if (body.startDate !== undefined) event.startDate = body.startDate;
+    if (body.endDate !== undefined) event.endDate = body.endDate;
+
+    // Champ-pick: optional votingStatus transitions (upcoming)
+    if (typeof body.votingStatus === "string" && (event.format === "tournament" || event.format === "field")) {
+      const vs = ["draft", "upcoming", "voting_open", "voting_closed", "champion_declared", "rewards_distributed"];
+      if (!vs.includes(body.votingStatus)) {
+        return c.json({ success: false, error: `Invalid votingStatus` }, 400);
+      }
+      event.votingStatus = body.votingStatus;
+      if (body.votingStatus === "voting_open" && event.status === "draft") event.status = "active";
+      if (body.votingStatus === "champion_declared") event.status = "completed";
+    }
+
+    if (body.complete === true) {
+      event.status = "completed";
+      if (!event.archivedAt && body.archive !== false) {
+        // leave archive optional — only complete
+      }
+    }
+
+    event.updatedAt = now();
+    await kv.set(`event:${id}`, event);
+    console.log(`[ADMIN] Event lifecycle ${id} by ${adminWallet}: status=${event.status} archived=${!!event.archivedAt}`);
+    return c.json({ success: true, data: event });
+  } catch (error) {
+    console.log(`[ADMIN] Error event lifecycle: ${error}`);
+    return c.json({ success: false, error: safeErrorMsg("Failed to update event lifecycle") }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /admin/events/:id — Production cascade delete
+// Allowed: draft/cancelled, or archived, or force=true with confirm
+// ---------------------------------------------------------------------------
+app.delete(`${PREFIX}/admin/events/:id`, requireAdminSession, async (c) => {
+  try {
+    const id = c.req.param("id");
+    const adminWallet = c.get("adminWallet");
+    const force = c.req.query("force") === "true";
+    const event: any = await kv.get(`event:${id}`);
+    if (!event) return c.json({ success: false, error: `Event ${id} not found` }, 404);
+
+    const isDraftish =
+      event.status === "draft" ||
+      event.status === "cancelled" ||
+      event.votingStatus === "draft";
+    const isArchived = !!event.archivedAt;
+
+    if (!isDraftish && !isArchived && !force) {
+      return c.json({
+        success: false,
+        error: "Only draft/cancelled or archived events can be deleted. Archive first, or pass force=true.",
+        code: "DELETE_NOT_ALLOWED",
+      }, 400);
+    }
+
+    const result = await cascadeDeleteEvent(id);
+    console.log(
+      `[ADMIN] Deleted event ${id} (+${result.battlesRemoved} battles, ${result.votesRemoved}+${result.tournamentVotesRemoved} votes). Admin: ${adminWallet}`,
+    );
+    return c.json({
+      success: true,
+      data: { eventId: id, ...result },
+    });
+  } catch (error) {
+    console.log(`[ADMIN] Error deleting event: ${error}`);
+    return c.json({ success: false, error: safeErrorMsg("Failed to delete event") }, 500);
   }
 });
 
@@ -2465,6 +2663,7 @@ app.post(`${PREFIX}/admin/battles/:id/status`, requireAdminSession, async (c) =>
     battle.status = body.status;
     battle.updatedAt = now();
     await kv.set(`battle:${id}`, battle);
+    await syncParentEventFromBattles(battle.eventId);
 
     console.log(`[ADMIN] Updated battle ${id} status '${prevStatus}' → '${body.status}' by admin ${c.get("adminWallet")}`);
     return c.json({ success: true, data: battle });
@@ -2696,6 +2895,7 @@ app.post(`${PREFIX}/admin/battles/:id/winner`, requireAdminSession, async (c) =>
     // SCALING: Invalidate leaderboard caches — winner changes W/L records + voter accuracy
     invalidateCache("leaderboard:athletes");
     invalidateCache("leaderboard:voters");
+    await syncParentEventFromBattles(battle.eventId);
 
     console.log(`[ADMIN] Winner declared: ${winnerId} for battle ${id}. Snapshot: ${recipients.length} recipients, pool=${battle.totalPool}, weighted=${totalWinningWeighted}, headcountFallback=${useHeadcountFallback}, balanceVerify=${!!BOTB_TOKEN_ID}, dupsRemoved=${dupsRemoved}, tallyDrift=${tallyDrift}. Admin: ${c.get("adminWallet")}`);
 
@@ -2997,6 +3197,24 @@ app.post(`${PREFIX}/admin/battles/:id/clear`, requireAdminSession, async (c) => 
 
     // Delete the battle itself
     await kv.del(`battle:${id}`);
+
+    // Prune battle id from parent event.rounds
+    if (eventId && eventId !== "standalone") {
+      try {
+        const evt: any = await kv.get(`event:${eventId}`);
+        if (evt?.rounds?.length) {
+          evt.rounds = evt.rounds.map((r: any) => ({
+            ...r,
+            battleIds: (r.battleIds || []).filter((bid: string) => bid !== id),
+          }));
+          evt.updatedAt = now();
+          await kv.set(`event:${eventId}`, evt);
+        }
+        await syncParentEventFromBattles(eventId);
+      } catch (err) {
+        console.log(`[ADMIN] Non-fatal: failed to prune event rounds after clear: ${err}`);
+      }
+    }
 
     console.log(`[ADMIN] Permanently cleared cancelled battle ${id} (${battle.title || "untitled"}), removed ${allBattleVotes.length} votes. Admin: ${adminWallet}`);
 

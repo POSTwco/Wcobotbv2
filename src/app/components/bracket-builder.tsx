@@ -22,11 +22,12 @@ import {
 import { api } from "../lib/api";
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "./error-boundary";
-import type { Athlete, BattleEvent, EventCompetitionFormat, EventElimination } from "../lib/types";
+import type { Athlete, Battle, BattleEvent, EventCompetitionFormat, EventElimination } from "../lib/types";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-import { getCountryFlag } from "../lib/country-flags";
 import { InlineFlag } from "./country-flag";
 import { TournamentAdminPanel } from "./tournament-admin-panel";
+import { EventConsoleList } from "./event-console-list";
+import { nextPowerOfTwo } from "../lib/event-admin";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -57,7 +58,13 @@ interface MatchupPreview {
 export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessionToken: string }) {
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [events, setEvents] = useState<BattleEvent[]>([]);
+  const [battles, setBattles] = useState<Battle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastCreated, setLastCreated] = useState<{
+    event: BattleEvent;
+    battles: Battle[];
+    message: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
   /** Tournament/Field: athlete count. PvP: derived from eventBattles * 2. */
@@ -102,12 +109,14 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [athRes, evtRes] = await Promise.all([
+      const [athRes, evtRes, btlRes] = await Promise.all([
         api.getAthletes(),
         api.getEvents(),
+        api.getBattles(),
       ]);
       if (athRes.success && athRes.data) setAthletes(athRes.data);
       if (evtRes.success && evtRes.data) setEvents(evtRes.data);
+      if (btlRes.success && btlRes.data) setBattles(btlRes.data);
     } catch (err) {
       console.error("[BracketBuilder] Load error:", err);
     } finally {
@@ -142,11 +151,11 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
 
   // Generated matchups preview
   // PvP duals: sequential pairs (1v2, 3v4, …) — no snake / no byes
-  // Tournament: classic snake (1vN, 2vN-1, …)
+  // Tournament: pad to next power of 2 (BYE slots) then snake — matches server buildSingleElimMatches
   const matchups: MatchupPreview[] = useMemo(() => {
-    const numMatches = Math.floor(bracketSize / 2);
-    return Array.from({ length: numMatches }, (_, i) => {
-      if (isPvp) {
+    if (isPvp) {
+      const numMatches = Math.floor(bracketSize / 2);
+      return Array.from({ length: numMatches }, (_, i) => {
         const seat1 = i * 2 + 1;
         const seat2 = i * 2 + 2;
         const s1 = seats[seat1 - 1];
@@ -158,15 +167,24 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
           athlete1: s1?.athleteId ? athleteMap.get(s1.athleteId) || null : null,
           athlete2: s2?.athleteId ? athleteMap.get(s2.athleteId) || null : null,
         };
-      }
-      const s1 = seats[i];
-      const s2 = seats[bracketSize - 1 - i];
+      });
+    }
+    // Tournament padded snake
+    const pad = nextPowerOfTwo(bracketSize);
+    const slots: (string | null)[] = Array.from({ length: pad }, () => null);
+    for (let i = 0; i < seats.length; i++) {
+      slots[i] = seats[i]?.athleteId || null;
+    }
+    const r1 = pad / 2;
+    return Array.from({ length: r1 }, (_, i) => {
+      const a = slots[i];
+      const b = slots[pad - 1 - i];
       return {
         position: i + 1,
         seat1: i + 1,
-        seat2: bracketSize - i,
-        athlete1: s1?.athleteId ? athleteMap.get(s1.athleteId) || null : null,
-        athlete2: s2?.athleteId ? athleteMap.get(s2.athleteId) || null : null,
+        seat2: pad - i,
+        athlete1: a ? athleteMap.get(a) || null : null,
+        athlete2: b ? athleteMap.get(b) || null : null,
       };
     });
   }, [seats, bracketSize, athleteMap, isPvp]);
@@ -230,13 +248,18 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
 
     setSaving(true);
     try {
+      const toIso = (local: string) => {
+        if (!local) return "";
+        const d = new Date(local);
+        return isNaN(d.getTime()) ? local : d.toISOString();
+      };
       const res = await api.admin.generateBracket(
         {
           name: eventName,
           description: eventDescription,
           location: eventLocation,
-          startDate,
-          endDate,
+          startDate: toIso(startDate),
+          endDate: toIso(endDate),
           totalPrizePool: prizePool,
           format: competitionFormat,
           elimination:
@@ -272,15 +295,12 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
           return;
         }
 
-        if (competitionFormat === "field" && created?.format === "field") {
-          toast.success(
-            res.data.message ||
-              `Field created with ${seats.length} athletes — no matchups. Fans pick one winner.`,
-          );
-        } else {
-          toast.success(res.data.message);
-        }
-
+        toast.success(res.data.message || "Event created");
+        setLastCreated({
+          event: created,
+          battles: createdBattles,
+          message: res.data.message || "Event created",
+        });
         setShowBuilder(false);
         loadData();
         setEventName("");
@@ -324,93 +344,75 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div>
             <h3 className="text-[#E8ECF0] font-bold" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-              BRACKET BUILDER
+              EVENT CONSOLE
             </h3>
             <p className="text-[#8494A7] text-xs">
-              {events.length} events created · {athletes.length} athletes available
+              Create &amp; manage Duals · Tournament · Field · {athletes.length} athletes
             </p>
           </div>
           <button
-            onClick={() => setShowBuilder(!showBuilder)}
+            onClick={() => { setShowBuilder(!showBuilder); setLastCreated(null); }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#D4A843]/10 border border-[#D4A843]/30 text-[#D4A843] text-xs hover:bg-[#D4A843]/20 transition-all"
             style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.6rem" }}
           >
             <Trophy className="w-3 h-3" />
-            {showBuilder ? "HIDE BUILDER" : "+ NEW BRACKET EVENT"}
+            {showBuilder ? "HIDE CREATOR" : "+ NEW EVENT"}
           </button>
         </div>
 
-        {/* Existing Events List */}
-        {events.length > 0 && !showBuilder && (
-          <div className="space-y-2 mb-4">
-            {events.map((evt) => (
-              <div
-                key={evt.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#0B1120] border border-[#4274B9]/10 hover:border-[#4274B9]/30 transition-all"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-1.5 rounded-lg bg-[#4274B9]/10">
-                    <Trophy className="w-4 h-4 text-[#4274B9]" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[#E8ECF0] text-sm font-semibold truncate">{evt.name}</p>
-                    <p className="text-[#8494A7] text-[0.6rem] truncate">
-                      {evt.format === "field"
-                        ? "FIELD"
-                        : evt.format === "tournament"
-                          ? "TOURNAMENT"
-                          : "1v1 DUALS"}{" "}
-                      · {evt.format === "pvp" || !evt.format
-                        ? `${Math.floor((evt.bracketSize || 0) / 2)} battle${Math.floor((evt.bracketSize || 0) / 2) === 1 ? "" : "s"} · ${evt.bracketSize} athletes`
-                        : `${evt.bracketSize}-athlete`}
-                      {evt.format === "tournament" || evt.format === "field"
-                        ? ` · ${evt.votingStatus || "draft"}`
-                        : ""}
-                      {evt.format === "field" && evt.performanceRounds
-                        ? ` · ${evt.performanceRounds} judged round${evt.performanceRounds > 1 ? "s" : ""}`
-                        : ""}
-                      {" · "}{evt.location || "TBD"}
-                    </p>
-                  </div>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[0.55rem] ${
-                  evt.format === "field"
-                    ? "bg-[#10b981]/10 text-[#10b981]"
-                    : evt.format === "tournament"
-                    ? "bg-[#D4A843]/10 text-[#D4A843]"
-                    : evt.status === "active" ? "bg-[#10b981]/10 text-[#10b981]" :
-                      evt.status === "completed" ? "bg-[#4274B9]/10 text-[#4274B9]" :
-                      "bg-[#D4A843]/10 text-[#D4A843]"
-                }`}>
-                  {evt.format === "tournament" || evt.format === "field"
-                    ? (evt.votingStatus || evt.status || "draft").toUpperCase()
-                    : (evt.status?.toUpperCase() || "DRAFT")}
-                </span>
-              </div>
-            ))}
+        {/* Post-create handoff */}
+        {lastCreated && !showBuilder && (
+          <div className="mb-4 p-3 rounded-xl border border-[#10b981]/30 bg-[#10b981]/5 space-y-2">
+            <p className="text-[#10b981] text-xs font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>
+              CREATED · {lastCreated.event.name}
+            </p>
+            <p className="text-[#8494A7] text-[0.55rem]">{lastCreated.message}</p>
+            <p className="text-[#E8ECF0] text-[0.55rem]">
+              Next: expand the event below → save schedule → publish / open voting.
+              {(lastCreated.battles?.length || 0) > 0
+                ? ` Or open the Battles tab for ${lastCreated.battles.length} dual(s).`
+                : " Champ-pick events are managed from this list (no 1v1 battles)."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setLastCreated(null)}
+              className="text-[0.5rem] text-[#8494A7] hover:text-[#E8ECF0]"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
-        {/* Tournament admin controls (open voting / advance / champion) */}
+        {/* Manage list */}
+        {!showBuilder && (
+          <EventConsoleList
+            events={events}
+            battles={battles}
+            athletes={athletes}
+            wallet={wallet}
+            sessionToken={sessionToken}
+            onRefresh={loadData}
+            onOpenBattlesTab={() => {
+              toast.info("Switch to the Battles tab to manage individual duals for this event");
+            }}
+          />
+        )}
+
+        {/* Tournament admin controls (advance / declare) — schedule open/close also on event cards */}
         {!showBuilder && (
           <TournamentAdminPanel
-            events={events.filter((e) => e.format === "tournament" || e.format === "field")}
+            events={events.filter(
+              (e) =>
+                (e.format === "tournament" || e.format === "field") &&
+                !e.archivedAt &&
+                e.votingStatus &&
+                e.votingStatus !== "draft",
+            )}
             athletes={athletes}
             wallet={wallet}
             sessionToken={sessionToken}
             onRefresh={loadData}
           />
-        )}
-
-        {/* No events state */}
-        {events.length === 0 && !showBuilder && (
-          <div className="text-center py-8 bg-[#0B1120] rounded-xl border border-[#4274B9]/10">
-            <Trophy className="w-8 h-8 text-[#4274B9]/30 mx-auto mb-2" />
-            <p className="text-[#8494A7] text-sm mb-2">No bracket events yet.</p>
-            <p className="text-[#8494A7] text-xs">
-              Click "New Bracket Event" to create your first tournament bracket.
-            </p>
-          </div>
         )}
 
         {/* Builder */}
@@ -426,7 +428,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                 {/* Builder Header */}
                 <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-[#D4A843]/10 bg-[#D4A843]/5">
                   <h4 className="text-[#D4A843] font-bold" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.7rem" }}>
-                    NEW BRACKET EVENT
+                    NEW EVENT
                   </h4>
                   <button onClick={() => setShowBuilder(false)} className="text-[#8494A7] hover:text-[#E8ECF0]">
                     <X className="w-4 h-4" />
@@ -574,18 +576,18 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         </div>
                       </div>
                       <div>
-                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Start Date</label>
+                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Voting opens</label>
                         <input
-                          type="date"
+                          type="datetime-local"
                           value={startDate}
                           onChange={(e) => setStartDate(e.target.value)}
                           className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
                         />
                       </div>
                       <div>
-                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">End Date</label>
+                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Voting closes / end</label>
                         <input
-                          type="date"
+                          type="datetime-local"
                           value={endDate}
                           onChange={(e) => setEndDate(e.target.value)}
                           className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
@@ -810,7 +812,10 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
 
                   {filledCount > 0 && competitionFormat === "tournament" && (
                     <div>
-                      <SectionHeader icon={<Swords className="w-3.5 h-3.5" />} title="ROUND 1 MATCHUP PREVIEW (SNAKE SEEDING)" />
+                      <SectionHeader
+                        icon={<Swords className="w-3.5 h-3.5" />}
+                        title={`ROUND 1 PREVIEW (PADDED TO ${nextPowerOfTwo(bracketSize)} — BYES MATCH SERVER)`}
+                      />
                       <div className="mt-2 space-y-1.5">
                         {matchups.map((m) => (
                           <div
@@ -824,7 +829,8 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                             <MatchupSlot
                               athlete={m.athlete1}
                               seatNum={m.seat1}
-                              isTopSeed={m.seat1 <= bracketSize / 2}
+                              isTopSeed={m.seat1 <= nextPowerOfTwo(bracketSize) / 2}
+                              emptyLabel={m.athlete1 ? undefined : "BYE"}
                             />
 
                             <div className="flex items-center gap-1 px-1.5">
@@ -835,6 +841,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                               athlete={m.athlete2}
                               seatNum={m.seat2}
                               isTopSeed={false}
+                              emptyLabel={m.athlete2 ? undefined : "BYE"}
                             />
                           </div>
                         ))}
@@ -842,7 +849,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
 
                       <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-[#4274B9]/10">
                         <span className="text-[#8494A7] text-[0.55rem]">Tournament flow:</span>
-                        {getRoundNames(bracketSize).map((name, i, arr) => (
+                        {getRoundNames(nextPowerOfTwo(bracketSize)).map((name, i, arr) => (
                           <span key={name} className="flex items-center gap-1">
                             <span className="px-2 py-0.5 rounded bg-[#4274B9]/10 text-[#6AA3E0] text-[0.5rem] border border-[#4274B9]/20" style={{ fontFamily: "Orbitron, sans-serif" }}>
                               {name}
@@ -1215,11 +1222,12 @@ function CornerDropSlot({
 function MatchupSlot({
   athlete,
   seatNum,
-  isTopSeed,
+  emptyLabel,
 }: {
   athlete: Athlete | null;
   seatNum: number;
-  isTopSeed: boolean;
+  isTopSeed?: boolean;
+  emptyLabel?: string;
 }) {
   const borderColor = athlete?.nftCardBorderColor || "#4274B9";
   const hasPfp = athlete?.pfpUrl && athlete.pfpUrl !== "placeholder";
@@ -1246,7 +1254,9 @@ function MatchupSlot({
           </div>
         </>
       ) : (
-        <p className="text-[#8494A7]/30 text-[0.5rem]">Seat {seatNum} — empty</p>
+        <p className={`text-[0.5rem] ${emptyLabel === "BYE" ? "text-[#f59e0b]/70 font-bold" : "text-[#8494A7]/30"}`}>
+          {emptyLabel || `Seat ${seatNum} — empty`}
+        </p>
       )}
     </div>
   );

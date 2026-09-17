@@ -182,6 +182,9 @@ export interface BattleEvent {
   /** Bracket match tree (tournament only; empty for field) */
   tournamentMatches?: TournamentMatch[];
 
+  /** Soft-hide from default admin Active list (does not delete votes) */
+  archivedAt?: string;
+
   createdAt: string;
   updatedAt: string;
 }

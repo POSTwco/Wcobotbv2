@@ -76,6 +76,9 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [hideArchivedEvents, setHideArchivedEvents] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
 
   // Winner declaration state
   const [winnerModal, setWinnerModal] = useState<{ battleId: string; ath1: Athlete | null; ath2: Athlete | null } | null>(null);
@@ -135,10 +138,65 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
     return () => clearInterval(iv);
   }, []);
 
-  const filtered = useMemo(
-    () => filterStatus === "all" ? battles : battles.filter((b) => b.status === filterStatus),
-    [battles, filterStatus]
-  );
+  const filtered = useMemo(() => {
+    let list = filterStatus === "all" ? battles : battles.filter((b) => b.status === filterStatus);
+    if (hideArchivedEvents) {
+      list = list.filter((b) => {
+        const evt = eventMap.get(b.eventId);
+        return !evt?.archivedAt;
+      });
+    }
+    return list;
+  }, [battles, filterStatus, hideArchivedEvents, eventMap]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, { event: BattleEvent | null; battles: Battle[] }>();
+    for (const b of filtered) {
+      const eid = b.eventId || "standalone";
+      if (!map.has(eid)) map.set(eid, { event: eventMap.get(eid) || null, battles: [] });
+      map.get(eid)!.battles.push(b);
+    }
+    return Array.from(map.entries());
+  }, [filtered, eventMap]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectGroup = (ids: string[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.every((id) => next.has(id));
+      if (allSelected) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const runBatch = async (status: string) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) {
+      toast.error("Select battles first");
+      return;
+    }
+    setBatchBusy(true);
+    try {
+      const res = await api.admin.batchBattleStatus(ids, status, wallet, sessionToken);
+      if (!res.success) throw new Error(res.error || "Batch failed");
+      toast.success(`Updated ${res.data?.updated || 0}/${ids.length} → ${STATUS_META[status]?.label || status}`);
+      setSelectedIds(new Set());
+      load();
+    } catch (err: any) {
+      toast.error(sanitizeErrorMessage(err?.message));
+    } finally {
+      setBatchBusy(false);
+    }
+  };
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -282,7 +340,7 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
       </div>
 
       {/* Status Filter Pills */}
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      <div className="flex flex-wrap gap-1.5 mb-2">
         {["all", ...STATUS_ORDER].map((s) => {
           const meta = STATUS_META[s];
           const count = s === "all" ? battles.length : battles.filter((b) => b.status === s).length;
@@ -301,21 +359,94 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => setHideArchivedEvents((v) => !v)}
+          className={`px-2 py-1 rounded text-[0.5rem] border ${
+            hideArchivedEvents
+              ? "border-[#10b981]/30 text-[#10b981]"
+              : "border-[#4274B9]/10 text-[#8494A7]"
+          }`}
+          style={{ fontFamily: "Orbitron, sans-serif" }}
+        >
+          {hideArchivedEvents ? "HIDING ARCHIVED EVENTS" : "SHOWING ARCHIVED"}
+        </button>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 p-2 rounded-lg border border-[#D4A843]/25 bg-[#D4A843]/5">
+          <span className="text-[0.5rem] text-[#D4A843] font-bold mr-1" style={{ fontFamily: "Orbitron, sans-serif" }}>
+            {selectedIds.size} SELECTED
+          </span>
+          <button
+            type="button"
+            disabled={batchBusy}
+            onClick={() => runBatch("upcoming")}
+            className="px-2 py-1 rounded text-[0.5rem] bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 disabled:opacity-40"
+            style={{ fontFamily: "Orbitron, sans-serif" }}
+          >
+            Publish
+          </button>
+          <button
+            type="button"
+            disabled={batchBusy}
+            onClick={() => runBatch("voting_open")}
+            className="px-2 py-1 rounded text-[0.5rem] bg-[#EF4444]/15 text-[#EF4444] border border-[#EF4444]/30 disabled:opacity-40"
+            style={{ fontFamily: "Orbitron, sans-serif" }}
+          >
+            Open voting
+          </button>
+          <button
+            type="button"
+            disabled={batchBusy}
+            onClick={() => runBatch("voting_closed")}
+            className="px-2 py-1 rounded text-[0.5rem] bg-[#6AA3E0]/15 text-[#6AA3E0] border border-[#6AA3E0]/30 disabled:opacity-40"
+            style={{ fontFamily: "Orbitron, sans-serif" }}
+          >
+            Close voting
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            className="px-2 py-1 rounded text-[0.5rem] text-[#8494A7]"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Empty */}
       {filtered.length === 0 && (
         <div className="text-center py-8 bg-[#0B1120] rounded-xl border border-[#4274B9]/10">
           <Swords className="w-8 h-8 text-[#4274B9]/20 mx-auto mb-2" />
           <p className="text-[#8494A7] text-sm">
-            {filterStatus === "all" ? "No battles yet. Create bracket events first." : `No ${filterStatus.replace("_", " ")} battles.`}
+            {filterStatus === "all"
+              ? "No battles yet. Create Duals events in the Events tab first."
+              : `No ${filterStatus.replace("_", " ")} battles.`}
           </p>
         </div>
       )}
 
-      {/* Battle Cards */}
-      <div className="space-y-2">
-        {filtered.map((battle) => {
+      {/* Battle Cards grouped by event */}
+      <div className="space-y-4">
+        {grouped.map(([eventId, group]) => (
+          <div key={eventId} className="space-y-2">
+            <div className="flex items-center justify-between gap-2 px-1">
+              <p className="text-[0.55rem] text-[#6AA3E0] font-bold truncate" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                {group.event?.name || (eventId === "standalone" ? "STANDALONE" : eventId)}
+                <span className="text-[#8494A7] font-normal"> · {group.battles.length} battle(s)</span>
+                {group.event?.archivedAt ? <span className="text-[#8494A7]"> · archived</span> : null}
+              </p>
+              <button
+                type="button"
+                onClick={() => selectGroup(group.battles.map((b) => b.id))}
+                className="text-[0.45rem] text-[#8494A7] hover:text-[#E8ECF0] shrink-0"
+                style={{ fontFamily: "Orbitron, sans-serif" }}
+              >
+                SELECT GROUP
+              </button>
+            </div>
+            {group.battles.map((battle) => {
           const ath1 = athleteMap.get(battle.athlete1Id) || null;
           const ath2 = athleteMap.get(battle.athlete2Id) || null;
           const event = eventMap.get(battle.eventId);
@@ -329,16 +460,27 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
             ? Math.round((battle.votes1Count / totalVotes) * 100)
             : 50;
           const pct2 = 100 - pct1;
+          const isSelected = selectedIds.has(battle.id);
 
           return (
             <div
               key={battle.id}
-              className="rounded-xl bg-[#0B1120] border border-[#4274B9]/10 overflow-hidden hover:border-[#4274B9]/20 transition-all"
+              className={`rounded-xl bg-[#0B1120] border overflow-hidden hover:border-[#4274B9]/20 transition-all ${
+                isSelected ? "border-[#D4A843]/40" : "border-[#4274B9]/10"
+              }`}
             >
               {/* Summary Row */}
+              <div className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => toggleSelect(battle.id)}
+                className="ml-3 shrink-0 accent-[#D4A843]"
+                aria-label={`Select ${battle.title}`}
+              />
               <button
                 onClick={() => setExpandedId(isExpanded ? null : battle.id)}
-                className="w-full flex items-center gap-2 p-3 text-left hover:bg-[#4274B9]/5 transition-all"
+                className="flex-1 flex items-center gap-2 p-3 text-left hover:bg-[#4274B9]/5 transition-all"
               >
                 <ChevronRight className={`w-3.5 h-3.5 text-[#8494A7] transition-transform shrink-0 ${isExpanded ? "rotate-90" : ""}`} />
 
@@ -366,6 +508,7 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
 
                 {statusBadge(battle.status)}
               </button>
+              </div>
 
               {/* Expanded Detail */}
               <AnimatePresence>
@@ -540,7 +683,9 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
               </AnimatePresence>
             </div>
           );
-        })}
+            })}
+          </div>
+        ))}
       </div>
 
       {/* Winner Declaration Modal */}

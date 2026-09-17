@@ -20,8 +20,8 @@
  *
  * TABS:
  *   Athletes  — Add/edit/remove athletes, set skills, NFT info, socials
- *   Brackets  — Create events with variable bracket sizes (2-12)
- *   Battles   — Manage matchups, voting windows, declare winners
+ *   Events    — Event Console: Duals / Tournament / Field create + manage
+ *   Battles   — Manage 1v1 duals, voting windows, declare winners
  *   Proposals — Create governance proposals for Governor votes
  *   Sponsors  — Manage site sponsors and partnerships
  *   Snapshots — View reward distribution snapshots, export CSV
@@ -88,8 +88,8 @@ interface AdminSession {
 
 const TABS: { id: AdminTab; label: string; icon: React.ReactNode; description: string }[] = [
   { id: "athletes", label: "Athletes", icon: <Users className="w-4 h-4" />, description: "Add, edit, and manage athlete profiles" },
-  { id: "brackets", label: "Brackets", icon: <Trophy className="w-4 h-4" />, description: "Create events and bracket matchups" },
-  { id: "battles", label: "Battles", icon: <Swords className="w-4 h-4" />, description: "Manage battles and voting windows" },
+  { id: "brackets", label: "Events", icon: <Trophy className="w-4 h-4" />, description: "Event Console — Duals, Tournament, Field" },
+  { id: "battles", label: "Battles", icon: <Swords className="w-4 h-4" />, description: "1v1 dual lifecycle & voting windows" },
   { id: "proposals", label: "Proposals", icon: <Vote className="w-4 h-4" />, description: "Create governance proposals" },
   { id: "sponsors", label: "Sponsors", icon: <Megaphone className="w-4 h-4" />, description: "Manage site sponsors and partnerships" },
   { id: "snapshots", label: "Snapshots", icon: <Camera className="w-4 h-4" />, description: "View reward snapshots and export" },
@@ -1103,19 +1103,26 @@ function ManualTab() {
     },
     {
       id: "brackets",
-      title: "Creating Brackets & Events",
+      title: "Event Console (Duals / Tournament / Field)",
       content: (
         <div className="space-y-3 text-sm text-[#8494A7]">
-          <p>Events contain brackets that generate battles automatically.</p>
-          <div className="bg-[#162033] rounded-lg p-3 border border-[#4274B9]/10">
-            <p className="text-[#6AA3E0] text-xs font-bold mb-2" style={{ fontFamily: "Orbitron, sans-serif" }}>HOW BRACKETS WORK</p>
+          <p>Use the <span className="text-[#D4A843]">Events</span> tab to create and manage all competition formats.</p>
+          <div className="bg-[#162033] rounded-lg p-3 border border-[#4274B9]/10 space-y-2">
+            <p className="text-[#6AA3E0] text-xs font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>THREE FORMATS</p>
             <ul className="text-xs space-y-1.5 list-disc list-inside">
-              <li>Choose bracket size: <span className="text-[#D4A843]">2, 4, 6, 8, 10, or 12</span> athletes</li>
-              <li>Seat 1 = top seed (best athlete), Seat 12 = #2 seed (for 12-man brackets)</li>
-              <li>The system auto-generates matchups based on seed order</li>
-              <li>Battles are created for each matchup with default voting windows</li>
-              <li>You can adjust voting start/end times for each battle individually</li>
+              <li><span className="text-[#D4A843]">1v1 Duals</span> — Event Battles 1–16 (up to 32 athletes). Sequential pairs. Creates real vote battles.</li>
+              <li><span className="text-[#D4A843]">Tournament</span> — 3–12 athletes, single-elim display bracket (byes pad to power of 2). Fans pick one champion. No 1v1 battles.</li>
+              <li><span className="text-[#D4A843]">Best in Field</span> — Flat individual pool. Fans pick exactly one athlete. Never paired into fights.</li>
             </ul>
+          </div>
+          <div className="bg-[#162033] rounded-lg p-3 border border-[#4274B9]/10 space-y-2">
+            <p className="text-[#6AA3E0] text-xs font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>WORKFLOW</p>
+            <ol className="text-xs space-y-1.5 list-decimal list-inside">
+              <li>Create event → set schedule (datetime) → seat athletes → Generate</li>
+              <li>Expand event card → Save schedule → Publish / Open voting (batch for Duals)</li>
+              <li>Duals detail work happens in the <span className="text-[#D4A843]">Battles</span> tab (grouped by event)</li>
+              <li><span className="text-[#D4A843]">Archive</span> hides completed noise; <span className="text-[#D4A843]">Delete</span> removes drafts/archived with full cascade</li>
+            </ol>
           </div>
         </div>
       ),

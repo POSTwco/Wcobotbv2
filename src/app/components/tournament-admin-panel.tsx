@@ -58,11 +58,13 @@ export function TournamentAdminPanel({
         const busy = busyId === evt.id;
         const open = expanded === evt.id;
         const matches = (evt.tournamentMatches || []) as TournamentMatch[];
-        const openable = ["draft", "upcoming", "voting_closed"].includes(evt.votingStatus || "draft");
-        const closeable = evt.votingStatus === "voting_open";
+        const vs = evt.votingStatus || "draft";
+        const canUpcoming = vs === "draft";
+        const openable = ["draft", "upcoming", "voting_closed"].includes(vs);
+        const closeable = vs === "voting_open";
         const canDeclare =
-          evt.votingStatus === "voting_open" ||
-          evt.votingStatus === "voting_closed";
+          vs === "voting_open" ||
+          vs === "voting_closed";
 
         return (
           <div
@@ -104,7 +106,7 @@ export function TournamentAdminPanel({
             {open && (
               <div className="px-3 pb-3 space-y-3 border-t border-[#D4A843]/10 pt-3">
                 <div className="flex flex-wrap gap-2">
-                  {openable && (
+                  {canUpcoming && (
                     <button
                       type="button"
                       disabled={busy}
@@ -112,12 +114,37 @@ export function TournamentAdminPanel({
                         run(evt.id, async () => {
                           const res = await api.admin.setTournamentStatus(
                             evt.id,
+                            "upcoming",
+                            wallet,
+                            sessionToken,
+                          );
+                          if (!res.success) throw new Error(res.error || "Failed");
+                          toast.success("Marked upcoming");
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-lg text-[0.55rem] font-bold bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 disabled:opacity-50"
+                      style={orbitron}
+                    >
+                      PUBLISH → UPCOMING
+                    </button>
+                  )}
+                  {openable && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        run(evt.id, async () => {
+                          if (!confirm(`Open voting for "${evt.name}"? Fans will be able to pick one athlete.`)) return;
+                          const res = await api.admin.setTournamentStatus(
+                            evt.id,
                             "voting_open",
                             wallet,
                             sessionToken,
                           );
                           if (!res.success) throw new Error(res.error || "Failed");
-                          toast.success("Tournament voting opened");
+                          toast.success(
+                            evt.format === "field" ? "Field voting opened" : "Tournament voting opened",
+                          );
                         })
                       }
                       className="px-3 py-1.5 rounded-lg text-[0.55rem] font-bold bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/30 disabled:opacity-50"
@@ -139,7 +166,7 @@ export function TournamentAdminPanel({
                             sessionToken,
                           );
                           if (!res.success) throw new Error(res.error || "Failed");
-                          toast.success("Tournament voting closed");
+                          toast.success("Voting closed");
                         })
                       }
                       className="px-3 py-1.5 rounded-lg text-[0.55rem] font-bold bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30 disabled:opacity-50"
@@ -190,6 +217,15 @@ export function TournamentAdminPanel({
                         run(evt.id, async () => {
                           const cid = champPick[evt.id];
                           if (!cid) return;
+                          if (evt.votingStatus === "voting_open") {
+                            if (
+                              !confirm(
+                                "Voting is still OPEN. Declare winner anyway? (Recommended: close voting first.)",
+                              )
+                            ) {
+                              return;
+                            }
+                          }
                           if (
                             !confirm(
                               `Declare ${athMap.get(cid)?.name || cid} as ${
