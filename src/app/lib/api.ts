@@ -301,14 +301,20 @@ export const api = {
   getAthlete: (id: string) => request<Athlete>(`/athletes/${id}`),
 
   // Events
-  getEvents: () => request<BattleEvent[]>("/events"),
+  getEvents: (opts?: { includeAdmin?: boolean }) => {
+    const params = new URLSearchParams();
+    if (opts?.includeAdmin) params.set("includeAdmin", "1");
+    const qs = params.toString();
+    return request<BattleEvent[]>(`/events${qs ? `?${qs}` : ""}`);
+  },
   getEvent: (id: string) => request<BattleEvent>(`/events/${id}`),
 
-  // Battles
-  getBattles: (filters?: { eventId?: string; status?: string }) => {
+  // Battles — public omits draft/cancelled unless includeAdmin: true
+  getBattles: (filters?: { eventId?: string; status?: string; includeAdmin?: boolean }) => {
     const params = new URLSearchParams();
     if (filters?.eventId) params.set("eventId", filters.eventId);
     if (filters?.status) params.set("status", filters.status);
+    if (filters?.includeAdmin) params.set("includeAdmin", "1");
     const qs = params.toString();
     return request<Battle[]>(`/battles${qs ? `?${qs}` : ""}`);
   },

@@ -111,8 +111,8 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
     setLoading(true);
     try {
       const [bRes, eRes, aRes] = await Promise.all([
-        api.getBattles(),
-        api.getEvents(),
+        api.getBattles({ includeAdmin: true }),
+        api.getEvents({ includeAdmin: true }),
         api.getAthletes(),
       ]);
       if (bRes.success && bRes.data) setBattles(bRes.data);
@@ -131,7 +131,7 @@ export function BattlesTab({ wallet, sessionToken }: { wallet: string; sessionTo
   useEffect(() => {
     const iv = setInterval(async () => {
       try {
-        const res = await api.getBattles();
+        const res = await api.getBattles({ includeAdmin: true });
         if (res.success && res.data) setBattles(res.data);
       } catch {}
     }, 15000);

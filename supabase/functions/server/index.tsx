@@ -1322,7 +1322,21 @@ app.get(`${PREFIX}/athletes/:id`, async (c) => {
 // ---------------------------------------------------------------------------
 app.get(`${PREFIX}/events`, async (c) => {
   try {
-    const events = await kv.getByPrefix("event:");
+    const includeAdmin = c.req.query("includeAdmin") === "1" || c.req.query("includeAdmin") === "true";
+    let events = await kv.getByPrefix("event:");
+    if (!includeAdmin) {
+      // Public: hide archived + draft champ-pick; PvP drafts stay but their battles are filtered
+      events = events.filter((e: any) => {
+        if (e?.archivedAt) return false;
+        if (
+          (e?.format === "tournament" || e?.format === "field") &&
+          (!e.votingStatus || e.votingStatus === "draft")
+        ) {
+          return false;
+        }
+        return true;
+      });
+    }
     events.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return c.json({ success: true, data: events });
   } catch (error) {
@@ -1355,6 +1369,8 @@ app.get(`${PREFIX}/battles`, async (c) => {
   try {
     const eventId = c.req.query("eventId");
     const statusFilter = c.req.query("status");
+    // Public default: never return draft/cancelled. Admin UI passes includeAdmin=1.
+    const includeAdmin = c.req.query("includeAdmin") === "1" || c.req.query("includeAdmin") === "true";
 
     let battles = await kv.getByPrefix("battle:");
 
@@ -1389,6 +1405,11 @@ app.get(`${PREFIX}/battles`, async (c) => {
     }
     if (statusFilter) {
       battles = battles.filter((b: any) => b.status === statusFilter);
+    } else if (!includeAdmin) {
+      // Public site: only upcoming / live / completed — never draft or cancelled
+      battles = battles.filter(
+        (b: any) => b.status !== "draft" && b.status !== "cancelled",
+      );
     }
 
     // Sort: live first, then upcoming, then completed

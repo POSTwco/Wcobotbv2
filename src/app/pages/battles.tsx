@@ -39,12 +39,36 @@ import { CountryFlag, InlineFlag } from "../components/country-flag";
 // ─── Constants ──────────────────────────────────────────────────────────────
 type BattleFilter = "all" | "voting_open" | "upcoming" | "completed" | "tournaments";
 
+/** Public site never shows draft / cancelled — admin-only statuses. */
+const PUBLIC_BATTLE_STATUSES = new Set([
+  "upcoming",
+  "voting_open",
+  "voting_closed",
+  "winner_declared",
+  "rewards_distributed",
+]);
+
+const PUBLIC_TOURNAMENT_STATUSES = new Set([
+  "upcoming",
+  "voting_open",
+  "voting_closed",
+  "champion_declared",
+  "rewards_distributed",
+]);
+
+function isPublicBattleStatus(status: string): boolean {
+  return PUBLIC_BATTLE_STATUSES.has(status);
+}
+
 function matchesFilter(status: string, filter: BattleFilter): boolean {
+  if (!isPublicBattleStatus(status)) return false; // draft / cancelled never public
   if (filter === "tournaments") return false; // 1v1 battles hidden on tournaments tab
   if (filter === "all") return true;
   if (filter === "voting_open") return status === "voting_open";
-  if (filter === "upcoming") return status === "upcoming" || status === "draft";
-  if (filter === "completed") return status === "winner_declared" || status === "rewards_distributed" || status === "voting_closed";
+  if (filter === "upcoming") return status === "upcoming";
+  if (filter === "completed") {
+    return status === "winner_declared" || status === "rewards_distributed" || status === "voting_closed";
+  }
   return false;
 }
 
@@ -52,11 +76,9 @@ function statusLabel(status: string): { text: string; color: string; icon: "live
   switch (status) {
     case "voting_open": return { text: "VOTING OPEN", color: "#EF4444", icon: "live" };
     case "upcoming": return { text: "UPCOMING", color: "#f59e0b", icon: "upcoming" };
-    case "draft": return { text: "DRAFT", color: "#8494A7", icon: "upcoming" };
     case "voting_closed": return { text: "VOTING CLOSED", color: "#6AA3E0", icon: "completed" };
     case "winner_declared": return { text: "COMPLETED", color: "#10b981", icon: "completed" };
     case "rewards_distributed": return { text: "REWARDS PAID", color: "#10b981", icon: "completed" };
-    case "cancelled": return { text: "CANCELLED", color: "#8494A7", icon: "completed" };
     default: return { text: status.toUpperCase(), color: "#8494A7", icon: "upcoming" };
   }
 }
@@ -99,7 +121,7 @@ function formatCountdown(battle: { votingClosesAt: string; votingOpensAt: string
   if (!closeDate) return null;
   const target = new Date(closeDate);
   if (isNaN(target.getTime())) return null;
-  if (!["voting_open", "upcoming", "draft"].includes(battle.status)) return null;
+  if (!["voting_open", "upcoming"].includes(battle.status)) return null;
 
   const now = new Date();
   const diffMs = target.getTime() - now.getTime();
@@ -151,8 +173,9 @@ export function BattlesPage() {
       (events || []).filter(
         (e) =>
           (e.format === "tournament" || e.format === "field") &&
+          !e.archivedAt &&
           e.votingStatus &&
-          e.votingStatus !== "draft",
+          PUBLIC_TOURNAMENT_STATUSES.has(e.votingStatus),
       ),
     [events],
   );
@@ -268,6 +291,7 @@ export function BattlesPage() {
     () =>
       battles.filter(
         (b) =>
+          isPublicBattleStatus(b.status) &&
           matchesFilter(b.status, filter) &&
           !(b.eventId && champPickEventIds.has(b.eventId)),
       ),

@@ -111,8 +111,8 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
     try {
       const [athRes, evtRes, btlRes] = await Promise.all([
         api.getAthletes(),
-        api.getEvents(),
-        api.getBattles(),
+        api.getEvents({ includeAdmin: true }),
+        api.getBattles({ includeAdmin: true }),
       ]);
       if (athRes.success && athRes.data) setAthletes(athRes.data);
       if (evtRes.success && evtRes.data) setEvents(evtRes.data);
