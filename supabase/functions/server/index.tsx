@@ -2259,6 +2259,14 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
     const eventId = generateId("evt");
     const bracketSize = body.bracket.length;
 
+    // 1v1 Duals: even athlete count only (1–16 battles → 2–32 athletes)
+    if (bracketSize < 2 || bracketSize > 32 || bracketSize % 2 !== 0) {
+      return c.json({
+        success: false,
+        error: "1v1 Duals need an even number of athletes (2–32) for Event Battles 1–16",
+      }, 400);
+    }
+
     // Build athlete lookup for battle titles
     const athleteNames: Record<string, string> = {};
     for (const seat of body.bracket) {
@@ -2266,35 +2274,40 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       athleteNames[seat.athleteId] = ath?.name || seat.athleteId;
     }
 
-    // Generate matchups using snake seeding (1v12, 2v11, 3v10, ...)
-    // Sort bracket seats by seat number ascending
+    // Sequential pairing: Battle 1 = seats 1v2, Battle 2 = 3v4, … (no snake, no byes)
     const seats = [...body.bracket].sort((a: any, b: any) => a.seat - b.seat);
     const numMatches = Math.floor(bracketSize / 2);
 
     const round1Battles: any[] = [];
     const battleIds: string[] = [];
     const perBattlePool = body.totalPrizePool
-      ? Math.floor(body.totalPrizePool / numMatches) // Full pool split evenly across R1 matches
+      ? Math.floor(body.totalPrizePool / numMatches)
       : 0;
 
     for (let i = 0; i < numMatches; i++) {
-      const topSeed = seats[i];
-      const bottomSeed = seats[bracketSize - 1 - i];
+      const cornerA = seats[i * 2];
+      const cornerB = seats[i * 2 + 1];
+      if (!cornerA?.athleteId || !cornerB?.athleteId) {
+        return c.json({
+          success: false,
+          error: `Battle ${i + 1} is missing an athlete — fill both corners`,
+        }, 400);
+      }
       const battleId = generateId("btl");
       battleIds.push(battleId);
 
-      const ath1Name = athleteNames[topSeed.athleteId] || `Seat ${topSeed.seat}`;
-      const ath2Name = athleteNames[bottomSeed.athleteId] || `Seat ${bottomSeed.seat}`;
+      const ath1Name = athleteNames[cornerA.athleteId] || `Seat ${cornerA.seat}`;
+      const ath2Name = athleteNames[cornerB.athleteId] || `Seat ${cornerB.seat}`;
 
       const battle = {
         id: battleId,
         eventId,
         title: `${ath1Name} vs ${ath2Name}`,
         status: "draft",
-        round: "Round 1",
+        round: "Event Battles",
         bracketPosition: i + 1,
-        athlete1Id: topSeed.athleteId,
-        athlete2Id: bottomSeed.athleteId,
+        athlete1Id: cornerA.athleteId,
+        athlete2Id: cornerB.athleteId,
         votingOpensAt: body.startDate || "",
         votingClosesAt: body.endDate || "",
         totalPool: perBattlePool,
@@ -2314,50 +2327,11 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       await kv.set(`battle:${battleId}`, battle);
     }
 
-    // Determine rounds structure
+    // Independent duals under one event — no elim advancement / TBD rounds
     const rounds: any[] = [
-      { roundNumber: 1, roundName: "Round 1", battleIds },
+      { roundNumber: 1, roundName: "Event Battles", battleIds },
     ];
 
-    // Calculate subsequent rounds (no battles created yet — just placeholder structure)
-    let remaining = numMatches; // winners from R1
-    let roundNum = 2;
-    const roundNames: Record<number, string> = {};
-
-    // Pre-compute total rounds for naming
-    let tempR = remaining;
-    let totalRounds = 1;
-    while (tempR > 1) {
-      tempR = Math.ceil(tempR / 2);
-      totalRounds++;
-    }
-
-    // Now build the round structure with proper names
-    remaining = numMatches;
-    roundNum = 2;
-    while (remaining > 1) {
-      const matchesInRound = Math.floor(remaining / 2);
-      const hasBye = remaining % 2 !== 0;
-      const advancingToNext = matchesInRound + (hasBye ? 1 : 0);
-
-      let roundName = `Round ${roundNum}`;
-      if (advancingToNext === 1) roundName = "Finals";
-      else if (advancingToNext === 2 || matchesInRound === 2) roundName = "Semi-Finals";
-      else if (matchesInRound === 3 || matchesInRound === 4) roundName = "Quarter-Finals";
-
-      rounds.push({
-        roundNumber: roundNum,
-        roundName,
-        battleIds: [], // Generated when winners are declared
-        matchCount: matchesInRound,
-        hasBye,
-      });
-
-      remaining = advancingToNext;
-      roundNum++;
-    }
-
-    // Save the event (explicit format: pvp — legacy 1v1 path)
     const event = {
       id: eventId,
       name: body.name,
@@ -2368,7 +2342,7 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       totalPrizePool: body.totalPrizePool ?? 0,
       status: "draft",
       format: "pvp",
-      elimination: "single",
+      elimination: "none",
       bracketSize,
       bracket: seats,
       rounds,
@@ -2379,8 +2353,8 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
     await kv.set(`event:${eventId}`, event);
 
     console.log(
-      `[ADMIN] Generated PvP bracket event ${eventId} "${body.name}" with ${bracketSize} athletes, ` +
-      `${round1Battles.length} R1 battles, ${rounds.length} total rounds. Admin: ${adminWallet}`
+      `[ADMIN] Generated PvP duals event ${eventId} "${body.name}" with ${bracketSize} athletes, ` +
+      `${round1Battles.length} event battles (sequential pairs). Admin: ${adminWallet}`
     );
 
     return c.json({
@@ -2388,7 +2362,7 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       data: {
         event,
         battles: round1Battles,
-        message: `Created event "${body.name}" with ${round1Battles.length} Round 1 battles.`,
+        message: `Created event "${body.name}" with ${round1Battles.length} independent 1v1 battle${round1Battles.length === 1 ? "" : "s"}.`,
       },
     });
   } catch (error) {

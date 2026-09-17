@@ -1,11 +1,11 @@
 /**
- * BOTB Admin: 12-Man Bracket Builder
+ * BOTB Admin: Bracket / Duals Builder
  * ====================================
- * Visual bracket with drag-to-assign athletes, snake seeding,
- * auto matchup generation, and event metadata form.
- *
- * Snake seeding: Seat 1 = top seed vs Seat 12 = #2 seed
- * Round 1 generates 6 matches: 1v12, 2v11, 3v10, 4v9, 5v8, 6v7
+ * Three formats:
+ *  - 1v1 Duals (pvp): pick Event Battles 1–16 → 2–32 athletes.
+ *    Sequential pairs (Battle 1: seats 1v2, Battle 2: 3v4, …). No byes/TBD.
+ *  - Tournament: snake-ish seeding into single-elim display bracket.
+ *  - Field: flat athlete pool, no matchups.
  *
  * Uses react-dnd for drag-and-drop athlete assignment.
  */
@@ -33,7 +33,8 @@ import { TournamentAdminPanel } from "./tournament-admin-panel";
 // ---------------------------------------------------------------------------
 
 const DND_TYPE = "ATHLETE";
-const PVP_SIZES = [2, 4, 6, 8, 10, 12];
+/** 1v1 Duals: number of independent battles (1–16 → up to 32 athletes) */
+const PVP_BATTLE_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 const TOURNAMENT_SIZES = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 interface SeatAssignment {
@@ -59,7 +60,10 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
-  const [bracketSize, setBracketSize] = useState(12);
+  /** Tournament/Field: athlete count. PvP: derived from eventBattles * 2. */
+  const [bracketSize, setBracketSize] = useState(2);
+  /** 1v1 Duals only: how many independent battles (1–16). */
+  const [eventBattles, setEventBattles] = useState(1);
   const [competitionFormat, setCompetitionFormat] = useState<EventCompetitionFormat>("pvp");
   const [elimination, setElimination] = useState<EventElimination>("single");
   const [performanceRounds, setPerformanceRounds] = useState<1 | 2>(1);
@@ -75,19 +79,23 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   const [endDate, setEndDate] = useState("");
   const [prizePool, setPrizePool] = useState(0);
 
-  const sizeOptions =
-    competitionFormat === "tournament" || competitionFormat === "field"
-      ? TOURNAMENT_SIZES
-      : PVP_SIZES;
-  const isChampPick =
-    competitionFormat === "tournament" || competitionFormat === "field";
+  const isPvp = competitionFormat === "pvp";
 
-  // Keep size valid when switching format
+  // Keep sizes valid when switching format / changing battle count
   useEffect(() => {
-    if (!sizeOptions.includes(bracketSize)) {
-      setBracketSize(isChampPick ? 8 : 12);
+    if (isPvp) {
+      const battles = PVP_BATTLE_COUNTS.includes(eventBattles) ? eventBattles : 1;
+      if (battles !== eventBattles) {
+        setEventBattles(battles);
+        return;
+      }
+      setBracketSize(battles * 2);
+    } else if (!TOURNAMENT_SIZES.includes(bracketSize)) {
+      setBracketSize(8);
     }
-  }, [competitionFormat, sizeOptions, bracketSize, isChampPick]);
+    // intentionally omit bracketSize for pvp path — we derive it from eventBattles
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [competitionFormat, isPvp, eventBattles]);
 
   // Load athletes + existing events
   const loadData = useCallback(async () => {
@@ -131,10 +139,25 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
     return map;
   }, [athletes]);
 
-  // Generated matchups preview (snake seeding)
+  // Generated matchups preview
+  // PvP duals: sequential pairs (1v2, 3v4, …) — no snake / no byes
+  // Tournament: classic snake (1vN, 2vN-1, …)
   const matchups: MatchupPreview[] = useMemo(() => {
     const numMatches = Math.floor(bracketSize / 2);
     return Array.from({ length: numMatches }, (_, i) => {
+      if (isPvp) {
+        const seat1 = i * 2 + 1;
+        const seat2 = i * 2 + 2;
+        const s1 = seats[seat1 - 1];
+        const s2 = seats[seat2 - 1];
+        return {
+          position: i + 1,
+          seat1,
+          seat2,
+          athlete1: s1?.athleteId ? athleteMap.get(s1.athleteId) || null : null,
+          athlete2: s2?.athleteId ? athleteMap.get(s2.athleteId) || null : null,
+        };
+      }
       const s1 = seats[i];
       const s2 = seats[bracketSize - 1 - i];
       return {
@@ -145,7 +168,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
         athlete2: s2?.athleteId ? athleteMap.get(s2.athleteId) || null : null,
       };
     });
-  }, [seats, bracketSize, athleteMap]);
+  }, [seats, bracketSize, athleteMap, isPvp]);
 
   const allSeatsAssigned = seats.every((s) => s.athleteId !== null);
   const filledCount = seats.filter((s) => s.athleteId).length;
@@ -194,7 +217,11 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
       return;
     }
     if (!allSeatsAssigned) {
-      toast.error("All bracket seats must be filled before generating");
+      toast.error(
+        isPvp
+          ? "Fill every battle slot (both athletes) before generating"
+          : "All bracket seats must be filled before generating",
+      );
       return;
     }
 
@@ -209,7 +236,12 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
           endDate,
           totalPrizePool: prizePool,
           format: competitionFormat,
-          elimination: competitionFormat === "tournament" ? elimination : "single",
+          elimination:
+            competitionFormat === "tournament"
+              ? elimination
+              : competitionFormat === "pvp"
+                ? "none"
+                : "single",
           performanceRounds: competitionFormat === "field" ? performanceRounds : undefined,
           bracket: seats.map((s) => ({
             seat: s.seat,
@@ -234,6 +266,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
         setCompetitionFormat("pvp");
         setElimination("single");
         setPerformanceRounds(1);
+        setEventBattles(1);
         clearAll();
       } else {
         toast.error(res.error || "Failed to generate bracket");
@@ -246,7 +279,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   }, [
     eventName, eventDescription, eventLocation, startDate, endDate,
     prizePool, seats, allSeatsAssigned, wallet, loadData, clearAll, sessionToken,
-    competitionFormat, elimination, performanceRounds,
+    competitionFormat, elimination, performanceRounds, isPvp,
   ]);
 
   if (loading) {
@@ -300,11 +333,13 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         ? "FIELD"
                         : evt.format === "tournament"
                           ? "TOURNAMENT"
-                          : "1v1 PvP"}{" "}
-                      · {evt.bracketSize}-athlete
+                          : "1v1 DUALS"}{" "}
+                      · {evt.format === "pvp" || !evt.format
+                        ? `${Math.floor((evt.bracketSize || 0) / 2)} battle${Math.floor((evt.bracketSize || 0) / 2) === 1 ? "" : "s"} · ${evt.bracketSize} athletes`
+                        : `${evt.bracketSize}-athlete`}
                       {evt.format === "tournament" || evt.format === "field"
                         ? ` · ${evt.votingStatus || "draft"}`
-                        : ` · ${evt.rounds?.length || 0} rounds`}
+                        : ""}
                       {evt.format === "field" && evt.performanceRounds
                         ? ` · ${evt.performanceRounds} judged round${evt.performanceRounds > 1 ? "s" : ""}`
                         : ""}
@@ -387,7 +422,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         }`}
                         style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.55rem" }}
                       >
-                        1v1 MATCHUPS
+                        1v1 DUALS
                       </button>
                       <button
                         type="button"
@@ -419,7 +454,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         ? "Pool of athletes — no matchups. Judges pick the real winner by performance score. Fans still pick one field winner. Uses tournament wins/losses."
                         : competitionFormat === "tournament"
                           ? "Fans pick one overall champion. Creates a single-elim bracket for display — no 1v1 voting battles. Uses tournament wins/losses only."
-                          : "Existing flow: generates Round 1 1v1 battles fans vote on. Uses battle wins/losses."}
+                          : "Pick how many 1v1 battles (1–16). Each battle needs 2 athletes (up to 32). Pairs populate Battle 1, Battle 2… — no tournament byes or TBD slots. Fans vote each dual. Uses battle wins/losses."}
                     </p>
                     {competitionFormat === "tournament" && (
                       <div className="flex flex-wrap gap-2 mt-3">
@@ -543,33 +578,61 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                     </div>
                   </div>
 
-                  {/* Bracket Size */}
+                  {/* Size: Event Battles (1v1) OR Bracket Size (tournament/field) */}
                   <div>
-                    <SectionHeader icon={<Users className="w-3.5 h-3.5" />} title="BRACKET SIZE" />
+                    <SectionHeader
+                      icon={<Users className="w-3.5 h-3.5" />}
+                      title={isPvp ? "EVENT BATTLES" : "BRACKET SIZE"}
+                    />
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {sizeOptions.map((size) => (
-                        <button
-                          key={size}
-                          onClick={() => setBracketSize(size)}
-                          disabled={athletes.length < size}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            bracketSize === size
-                              ? "bg-[#D4A843] text-[#0B1120] border border-[#D4A843]"
-                              : athletes.length < size
-                                ? "bg-[#162033] text-[#8494A7]/30 border border-[#4274B9]/5 cursor-not-allowed"
-                                : "bg-[#162033] text-[#8494A7] border border-[#4274B9]/20 hover:border-[#D4A843]/30 hover:text-[#E8ECF0]"
-                          }`}
-                          style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.6rem" }}
-                        >
-                          {size}
-                        </button>
-                      ))}
+                      {isPvp
+                        ? PVP_BATTLE_COUNTS.map((n) => {
+                            const needAthletes = n * 2;
+                            const disabled = athletes.length < needAthletes;
+                            return (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setEventBattles(n)}
+                                disabled={disabled}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  eventBattles === n
+                                    ? "bg-[#D4A843] text-[#0B1120] border border-[#D4A843]"
+                                    : disabled
+                                      ? "bg-[#162033] text-[#8494A7]/30 border border-[#4274B9]/5 cursor-not-allowed"
+                                      : "bg-[#162033] text-[#8494A7] border border-[#4274B9]/20 hover:border-[#D4A843]/30 hover:text-[#E8ECF0]"
+                                }`}
+                                style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.6rem" }}
+                                title={`${n} battle${n === 1 ? "" : "s"} · ${needAthletes} athletes`}
+                              >
+                                {n}
+                              </button>
+                            );
+                          })
+                        : TOURNAMENT_SIZES.map((size) => (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => setBracketSize(size)}
+                              disabled={athletes.length < size}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                bracketSize === size
+                                  ? "bg-[#D4A843] text-[#0B1120] border border-[#D4A843]"
+                                  : athletes.length < size
+                                    ? "bg-[#162033] text-[#8494A7]/30 border border-[#4274B9]/5 cursor-not-allowed"
+                                    : "bg-[#162033] text-[#8494A7] border border-[#4274B9]/20 hover:border-[#D4A843]/30 hover:text-[#E8ECF0]"
+                              }`}
+                              style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.6rem" }}
+                            >
+                              {size}
+                            </button>
+                          ))}
                       <span className="flex items-center text-[#8494A7] text-[0.55rem]">
                         {competitionFormat === "field"
                           ? `athletes · flat field pool · ${performanceRounds} judged round${performanceRounds > 1 ? "s" : ""}`
                           : competitionFormat === "tournament"
                             ? `athletes · single-elim (byes pad to ${Math.pow(2, Math.ceil(Math.log2(Math.max(bracketSize, 2))))})`
-                            : `athletes · ${bracketSize / 2} R1 matches`}
+                            : `${eventBattles} battle${eventBattles === 1 ? "" : "s"} · ${bracketSize} athletes (no byes)`}
                       </span>
                     </div>
                     {athletes.length < bracketSize && (
@@ -580,10 +643,17 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                     )}
                   </div>
 
-                  {/* Bracket Assignment — Two columns */}
+                  {/* Assignment — Two columns */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <SectionHeader icon={<Zap className="w-3.5 h-3.5" />} title={`SEAT ASSIGNMENT (${filledCount}/${bracketSize})`} />
+                      <SectionHeader
+                        icon={<Zap className="w-3.5 h-3.5" />}
+                        title={
+                          isPvp
+                            ? `BATTLE PAIRING (${filledCount}/${bracketSize})`
+                            : `SEAT ASSIGNMENT (${filledCount}/${bracketSize})`
+                        }
+                      />
                       <div className="flex gap-2">
                         <button
                           onClick={autoFillByRank}
@@ -614,7 +684,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         <div className="bg-[#080D17] rounded-lg border border-[#4274B9]/10 p-2 max-h-[360px] overflow-y-auto space-y-1">
                           {unassigned.length === 0 ? (
                             <p className="text-[#8494A7]/40 text-[0.55rem] text-center py-4">
-                              {filledCount === bracketSize ? "All seats filled!" : "No athletes available"}
+                              {filledCount === bracketSize ? "All slots filled!" : "No athletes available"}
                             </p>
                           ) : (
                             unassigned.map((ath) => (
@@ -624,23 +694,41 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         </div>
                       </div>
 
-                      {/* Right: Bracket Seats (drop targets) */}
+                      {/* Right: battle pairs (1v1) OR tournament/field seats */}
                       <div>
                         <p className="text-[#8494A7] text-[0.55rem] mb-1.5 font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                          BRACKET SEATS
+                          {isPvp ? "EVENT BATTLES (1 VS 1)" : "BRACKET SEATS"}
                         </p>
-                        <div className="space-y-1">
-                          {seats.map((seat) => (
-                            <SeatDropZone
-                              key={seat.seat}
-                              seat={seat}
-                              athlete={seat.athleteId ? athleteMap.get(seat.athleteId) || null : null}
-                              bracketSize={bracketSize}
-                              onAssign={assignToSeat}
-                              onRemove={removeSeat}
-                            />
-                          ))}
-                        </div>
+                        {isPvp ? (
+                          <div className="space-y-2 max-h-[360px] overflow-y-auto pr-0.5">
+                            {matchups.map((m) => (
+                              <BattlePairDropZone
+                                key={m.position}
+                                battleNum={m.position}
+                                seat1={seats[m.seat1 - 1]}
+                                seat2={seats[m.seat2 - 1]}
+                                athlete1={m.athlete1}
+                                athlete2={m.athlete2}
+                                onAssign={assignToSeat}
+                                onRemove={removeSeat}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {seats.map((seat) => (
+                              <SeatDropZone
+                                key={seat.seat}
+                                seat={seat}
+                                athlete={seat.athleteId ? athleteMap.get(seat.athleteId) || null : null}
+                                bracketSize={bracketSize}
+                                pairing="snake"
+                                onAssign={assignToSeat}
+                                onRemove={removeSeat}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -669,7 +757,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                     </div>
                   )}
 
-                  {filledCount > 0 && competitionFormat !== "field" && (
+                  {filledCount > 0 && competitionFormat === "tournament" && (
                     <div>
                       <SectionHeader icon={<Swords className="w-3.5 h-3.5" />} title="ROUND 1 MATCHUP PREVIEW (SNAKE SEEDING)" />
                       <div className="mt-2 space-y-1.5">
@@ -701,20 +789,24 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         ))}
                       </div>
 
-                      {competitionFormat === "tournament" && (
-                        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-[#4274B9]/10">
-                          <span className="text-[#8494A7] text-[0.55rem]">Tournament flow:</span>
-                          {getRoundNames(bracketSize).map((name, i, arr) => (
-                            <span key={name} className="flex items-center gap-1">
-                              <span className="px-2 py-0.5 rounded bg-[#4274B9]/10 text-[#6AA3E0] text-[0.5rem] border border-[#4274B9]/20" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                                {name}
-                              </span>
-                              {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-[#8494A7]/40" />}
+                      <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-[#4274B9]/10">
+                        <span className="text-[#8494A7] text-[0.55rem]">Tournament flow:</span>
+                        {getRoundNames(bracketSize).map((name, i, arr) => (
+                          <span key={name} className="flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded bg-[#4274B9]/10 text-[#6AA3E0] text-[0.5rem] border border-[#4274B9]/20" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                              {name}
                             </span>
-                          ))}
-                        </div>
-                      )}
+                            {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-[#8494A7]/40" />}
+                          </span>
+                        ))}
+                      </div>
                     </div>
+                  )}
+
+                  {filledCount > 0 && isPvp && (
+                    <p className="text-[#8494A7] text-[0.5rem]">
+                      Creates {eventBattles} independent 1v1 battle{eventBattles === 1 ? "" : "s"} under one event — no Round-of-X padding, no TBD byes.
+                    </p>
                   )}
 
                   {/* Save Button */}
@@ -730,7 +822,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         ? "GENERATE FIELD EVENT"
                         : competitionFormat === "tournament"
                           ? "GENERATE TOURNAMENT"
-                          : "GENERATE BRACKET & BATTLES"}
+                          : `GENERATE ${eventBattles} EVENT BATTLE${eventBattles === 1 ? "" : "S"}`}
                     </button>
                     <button
                       onClick={() => setShowBuilder(false)}
@@ -741,7 +833,9 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                     </button>
                     {!allSeatsAssigned && (
                       <span className="flex items-center text-[#f59e0b] text-[0.55rem]">
-                        Assign all {bracketSize} seats to continue
+                        {isPvp
+                          ? `Fill all ${eventBattles} battle${eventBattles === 1 ? "" : "s"} (${bracketSize} athletes) to continue`
+                          : `Assign all ${bracketSize} seats to continue`}
                       </span>
                     )}
                   </div>
@@ -806,12 +900,14 @@ function SeatDropZone({
   seat,
   athlete,
   bracketSize,
+  pairing = "snake",
   onAssign,
   onRemove,
 }: {
   seat: SeatAssignment;
   athlete: Athlete | null;
   bracketSize: number;
+  pairing?: "snake" | "sequential";
   onAssign: (seat: number, athleteId: string) => void;
   onRemove: (seat: number) => void;
 }) {
@@ -828,12 +924,21 @@ function SeatDropZone({
 
   const borderColor = athlete?.nftCardBorderColor || "#4274B9";
   const hasPfp = athlete?.pfpUrl && athlete.pfpUrl !== "placeholder";
-  const opponentSeat = bracketSize + 1 - seat.seat;
+  const opponentSeat =
+    pairing === "sequential"
+      ? seat.seat % 2 === 1
+        ? seat.seat + 1
+        : seat.seat - 1
+      : bracketSize + 1 - seat.seat;
 
-  // Seed label
-  const seedLabel = seat.seat === 1 ? "TOP SEED"
-    : seat.seat === bracketSize ? "#2 SEED"
-    : `#${seat.seat} SEED`;
+  const seedLabel =
+    pairing === "sequential"
+      ? `Battle ${Math.ceil(seat.seat / 2)} · ${seat.seat % 2 === 1 ? "A" : "B"}`
+      : seat.seat === 1
+        ? "TOP SEED"
+        : seat.seat === bracketSize
+          ? "#2 SEED"
+          : `#${seat.seat} SEED`;
 
   return (
     <div
@@ -885,6 +990,139 @@ function SeatDropZone({
             {isOver ? "Drop here" : `Drag athlete · ${seedLabel} · vs Seat ${opponentSeat}`}
           </p>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** 1v1 Duals: one card per battle with two drop slots (A vs B). */
+function BattlePairDropZone({
+  battleNum,
+  seat1,
+  seat2,
+  athlete1,
+  athlete2,
+  onAssign,
+  onRemove,
+}: {
+  battleNum: number;
+  seat1: SeatAssignment | undefined;
+  seat2: SeatAssignment | undefined;
+  athlete1: Athlete | null;
+  athlete2: Athlete | null;
+  onAssign: (seat: number, athleteId: string) => void;
+  onRemove: (seat: number) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-[#4274B9]/15 bg-[#080D17] p-2 space-y-1.5">
+      <div className="flex items-center justify-between px-0.5">
+        <span
+          className="text-[#D4A843] text-[0.55rem] font-bold"
+          style={{ fontFamily: "Orbitron, sans-serif" }}
+        >
+          BATTLE {battleNum}
+        </span>
+        <span className="text-[#8494A7] text-[0.4rem]">1 vs 1</span>
+      </div>
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-1.5 items-center">
+        {seat1 && (
+          <CornerDropSlot
+            seat={seat1}
+            athlete={athlete1}
+            corner="A"
+            onAssign={onAssign}
+            onRemove={onRemove}
+          />
+        )}
+        <span
+          className="text-[#D4A843] text-[0.5rem] font-bold px-0.5"
+          style={{ fontFamily: "Orbitron, sans-serif" }}
+        >
+          VS
+        </span>
+        {seat2 && (
+          <CornerDropSlot
+            seat={seat2}
+            athlete={athlete2}
+            corner="B"
+            onAssign={onAssign}
+            onRemove={onRemove}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CornerDropSlot({
+  seat,
+  athlete,
+  corner,
+  onAssign,
+  onRemove,
+}: {
+  seat: SeatAssignment;
+  athlete: Athlete | null;
+  corner: "A" | "B";
+  onAssign: (seat: number, athleteId: string) => void;
+  onRemove: (seat: number) => void;
+}) {
+  const [{ isOver, canDrop }, dropRef] = useDrop({
+    accept: DND_TYPE,
+    drop: (item: { athleteId: string }) => {
+      onAssign(seat.seat, item.athleteId);
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+    }),
+  });
+
+  const borderColor = athlete?.nftCardBorderColor || "#4274B9";
+  const hasPfp = athlete?.pfpUrl && athlete.pfpUrl !== "placeholder";
+
+  return (
+    <div
+      ref={dropRef as any}
+      className={`flex items-center gap-1.5 p-1.5 rounded-md border min-h-[44px] transition-all ${
+        isOver && canDrop
+          ? "border-[#D4A843]/60 bg-[#D4A843]/10"
+          : athlete
+            ? "border-[#4274B9]/25 bg-[#0B1120]"
+            : "border-dashed border-[#4274B9]/20 bg-[#0B1120]/60"
+      }`}
+    >
+      <span
+        className="w-4 h-4 rounded flex items-center justify-center shrink-0 bg-[#162033] text-[#6AA3E0] text-[0.4rem] font-bold"
+        style={{ fontFamily: "Orbitron, sans-serif" }}
+      >
+        {corner}
+      </span>
+      {athlete ? (
+        <>
+          <div
+            className="w-5 h-5 rounded-full overflow-hidden border shrink-0 bg-[#162033] flex items-center justify-center"
+            style={{ borderColor: `${borderColor}40` }}
+          >
+            {hasPfp ? (
+              <ImageWithFallback src={athlete.pfpUrl} alt={athlete.name} className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-2.5 h-2.5" style={{ color: `${borderColor}60` }} />
+            )}
+          </div>
+          <p className="text-[#E8ECF0] text-[0.5rem] font-semibold truncate flex-1 min-w-0">{athlete.name}</p>
+          <button
+            type="button"
+            onClick={() => onRemove(seat.seat)}
+            className="p-0.5 rounded text-[#8494A7] hover:text-red-400 shrink-0"
+          >
+            <Trash2 className="w-2.5 h-2.5" />
+          </button>
+        </>
+      ) : (
+        <p className="text-[#8494A7]/40 text-[0.45rem] truncate">
+          {isOver ? "Drop" : `Athlete ${corner}`}
+        </p>
       )}
     </div>
   );

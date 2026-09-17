@@ -139,7 +139,8 @@ export type AthleteStatus = "active" | "eliminated" | "champion" | "inactive";
  * Field = flat pool (no matchups), judged best-in-field; fans pick one champion.
  */
 export type EventCompetitionFormat = "pvp" | "tournament" | "field";
-export type EventElimination = "single" | "double";
+/** "none" = independent 1v1 duals (no elim advancement). */
+export type EventElimination = "single" | "double" | "none";
 
 export type TournamentVotingStatus =
   | "draft"
@@ -158,7 +159,7 @@ export interface BattleEvent {
   endDate: string;               // ISO date
   totalPrizePool: number;        // Total WCO/BOTB tokens in pool
   status: EventStatus;
-  bracketSize: number;           // PvP: 2–12 even; Tournament: 3–12
+  bracketSize: number;           // PvP duals: 2–32 even (Event Battles 1–16); Tournament/Field: 3–12
   bracket: BracketSeat[];        // Ordered seat assignments
   rounds: BracketRound[];        // Generated matchup rounds (PvP battle IDs; tournament may be empty)
 

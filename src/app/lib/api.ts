@@ -703,7 +703,7 @@ export const api = {
       totalPrizePool?: number;
       bracket: { seat: number; athleteId: string }[];
       format?: "pvp" | "tournament" | "field";
-      elimination?: "single" | "double";
+      elimination?: "single" | "double" | "none";
       performanceRounds?: 1 | 2;
     }, adminWallet: string, sessionToken?: string) =>
       request<{ event: BattleEvent; battles: Battle[]; message: string }>(
