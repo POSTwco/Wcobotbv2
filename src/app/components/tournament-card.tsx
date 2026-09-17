@@ -51,21 +51,29 @@ export function TournamentCard({
 
   const champion = event.championId ? athleteMap.get(event.championId) : null;
 
+  const isField = event.format === "field";
+
   const statusLabel = useMemo(() => {
     switch (status) {
       case "voting_open":
-        return { text: "CHAMPION PICK OPEN", color: "#EF4444" };
+        return {
+          text: isField ? "FIELD PICK OPEN" : "CHAMPION PICK OPEN",
+          color: "#EF4444",
+        };
       case "voting_closed":
         return { text: "VOTING CLOSED", color: "#6AA3E0" };
       case "champion_declared":
       case "rewards_distributed":
-        return { text: "CHAMPION DECLARED", color: "#10b981" };
+        return {
+          text: isField ? "FIELD WINNER DECLARED" : "CHAMPION DECLARED",
+          color: "#10b981",
+        };
       case "upcoming":
         return { text: "UPCOMING", color: "#f59e0b" };
       default:
         return { text: "DRAFT", color: "#8494A7" };
     }
-  }, [status]);
+  }, [status, isField]);
 
   const castVote = async () => {
     if (!picked || !accountId) return;
@@ -81,9 +89,13 @@ export function TournamentCard({
         "Stake: 0 BOTB (headcount / pre-token)",
       ].join("\n");
 
-      toast.info(signaturePromptMessage(walletProvider, "approve the tournament vote signature"), {
-        duration: 12000,
-      });
+      toast.info(
+        signaturePromptMessage(
+          walletProvider,
+          isField ? "approve the field winner vote signature" : "approve the tournament vote signature",
+        ),
+        { duration: 12000 },
+      );
       const signature = await signMessage(signedMessage);
       if (!signature) {
         toast.error(signatureCancelledMessage(walletProvider));
@@ -107,7 +119,11 @@ export function TournamentCard({
         toast.error(res.error || "Vote failed");
         return;
       }
-      toast.success("Champion pick recorded — free headcount vote · no token rewards yet");
+      toast.success(
+        isField
+          ? "Field pick recorded — one athlete from the field · free headcount vote"
+          : "Champion pick recorded — free headcount vote · no token rewards yet",
+      );
       onVoted();
     } catch (err: any) {
       toast.error(err?.message || "Vote failed");
@@ -127,14 +143,14 @@ export function TournamentCard({
         <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <Crown className={`w-4 h-4 ${event.format === "field" ? "text-[#10b981]" : "text-[#D4A843]"}`} />
+              <Crown className={`w-4 h-4 ${isField ? "text-[#10b981]" : "text-[#D4A843]"}`} />
               <span
                 className={`text-[0.55rem] font-bold tracking-widest ${
-                  event.format === "field" ? "text-[#10b981]" : "text-[#D4A843]"
+                  isField ? "text-[#10b981]" : "text-[#D4A843]"
                 }`}
                 style={ORBITRON}
               >
-                {event.format === "field" ? "FIELD / BEST IN FIELD" : "TOURNAMENT"}
+                {isField ? "FIELD / BEST IN FIELD" : "TOURNAMENT"}
               </span>
               <span
                 className="text-[0.5rem] font-bold px-2 py-0.5 rounded-full"
@@ -147,8 +163,8 @@ export function TournamentCard({
               {event.name}
             </h3>
             <p className="text-[0.65rem] text-[#8494A7] mt-0.5">
-              {event.format === "field"
-                ? `${entrantIds.length} athletes · no matchups · pick one winner · ${event.performanceRounds || 1} judged round${(event.performanceRounds || 1) > 1 ? "s" : ""}`
+              {isField
+                ? `${entrantIds.length} individuals · no 1v1 fights · pick exactly one · ${event.performanceRounds || 1} judged round${(event.performanceRounds || 1) > 1 ? "s" : ""}`
                 : `${entrantIds.length} athletes · single elimination · pick one champion`}
               {event.location ? ` · ${event.location}` : ""}
             </p>
@@ -169,13 +185,18 @@ export function TournamentCard({
           <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-[#10b981]/10 border border-[#10b981]/25">
             <Trophy className="w-4 h-4 text-[#10b981]" />
             <span className="text-xs text-[#10b981] font-bold" style={ORBITRON}>
-              CHAMPION: {champion.name}
+              {isField ? "FIELD WINNER" : "CHAMPION"}: {champion.name}
             </span>
           </div>
         )}
       </div>
 
       <div className="p-3 sm:p-5 space-y-3 min-w-0">
+        {isField && status === "voting_open" && (
+          <p className="text-[0.6rem] text-[#10b981]/90 font-semibold">
+            Select one athlete from the field — not a 1v1. Your vote is a single Best-in-Field pick.
+          </p>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 min-w-0">
           {entrantIds.map((id) => {
             const ath = athleteMap.get(id);
@@ -256,20 +277,30 @@ export function TournamentCard({
               }}
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
-              {myVote ? "UPDATE CHAMPION PICK" : "CONFIRM CHAMPION PICK"}
+              {isField
+                ? myVote
+                  ? "UPDATE FIELD PICK"
+                  : "CONFIRM FIELD PICK (1 ATHLETE)"
+                : myVote
+                  ? "UPDATE CHAMPION PICK"
+                  : "CONFIRM CHAMPION PICK"}
               {votingPower > 1 ? ` · ${votingPower}x` : ""}
             </button>
             <p className="text-[0.5rem] text-[#8494A7] text-center sm:text-left sm:max-w-[12rem]">
-              Free headcount vote · no token rewards yet
+              {isField
+                ? "One pick from the whole field · free headcount vote"
+                : "Free headcount vote · no token rewards yet"}
             </p>
           </div>
         )}
 
         {!connected && status === "voting_open" && (
-          <p className="text-center text-[0.65rem] text-[#8494A7]">Connect wallet to pick a champion</p>
+          <p className="text-center text-[0.65rem] text-[#8494A7]">
+            {isField ? "Connect wallet to pick one athlete from the field" : "Connect wallet to pick a champion"}
+          </p>
         )}
 
-        {event.format !== "field" && (
+        {!isField && (
           <>
             <button
               type="button"

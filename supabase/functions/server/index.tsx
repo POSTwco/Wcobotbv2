@@ -2233,14 +2233,21 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       }
     }
 
-    // ── Tournament / Field (champion-pick) — no public 1v1 battles ──
+    // ── Tournament / Field (champion-pick) — NEVER create public 1v1 battles ──
     const format =
       body.format === "tournament" || body.format === "field" ? body.format : "pvp";
     if (format === "tournament" || format === "field") {
       try {
         const { event, message } = await createTournamentEvent({ ...body, format });
+        // Hard guarantee: champ-pick formats return zero battles
+        if (event.format !== format) {
+          return c.json({
+            success: false,
+            error: `Expected format "${format}" but created "${event.format}"`,
+          }, 500);
+        }
         console.log(
-          `[ADMIN] Generated ${String(format).toUpperCase()} event ${event.id} "${event.name}". Admin: ${adminWallet}`,
+          `[ADMIN] Generated ${String(format).toUpperCase()} event ${event.id} "${event.name}" (0 battles). Admin: ${adminWallet}`,
         );
         return c.json({
           success: true,

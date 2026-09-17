@@ -254,9 +254,24 @@ export function BattlesPage() {
     }
   }, [battles]);
 
+  // Champ-pick formats (tournament / field) must never surface as 1v1 battle cards.
+  // Also hides orphan battles wrongly created by an outdated Edge when format=field.
+  const champPickEventIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const e of events || []) {
+      if (e.format === "tournament" || e.format === "field") ids.add(e.id);
+    }
+    return ids;
+  }, [events]);
+
   const filteredBattles = useMemo(
-    () => battles.filter((b) => matchesFilter(b.status, filter)),
-    [battles, filter]
+    () =>
+      battles.filter(
+        (b) =>
+          matchesFilter(b.status, filter) &&
+          !(b.eventId && champPickEventIds.has(b.eventId)),
+      ),
+    [battles, filter, champPickEventIds],
   );
 
   const getAthlete = (id: string): Athlete | null => athleteMap.get(id) || null;
@@ -544,7 +559,7 @@ export function BattlesPage() {
   // ─── Filters ────────────────────────────────────────────────────────────
   const FILTERS: { key: BattleFilter; label: string; icon: typeof Swords }[] = [
     { key: "all", label: "All", icon: Swords },
-    { key: "tournaments", label: "Tournaments", icon: Trophy },
+    { key: "tournaments", label: "Tournaments / Field", icon: Trophy },
     { key: "voting_open", label: "Live 1v1", icon: Zap },
     { key: "upcoming", label: "Upcoming", icon: Clock },
     { key: "completed", label: "Completed", icon: CheckCircle },
@@ -663,7 +678,7 @@ export function BattlesPage() {
               <Swords className="w-10 h-10 mx-auto text-[#4274B9]/20 mb-4" />
               <p className="text-[#8494A7] text-sm max-w-sm mx-auto">
                 {filter === "tournaments"
-                  ? "No live tournaments yet. Admins create them under Brackets → Tournament (Champion Pick)."
+                  ? "No live tournaments or Best in Field events yet. Admins create them under Brackets → Tournament / Field."
                   : filter === "all"
                   ? "Battles will appear here once the WCO admin creates matchups via the Admin Command Center."
                   : "No battles match this filter. Try another category."}

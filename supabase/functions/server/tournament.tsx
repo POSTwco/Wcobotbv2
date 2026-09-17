@@ -249,7 +249,12 @@ export async function createTournamentEvent(body: {
   const eventId = generateId("evt");
 
   if (format === "field") {
-    const rounds = body.performanceRounds === 2 ? 2 : 1;
+    // Best in Field: flat individual pool ONLY — never create 1v1 battles or bracket matches.
+    const judgedRounds = body.performanceRounds === 2 ? 2 : 1;
+    const uniqueIds = [...new Set(athleteIds)];
+    if (uniqueIds.length !== athleteIds.length) {
+      throw Object.assign(new Error("Field pool cannot contain duplicate athletes"), { status: 400 });
+    }
     const event = {
       id: eventId,
       name: sanitizeString(body.name, 200),
@@ -259,17 +264,19 @@ export async function createTournamentEvent(body: {
       endDate: body.endDate || "",
       totalPrizePool: sanitizeNumber(body.totalPrizePool, 0, 1e12, 0),
       status: "draft",
-      format: "field",
-      performanceRounds: rounds,
+      format: "field" as const,
+      elimination: "none",
+      performanceRounds: judgedRounds,
       fieldScores: {},
       bracketSize: size,
       bracket,
-      athleteIds,
-      rounds: [],
-      tournamentMatches: [],
+      athleteIds: uniqueIds,
+      // Explicit empty — Field is never paired into fights
+      rounds: [] as any[],
+      tournamentMatches: [] as TournamentMatch[],
       votingStatus: "draft" as TournamentVotingStatus,
       championId: "",
-      voteTallies: emptyTallies(athleteIds),
+      voteTallies: emptyTallies(uniqueIds),
       totalVotes: 0,
       totalWeighted: 0,
       createdAt: now(),
@@ -278,7 +285,7 @@ export async function createTournamentEvent(body: {
     await kv.set(`event:${eventId}`, event);
     return {
       event,
-      message: `Created Field / Best in Field "${event.name}" with ${size} athletes (${rounds} judged round${rounds > 1 ? "s" : ""}, no matchups). Fans pick one winner.`,
+      message: `Created Best in Field "${event.name}" with ${uniqueIds.length} individuals (${judgedRounds} judged round${judgedRounds > 1 ? "s" : ""}, no 1v1 matchups). Fans each pick exactly one athlete.`,
     };
   }
 
@@ -470,7 +477,13 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
 
         const entrants: string[] = event.athleteIds || event.bracket?.map((s: any) => s.athleteId) || [];
         if (!entrants.includes(athleteId)) {
-          return c.json({ success: false, error: "athleteId is not in this tournament" }, 400);
+          return c.json({
+            success: false,
+            error:
+              event.format === "field"
+                ? "Athlete is not in this Best in Field pool"
+                : "athleteId is not in this tournament",
+          }, 400);
         }
 
         const nftHoldings = await fetchNFTHoldings(wallet);

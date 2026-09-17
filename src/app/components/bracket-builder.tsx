@@ -80,6 +80,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   const [prizePool, setPrizePool] = useState(0);
 
   const isPvp = competitionFormat === "pvp";
+  const isField = competitionFormat === "field";
 
   // Keep sizes valid when switching format / changing battle count
   useEffect(() => {
@@ -220,7 +221,9 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
       toast.error(
         isPvp
           ? "Fill every battle slot (both athletes) before generating"
-          : "All bracket seats must be filled before generating",
+          : isField
+            ? "Fill every field slot before generating"
+            : "All bracket seats must be filled before generating",
       );
       return;
     }
@@ -241,7 +244,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
               ? elimination
               : competitionFormat === "pvp"
                 ? "none"
-                : "single",
+                : "none",
           performanceRounds: competitionFormat === "field" ? performanceRounds : undefined,
           bracket: seats.map((s) => ({
             seat: s.seat,
@@ -253,10 +256,33 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
       );
 
       if (res.success && res.data) {
-        toast.success(res.data.message);
+        const created = res.data.event;
+        const createdBattles = res.data.battles || [];
+
+        // Guard: Field / Tournament must NEVER create 1v1 battles (old Edge may fall through to pvp)
+        if (
+          (competitionFormat === "field" || competitionFormat === "tournament") &&
+          (createdBattles.length > 0 || (created?.format && created.format !== competitionFormat))
+        ) {
+          toast.error(
+            `Server created ${createdBattles.length || "unexpected"} 1v1 battle(s) instead of a ${competitionFormat} event. Edge function is likely outdated — redeploy make-server-57fcb0ee, then delete the bad event and retry.`,
+            { duration: 12000 },
+          );
+          loadData();
+          return;
+        }
+
+        if (competitionFormat === "field" && created?.format === "field") {
+          toast.success(
+            res.data.message ||
+              `Field created with ${seats.length} athletes — no matchups. Fans pick one winner.`,
+          );
+        } else {
+          toast.success(res.data.message);
+        }
+
         setShowBuilder(false);
-        loadData(); // Refresh events list
-        // Reset form
+        loadData();
         setEventName("");
         setEventDescription("");
         setEventLocation("");
@@ -279,7 +305,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   }, [
     eventName, eventDescription, eventLocation, startDate, endDate,
     prizePool, seats, allSeatsAssigned, wallet, loadData, clearAll, sessionToken,
-    competitionFormat, elimination, performanceRounds, isPvp,
+    competitionFormat, elimination, performanceRounds, isPvp, isField,
   ]);
 
   if (loading) {
@@ -451,7 +477,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                     </div>
                     <p className="text-[#8494A7] text-[0.55rem] mt-2 leading-relaxed">
                       {competitionFormat === "field"
-                        ? "Pool of athletes — no matchups. Judges pick the real winner by performance score. Fans still pick one field winner. Uses tournament wins/losses."
+                        ? "Best in Field: flat pool of individuals — never paired into 1v1 fights. Judges score performances; fans each pick exactly ONE athlete from the field. Uses tournament wins/losses."
                         : competitionFormat === "tournament"
                           ? "Fans pick one overall champion. Creates a single-elim bracket for display — no 1v1 voting battles. Uses tournament wins/losses only."
                           : "Pick how many 1v1 battles (1–16). Each battle needs 2 athletes (up to 32). Pairs populate Battle 1, Battle 2… — no tournament byes or TBD slots. Fans vote each dual. Uses battle wins/losses."}
@@ -582,7 +608,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                   <div>
                     <SectionHeader
                       icon={<Users className="w-3.5 h-3.5" />}
-                      title={isPvp ? "EVENT BATTLES" : "BRACKET SIZE"}
+                      title={isPvp ? "EVENT BATTLES" : isField ? "FIELD SIZE" : "BRACKET SIZE"}
                     />
                     <div className="flex flex-wrap gap-2 mt-2">
                       {isPvp
@@ -651,7 +677,9 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         title={
                           isPvp
                             ? `BATTLE PAIRING (${filledCount}/${bracketSize})`
-                            : `SEAT ASSIGNMENT (${filledCount}/${bracketSize})`
+                            : isField
+                              ? `FIELD POOL (${filledCount}/${bracketSize})`
+                              : `SEAT ASSIGNMENT (${filledCount}/${bracketSize})`
                         }
                       />
                       <div className="flex gap-2">
@@ -694,10 +722,14 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         </div>
                       </div>
 
-                      {/* Right: battle pairs (1v1) OR tournament/field seats */}
+                      {/* Right: 1v1 pairs OR field individuals OR tournament seeds */}
                       <div>
                         <p className="text-[#8494A7] text-[0.55rem] mb-1.5 font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                          {isPvp ? "EVENT BATTLES (1 VS 1)" : "BRACKET SEATS"}
+                          {isPvp
+                            ? "EVENT BATTLES (1 VS 1)"
+                            : isField
+                              ? "FIELD ATHLETES (INDIVIDUALS — NO MATCHUPS)"
+                              : "BRACKET SEATS"}
                         </p>
                         {isPvp ? (
                           <div className="space-y-2 max-h-[360px] overflow-y-auto pr-0.5">
@@ -709,6 +741,20 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                                 seat2={seats[m.seat2 - 1]}
                                 athlete1={m.athlete1}
                                 athlete2={m.athlete2}
+                                onAssign={assignToSeat}
+                                onRemove={removeSeat}
+                              />
+                            ))}
+                          </div>
+                        ) : isField ? (
+                          <div className="space-y-1 max-h-[360px] overflow-y-auto pr-0.5">
+                            {seats.map((seat) => (
+                              <SeatDropZone
+                                key={seat.seat}
+                                seat={seat}
+                                athlete={seat.athleteId ? athleteMap.get(seat.athleteId) || null : null}
+                                bracketSize={bracketSize}
+                                pairing="field"
                                 onAssign={assignToSeat}
                                 onRemove={removeSeat}
                               />
@@ -731,6 +777,11 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         )}
                       </div>
                     </div>
+                    {isField && (
+                      <p className="text-[#10b981]/80 text-[0.5rem] mt-2">
+                        Each slot is one athlete in the field — they are never paired. Voting later lets fans pick exactly one winner from this pool.
+                      </p>
+                    )}
                   </div>
 
                   {/* Preview: field pool OR R1 matchups */}
@@ -835,7 +886,9 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                       <span className="flex items-center text-[#f59e0b] text-[0.55rem]">
                         {isPvp
                           ? `Fill all ${eventBattles} battle${eventBattles === 1 ? "" : "s"} (${bracketSize} athletes) to continue`
-                          : `Assign all ${bracketSize} seats to continue`}
+                          : isField
+                            ? `Fill all ${bracketSize} field slots to continue`
+                            : `Assign all ${bracketSize} seats to continue`}
                       </span>
                     )}
                   </div>
@@ -907,7 +960,7 @@ function SeatDropZone({
   seat: SeatAssignment;
   athlete: Athlete | null;
   bracketSize: number;
-  pairing?: "snake" | "sequential";
+  pairing?: "snake" | "sequential" | "field";
   onAssign: (seat: number, athleteId: string) => void;
   onRemove: (seat: number) => void;
 }) {
@@ -922,17 +975,21 @@ function SeatDropZone({
     }),
   });
 
-  const borderColor = athlete?.nftCardBorderColor || "#4274B9";
+  const isFieldSlot = pairing === "field";
+  const borderColor = athlete?.nftCardBorderColor || (isFieldSlot ? "#10b981" : "#4274B9");
   const hasPfp = athlete?.pfpUrl && athlete.pfpUrl !== "placeholder";
   const opponentSeat =
     pairing === "sequential"
       ? seat.seat % 2 === 1
         ? seat.seat + 1
         : seat.seat - 1
-      : bracketSize + 1 - seat.seat;
+      : pairing === "snake"
+        ? bracketSize + 1 - seat.seat
+        : null;
 
-  const seedLabel =
-    pairing === "sequential"
+  const seedLabel = isFieldSlot
+    ? `Field #${seat.seat}`
+    : pairing === "sequential"
       ? `Battle ${Math.ceil(seat.seat / 2)} · ${seat.seat % 2 === 1 ? "A" : "B"}`
       : seat.seat === 1
         ? "TOP SEED"
@@ -940,20 +997,39 @@ function SeatDropZone({
           ? "#2 SEED"
           : `#${seat.seat} SEED`;
 
+  const subLabel = isFieldSlot
+    ? "individual · no matchup"
+    : opponentSeat != null
+      ? `${seedLabel} · vs Seat ${opponentSeat}`
+      : seedLabel;
+
   return (
     <div
       ref={dropRef as any}
       className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${
         isOver && canDrop
-          ? "border-[#D4A843]/60 bg-[#D4A843]/10"
+          ? isFieldSlot
+            ? "border-[#10b981]/60 bg-[#10b981]/10"
+            : "border-[#D4A843]/60 bg-[#D4A843]/10"
           : athlete
-            ? "border-[#4274B9]/20 bg-[#080D17]"
-            : "border-dashed border-[#4274B9]/15 bg-[#080D17]/50"
+            ? isFieldSlot
+              ? "border-[#10b981]/25 bg-[#080D17]"
+              : "border-[#4274B9]/20 bg-[#080D17]"
+            : isFieldSlot
+              ? "border-dashed border-[#10b981]/20 bg-[#080D17]/50"
+              : "border-dashed border-[#4274B9]/15 bg-[#080D17]/50"
       }`}
     >
       {/* Seat number */}
-      <div className="w-6 h-6 rounded flex items-center justify-center shrink-0 bg-[#162033] border border-[#4274B9]/10">
-        <span className="text-[#D4A843] text-[0.55rem] font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>
+      <div
+        className={`w-6 h-6 rounded flex items-center justify-center shrink-0 bg-[#162033] border ${
+          isFieldSlot ? "border-[#10b981]/20" : "border-[#4274B9]/10"
+        }`}
+      >
+        <span
+          className={`text-[0.55rem] font-bold ${isFieldSlot ? "text-[#10b981]" : "text-[#D4A843]"}`}
+          style={{ fontFamily: "Orbitron, sans-serif" }}
+        >
           {seat.seat}
         </span>
       </div>
@@ -973,8 +1049,8 @@ function SeatDropZone({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[#E8ECF0] text-[0.55rem] font-semibold truncate">{athlete.name}</p>
-            <p className="text-[#8494A7] text-[0.4rem]">
-              {seedLabel} · vs Seat {opponentSeat}
+            <p className={`text-[0.4rem] ${isFieldSlot ? "text-[#10b981]/80" : "text-[#8494A7]"}`}>
+              {subLabel}
             </p>
           </div>
           <button
@@ -987,7 +1063,11 @@ function SeatDropZone({
       ) : (
         <div className="flex-1 min-w-0">
           <p className="text-[#8494A7]/40 text-[0.55rem]">
-            {isOver ? "Drop here" : `Drag athlete · ${seedLabel} · vs Seat ${opponentSeat}`}
+            {isOver
+              ? "Drop here"
+              : isFieldSlot
+                ? `Drag athlete · Field #${seat.seat} (individual)`
+                : `Drag athlete · ${seedLabel}${opponentSeat != null ? ` · vs Seat ${opponentSeat}` : ""}`}
           </p>
         </div>
       )}

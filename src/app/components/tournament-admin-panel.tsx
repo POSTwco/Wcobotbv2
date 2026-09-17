@@ -153,7 +153,9 @@ export function TournamentAdminPanel({
                 {/* Entrants + declare */}
                 {canDeclare && (
                   <div className="space-y-2">
-                    <p className="text-[#8494A7] text-[0.55rem]">Declare tournament champion</p>
+                    <p className="text-[#8494A7] text-[0.55rem]">
+                      {evt.format === "field" ? "Declare Best in Field winner" : "Declare tournament champion"}
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {(evt.athleteIds || evt.bracket?.map((s) => s.athleteId) || []).map((id) => {
                         const a = athMap.get(id);
@@ -190,7 +192,9 @@ export function TournamentAdminPanel({
                           if (!cid) return;
                           if (
                             !confirm(
-                              `Declare ${athMap.get(cid)?.name || cid} as champion? This updates tournament W/L and freezes votes.`,
+                              `Declare ${athMap.get(cid)?.name || cid} as ${
+                                evt.format === "field" ? "Best in Field winner" : "champion"
+                              }? This updates tournament W/L and freezes votes.`,
                             )
                           ) {
                             return;
@@ -202,7 +206,10 @@ export function TournamentAdminPanel({
                             sessionToken,
                           );
                           if (!res.success) throw new Error(res.error || "Failed");
-                          toast.success(res.data?.message || "Champion declared");
+                          toast.success(
+                            res.data?.message ||
+                              (evt.format === "field" ? "Field winner declared" : "Champion declared"),
+                          );
                         })
                       }
                       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[0.55rem] font-bold bg-[#D4A843] text-[#0B1120] disabled:opacity-40"
