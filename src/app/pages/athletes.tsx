@@ -6,11 +6,12 @@
  * Athletes added via the Admin Panel auto-appear here.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "motion/react";
 import {
   Trophy, Flame, Target, TrendingUp, Loader2,
-  Instagram, Twitter, Youtube, Link2, Zap, User, ChevronDown, ChevronUp,
+  Instagram, Twitter, Youtube, Link2, Zap, User, ChevronDown,
+  Search, MessageCircle,
 } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useVIP } from "../components/vip/vip-context";
@@ -23,9 +24,8 @@ import { SponsorMarqueeStrip } from "../components/sponsor-showcase";
 import { ArenaChat } from "../components/arena-chat";
 import { ErrorCard } from "../components/error-boundary";
 import { BOTBSpinner, SkeletonAthleteCard } from "../components/botb-spinner";
-import { getCountryFlag } from "../lib/country-flags";
 import { InlineFlag } from "../components/country-flag";
-import { TiltCard, BlurImage, FadeInWhenVisible } from "../components/ui-enhancements";
+import { TiltCard } from "../components/ui-enhancements";
 import { formatPower } from "../lib/format";
 
 // ---------------------------------------------------------------------------
@@ -53,8 +53,27 @@ export function AthletesPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedAthlete, setSelectedAthlete] = useState<string | null>(null);
   const [showAllAthletes, setShowAllAthletes] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const highlightTimer = useRef<number | null>(null);
   const { vipActive } = useVIP();
   const location = useLocation();
+
+  const scrollToChat = useCallback(() => {
+    const el = document.getElementById("arena-chat");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const jumpToAthlete = useCallback((id: string) => {
+    setHighlightedId(id);
+    setSelectedAthlete(id);
+    window.setTimeout(() => {
+      const el = document.getElementById(`athlete-card-${id}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlightedId(null), 3500);
+  }, []);
 
   const loadAthletes = useCallback(async () => {
     setLoading(true);
@@ -96,23 +115,66 @@ export function AthletesPage() {
     <div className="min-h-screen py-6 sm:py-8 overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-w-0">
         <div className="mb-6 sm:mb-10">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3 mb-2">
-                <img src={botbShield} alt="BOTB" className="h-7 sm:h-8 w-auto" />
-                <h1 className="text-2xl sm:text-3xl" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">ATHLETES</span>
-                </h1>
+          <div className="flex flex-col gap-3 sm:gap-4 mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <img src={botbShield} alt="BOTB" className="h-7 sm:h-8 w-auto" />
+                  <h1 className="text-2xl sm:text-3xl" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                    <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">ATHLETES</span>
+                  </h1>
+                </div>
+                <p className="text-[#8494A7]">World-class calisthenics competitors. Choose your champion.</p>
               </div>
-              <p className="text-[#8494A7]">World-class calisthenics competitors. Choose your champion.</p>
+              <Link
+                to="/apply"
+                className="shrink-0 self-start sm:self-center inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all text-xs sm:text-sm font-semibold tracking-wide"
+                style={{ fontFamily: "Orbitron, sans-serif" }}
+              >
+                Pro Card Application
+              </Link>
             </div>
-            <Link
-              to="/apply"
-              className="shrink-0 self-start sm:self-center inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all text-xs sm:text-sm font-semibold tracking-wide"
-              style={{ fontFamily: "Orbitron, sans-serif" }}
-            >
-              Pro Card Application
-            </Link>
+
+            {/* Search + jump to Arena Chat */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8494A7] pointer-events-none" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    const q = searchQuery.trim().toLowerCase();
+                    if (!q) return;
+                    const sorted = [...athletes].sort(
+                      (a, b) => (b.totalPowerRating || 0) - (a.totalPowerRating || 0),
+                    );
+                    const match = sorted.find(
+                      (a) =>
+                        a.name.toLowerCase().includes(q) ||
+                        (a.nickname && a.nickname.toLowerCase().includes(q)),
+                    );
+                    if (!match) return;
+                    const idx = sorted.findIndex((a) => a.id === match.id);
+                    if (idx >= 3) setShowAllAthletes(true);
+                    jumpToAthlete(match.id);
+                  }}
+                  placeholder="Search athletes by name…"
+                  className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-[#111827] border border-[#4274B9]/25 text-[#E8ECF0] text-sm placeholder:text-[#8494A7]/50 outline-none focus:border-[#6AA3E0]/50"
+                  aria-label="Search athletes by name"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={scrollToChat}
+                className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#111827] border border-[#4274B9]/30 text-[#6AA3E0] hover:border-[#6AA3E0]/50 hover:bg-[#4274B9]/10 transition-all text-xs font-semibold tracking-wide"
+                style={{ fontFamily: "Orbitron, sans-serif" }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                CHAT
+              </button>
+            </div>
           </div>
         </div>
 
@@ -154,11 +216,19 @@ export function AthletesPage() {
           const sorted = [...athletes].sort((a, b) => (b.totalPowerRating || 0) - (a.totalPowerRating || 0));
           const top3 = sorted.slice(0, 3);
           const rest = sorted.slice(3);
+          const q = searchQuery.trim().toLowerCase();
+          const matchesQuery = (a: Athlete) =>
+            !q ||
+            a.name.toLowerCase().includes(q) ||
+            (!!a.nickname && a.nickname.toLowerCase().includes(q));
+          const filteredRest = rest.filter(matchesQuery);
+          const searchHits = q ? sorted.filter(matchesQuery) : [];
 
-          const renderAthleteCard = (athlete: Athlete, i: number) => {
+          const renderAthleteCard = (athlete: Athlete, i: number, compact = false) => {
               const borderColor = athlete.nftCardBorderColor || "#4274B9";
               const hasPfp = athlete.pfpUrl && athlete.pfpUrl !== "placeholder";
               const isExpanded = selectedAthlete === athlete.id;
+              const isHighlighted = highlightedId === athlete.id;
               const winRate = athlete.wins + athlete.losses > 0
                 ? ((athlete.wins / (athlete.wins + athlete.losses)) * 100).toFixed(1)
                 : "0.0";
@@ -166,21 +236,28 @@ export function AthletesPage() {
               return (
                 <TiltCard
                   key={athlete.id}
-                  maxTilt={5}
-                  scale={1.02}
+                  maxTilt={compact ? 3 : 5}
+                  scale={compact ? 1.01 : 1.02}
                   glowColor={borderColor}
                   className="relative"
                 >
                   <motion.div
+                    id={`athlete-card-${athlete.id}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08 }}
+                    transition={{ delay: Math.min(i * 0.04, 0.4) }}
                     onClick={() => setSelectedAthlete(isExpanded ? null : athlete.id)}
-                    className="bg-[#111827] border rounded-2xl overflow-hidden cursor-pointer hover:border-opacity-60 transition-all group"
-                    style={{ borderColor: `${borderColor}20` }}
+                    className={`bg-[#111827] border overflow-hidden cursor-pointer hover:border-opacity-60 transition-all group scroll-mt-24 ${
+                      compact ? "rounded-xl" : "rounded-2xl"
+                    } ${isHighlighted ? "ring-2 ring-[#D4A843] ring-offset-2 ring-offset-[#0B1120]" : ""}`}
+                    style={{ borderColor: isHighlighted ? "#D4A843" : `${borderColor}20` }}
                   >
-                    {/* Image */}
-                    <div className="relative h-72 sm:h-96 overflow-hidden bg-[#0B1120]">
+                    {/* Image — full size for top 3, ~50% for roster grid */}
+                    <div
+                      className={`relative overflow-hidden bg-[#0B1120] ${
+                        compact ? "h-36 sm:h-40" : "h-72 sm:h-96"
+                      }`}
+                    >
                       {hasPfp ? (
                         <ImageWithFallback
                           src={athlete.pfpUrl}
@@ -189,30 +266,33 @@ export function AthletesPage() {
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <User className="w-16 h-16 text-[#4274B9]/15" />
+                          <User className={compact ? "w-8 h-8 text-[#4274B9]/15" : "w-16 h-16 text-[#4274B9]/15"} />
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-[#111827] via-transparent to-transparent" />
 
-                      {/* Rank badge */}
-                      <div className="absolute top-3 left-3 px-3 py-1 rounded-lg" style={{ background: `${borderColor}20`, border: `1px solid ${borderColor}40` }}>
-                        <span className="text-xs font-bold" style={{ fontFamily: "Orbitron, sans-serif", color: borderColor }}>
+                      <div
+                        className={`absolute ${compact ? "top-1.5 left-1.5 px-1.5 py-0.5" : "top-3 left-3 px-3 py-1"} rounded-lg`}
+                        style={{ background: `${borderColor}20`, border: `1px solid ${borderColor}40` }}
+                      >
+                        <span
+                          className={`font-bold ${compact ? "text-[0.5rem]" : "text-xs"}`}
+                          style={{ fontFamily: "Orbitron, sans-serif", color: borderColor }}
+                        >
                           #{athlete.rank}
                         </span>
                       </div>
 
-                      {/* Streak badge */}
                       {athlete.streak > 0 && (
-                        <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-[#f59e0b]/20 border border-[#f59e0b]/40">
-                          <Flame className="w-3 h-3 text-[#f59e0b]" />
-                          <span className="text-xs text-[#f59e0b]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.streak}</span>
+                        <div className={`absolute ${compact ? "top-1.5 right-1.5 gap-0.5 px-1 py-0.5" : "top-3 right-3 gap-1 px-2 py-1"} flex items-center rounded-lg bg-[#f59e0b]/20 border border-[#f59e0b]/40`}>
+                          <Flame className={compact ? "w-2.5 h-2.5 text-[#f59e0b]" : "w-3 h-3 text-[#f59e0b]"} />
+                          <span className={`text-[#f59e0b] ${compact ? "text-[0.45rem]" : "text-xs"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.streak}</span>
                         </div>
                       )}
 
-                      {/* Status badge */}
                       {athlete.status !== "active" && (
-                        <div className="absolute top-3 right-3">
-                          <span className={`px-2 py-0.5 rounded text-[0.5rem] font-bold ${
+                        <div className={`absolute ${compact ? "top-1.5 right-1.5" : "top-3 right-3"}`}>
+                          <span className={`px-1.5 py-0.5 rounded font-bold ${compact ? "text-[0.4rem]" : "text-[0.5rem]"} ${
                             athlete.status === "champion" ? "bg-[#D4A843]/20 text-[#D4A843]" :
                             "bg-red-500/20 text-red-400"
                           }`} style={{ fontFamily: "Orbitron, sans-serif" }}>
@@ -221,19 +301,20 @@ export function AthletesPage() {
                         </div>
                       )}
 
-                      {/* Country + Flag */}
-                      <div className="absolute bottom-3 right-3 text-xs text-[#8494A7] flex items-center gap-1">
-                        <InlineFlag country={athlete.country} /> {athlete.country}
+                      <div className={`absolute ${compact ? "bottom-1.5 right-1.5 text-[0.45rem]" : "bottom-3 right-3 text-xs"} text-[#8494A7] flex items-center gap-1`}>
+                        <InlineFlag country={athlete.country} /> {!compact && athlete.country}
                       </div>
                     </div>
 
-                    {/* Info */}
-                    <div className="p-3 sm:p-5">
-                      <div className="flex items-center gap-2 mb-0.5 min-w-0">
-                        <h3 className="text-[#E8ECF0] font-bold truncate" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
+                    <div className={compact ? "p-2" : "p-3 sm:p-5"}>
+                      <div className="flex items-center gap-1.5 mb-0.5 min-w-0">
+                        <h3
+                          className="text-[#E8ECF0] font-bold truncate"
+                          style={{ fontFamily: "Orbitron, sans-serif", fontSize: compact ? "0.6rem" : "0.8rem" }}
+                        >
                           {athlete.name}
                         </h3>
-                        {athlete.competitionCategory && (
+                        {!compact && athlete.competitionCategory && (
                           <span
                             className="shrink-0 px-1.5 py-0.5 rounded text-[0.45rem] font-bold tracking-wide"
                             style={{
@@ -247,40 +328,42 @@ export function AthletesPage() {
                           </span>
                         )}
                       </div>
-                      {athlete.nickname && (
+                      {!compact && athlete.nickname && (
                         <p className="text-[0.65rem] mb-1" style={{ color: borderColor }}>
                           "{athlete.nickname}"
                         </p>
                       )}
-                      {athlete.weightClass && (
+                      {!compact && athlete.weightClass && (
                         <p className="text-[0.5rem] text-[#8494A7]/70 mb-2 truncate" style={{ fontFamily: "Orbitron, sans-serif" }}>
                           {athlete.weightClass}
                         </p>
                       )}
 
-                      <div className="grid grid-cols-3 gap-3 mb-2">
+                      <div className={`grid grid-cols-3 ${compact ? "gap-1 mb-1" : "gap-3 mb-2"}`}>
                         <div className="text-center">
-                          <p className="text-lg text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.wins}</p>
-                          <p className="text-xs text-[#8494A7]">Wins</p>
+                          <p className={`text-[#10b981] ${compact ? "text-sm" : "text-lg"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.wins}</p>
+                          <p className={`text-[#8494A7] ${compact ? "text-[0.4rem]" : "text-xs"}`}>W</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-lg text-red-400" style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.losses}</p>
-                          <p className="text-xs text-[#8494A7]">Losses</p>
+                          <p className={`text-red-400 ${compact ? "text-sm" : "text-lg"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>{athlete.losses}</p>
+                          <p className={`text-[#8494A7] ${compact ? "text-[0.4rem]" : "text-xs"}`}>L</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-lg text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                          <p className={`text-[#4274B9] ${compact ? "text-sm" : "text-lg"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>
                             {formatPower(athlete.totalPowerRating)}
                           </p>
-                          <p className="text-xs text-[#8494A7]">Power</p>
+                          <p className={`text-[#8494A7] ${compact ? "text-[0.4rem]" : "text-xs"}`}>PWR</p>
                         </div>
                       </div>
-                      <p className="text-center text-[0.55rem] text-[#D4A843]/80 mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                        Tournament {(athlete.tournamentWins || 0)}W-{(athlete.tournamentLosses || 0)}L
-                      </p>
+                      {!compact && (
+                        <p className="text-center text-[0.55rem] text-[#D4A843]/80 mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                          Tournament {(athlete.tournamentWins || 0)}W-{(athlete.tournamentLosses || 0)}L
+                        </p>
+                      )}
 
-                      {/* Skill bars (compact) */}
-                      {athlete.skills && (
-                        <div className="space-y-1 mb-2">
+                      {/* Skill bars — full cards only (or when compact expanded) */}
+                      {athlete.skills && (!compact || isExpanded) && (
+                        <div className={`space-y-1 ${compact ? "mb-1" : "mb-2"}`}>
                           {(["energy", "performance", "static", "aggression", "dynamic"] as const).map((skill) => {
                             const val = athlete.skills[skill] || 0;
                             return (
@@ -301,15 +384,14 @@ export function AthletesPage() {
                         </div>
                       )}
 
-                      {/* Expanded details */}
                       {isExpanded && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
-                          className="space-y-3 pt-3 border-t border-[#4274B9]/10"
+                          className={`space-y-2 pt-2 border-t border-[#4274B9]/10 ${compact ? "space-y-1.5" : "space-y-3 pt-3"}`}
                         >
                           {athlete.bio && (
-                            <p className="text-[#8494A7] text-xs leading-relaxed">{athlete.bio}</p>
+                            <p className={`text-[#8494A7] leading-relaxed ${compact ? "text-[0.55rem]" : "text-xs"}`}>{athlete.bio}</p>
                           )}
                           {athlete.specialMove && (
                             <div className="flex items-center justify-between text-sm">
@@ -338,7 +420,6 @@ export function AthletesPage() {
                             </div>
                           )}
 
-                          {/* Social links */}
                           {(athlete.socials?.instagram || athlete.socials?.twitter || athlete.socials?.youtube || athlete.socials?.website) && (
                             <div className="flex items-center gap-3 pt-2 border-t border-[#4274B9]/10">
                               {athlete.socials.instagram && (
@@ -388,7 +469,6 @@ export function AthletesPage() {
                             </div>
                           )}
 
-                          {/* NFT info if present */}
                           {athlete.nftSeriesName && (
                             <div className="flex items-center justify-between text-sm pt-1">
                               <span className="text-[#8494A7] flex items-center gap-2">
@@ -409,12 +489,38 @@ export function AthletesPage() {
 
           return (
             <>
-              {/* Top 3 Athletes — always visible */}
+              {/* Top 3 Athletes — full size, always visible */}
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-                {top3.map((athlete, i) => renderAthleteCard(athlete, i))}
+                {top3.map((athlete, i) => renderAthleteCard(athlete, i, false))}
               </div>
 
-              {/* Remaining Athletes — collapsible */}
+              {/* Search results banner */}
+              {q && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[#8494A7] text-xs">
+                    {searchHits.length === 0
+                      ? `No athletes match “${searchQuery.trim()}”`
+                      : `${searchHits.length} match${searchHits.length === 1 ? "" : "es"} for “${searchQuery.trim()}”`}
+                  </p>
+                  {searchHits[0] && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const hit = searchHits[0];
+                        const idx = sorted.findIndex((a) => a.id === hit.id);
+                        if (idx >= 3) setShowAllAthletes(true);
+                        jumpToAthlete(hit.id);
+                      }}
+                      className="text-[0.55rem] text-[#6AA3E0] hover:underline"
+                      style={{ fontFamily: "Orbitron, sans-serif" }}
+                    >
+                      JUMP TO FIRST MATCH
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Remaining Athletes — compact 6-up grid */}
               {rest.length > 0 && (
                 <div className="mt-6 sm:mt-8">
                   <button
@@ -425,25 +531,25 @@ export function AthletesPage() {
                       className="text-[#8494A7] group-hover:text-[#E8ECF0] text-xs tracking-wider transition-colors"
                       style={{ fontFamily: "Orbitron, sans-serif" }}
                     >
-                      {showAllAthletes ? "HIDE" : "VIEW ALL"} ATHLETES ({rest.length} MORE)
+                      {showAllAthletes || q ? "HIDE" : "VIEW ALL"} ATHLETES ({q ? filteredRest.length : rest.length} MORE)
                     </span>
                     <motion.div
-                      animate={{ rotate: showAllAthletes ? 180 : 0 }}
+                      animate={{ rotate: showAllAthletes || !!q ? 180 : 0 }}
                       transition={{ duration: 0.3 }}
                     >
                       <ChevronDown className="w-4 h-4 text-[#4274B9]" />
                     </motion.div>
                   </button>
 
-                  {showAllAthletes && (
+                  {(showAllAthletes || !!q) && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.4, ease: "easeOut" }}
-                      className="mt-4 sm:mt-6 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6"
+                      className="mt-4 sm:mt-6 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3"
                     >
-                      {rest.map((athlete, i) => renderAthleteCard(athlete, i + 3))}
+                      {(q ? filteredRest : rest).map((athlete, i) => renderAthleteCard(athlete, i + 3, true))}
                     </motion.div>
                   )}
                 </div>
