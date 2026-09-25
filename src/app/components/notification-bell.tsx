@@ -42,10 +42,13 @@ function NotificationIcon({ type }: { type: string }) {
     case "application_approved":
     case "org_approved":
     case "org_event_approved":
+    case "judge_approved":
       return <CheckCircle className="w-4 h-4 text-[#10b981] shrink-0" />;
     case "application_rejected":
     case "org_rejected":
     case "org_event_rejected":
+    case "judge_rejected":
+    case "judge_revoked":
       return <XCircle className="w-4 h-4 text-red-400 shrink-0" />;
     default:
       return <Bell className="w-4 h-4 text-[#6AA3E0] shrink-0" />;

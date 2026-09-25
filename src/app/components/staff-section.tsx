@@ -1,13 +1,19 @@
 /**
  * WCO staff strip on the Athletes page, under Arena Chat.
- * Officers and judges here are placeholders until the real roster and
- * judge applications are added in this same section.
+ * Officers stay as the published leadership pair. Judges come from
+ * approved Pro Judge Cards.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { motion } from "motion/react";
 import { ChevronDown, Shield } from "lucide-react";
 import { InlineFlag } from "./country-flag";
+import { api } from "../lib/api";
+import { orgDisciplineLabel } from "../lib/org-sign";
+import { JudgeBadge } from "./judge-badge";
+import { JudgeMark } from "./judge-mark";
+import type { PublicJudge } from "../lib/types";
 
 const OFFICERS = [
   {
@@ -22,16 +28,26 @@ const OFFICERS = [
   },
 ];
 
-const SAMPLE_JUDGES = [
-  { name: "Sample Judge A", country: "United States", discipline: "FreeStyle" },
-  { name: "Sample Judge B", country: "Mexico", discipline: "Statics" },
-  { name: "Sample Judge C", country: "Brazil", discipline: "Both" },
-];
-
 const STEPS = ["Create an account", "Pro Judge Registration", "Application submitted"];
 
 export function StaffSection() {
   const [open, setOpen] = useState(false);
+  const [judges, setJudges] = useState<PublicJudge[]>([]);
+  const [judgesReady, setJudgesReady] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    api.getJudges().then((res) => {
+      if (cancel) return;
+      setJudges(res.success && Array.isArray(res.data) ? res.data : []);
+      setJudgesReady(res.success);
+    }).catch(() => {
+      if (!cancel) setJudgesReady(false);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   return (
     <section id="wco-staff" className="py-8 sm:py-12 scroll-mt-24">
@@ -83,30 +99,42 @@ export function StaffSection() {
               <h3 className="text-xs tracking-wide text-[#8494A7] mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>
                 REGISTERED JUDGES
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {SAMPLE_JUDGES.map((judge) => (
-                  <article key={judge.name} className="rounded-xl border border-dashed border-[#4274B9]/30 bg-[#111827]/70 p-3">
-                    <p className="text-sm text-[#E8ECF0] font-semibold">{judge.name}</p>
-                    <p className="text-xs text-[#8494A7] mt-1 flex items-center gap-1.5">
-                      <InlineFlag country={judge.country} /> {judge.country}
-                    </p>
-                    <p className="text-[0.65rem] text-[#6AA3E0] mt-2">{judge.discipline}</p>
-                    <p className="text-[0.6rem] text-[#8494A7] mt-2">Sample profile</p>
-                  </article>
-                ))}
-              </div>
+              {judges.length === 0 ? (
+                <p className="text-sm text-[#8494A7] rounded-xl border border-dashed border-[#4274B9]/30 px-3 py-4">
+                  {judgesReady
+                    ? "Judges appear here after WCO approves their Pro Judge Card."
+                    : "The live judge list is updating."}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {judges.map((judge) => (
+                    <article key={judge.id} className="rounded-xl border border-[#4274B9]/25 bg-[#111827] p-3">
+                      <div className="flex items-center gap-3">
+                        <JudgeMark id={judge.id} hasPhoto={judge.hasPhoto} name={judge.name} className="w-14 h-14 rounded-xl object-cover border border-[#E8ECF0]/20 shrink-0" />
+                        <div className="min-w-0">
+                          <h4 className="text-sm text-[#E8ECF0] font-semibold truncate">{judge.name}</h4>
+                          <p className="text-xs text-[#8494A7] mt-1 flex items-center gap-1.5">
+                            <InlineFlag country={judge.country} /> {judge.country}
+                          </p>
+                          <div className="mt-1"><JudgeBadge small /></div>
+                        </div>
+                      </div>
+                      <p className="text-[0.65rem] text-[#6AA3E0] mt-2">{orgDisciplineLabel(judge.discipline)}</p>
+                      {judge.bio ? <p className="text-xs text-[#C5D0DC] mt-2 line-clamp-3">{judge.bio}</p> : null}
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="rounded-2xl border border-[#4274B9]/20 bg-[#0B1120]/50 p-4">
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-[#4274B9]/30 text-[#E8ECF0]/70 cursor-not-allowed text-xs sm:text-sm font-semibold"
+              <Link
+                to="/judges/apply"
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-[#4274B9] text-[#E8ECF0] hover:bg-[#3563A0] text-xs sm:text-sm font-semibold"
                 style={{ fontFamily: "Orbitron, sans-serif" }}
               >
-                Apply for Official Pro Calisthenics Judge Card — Coming Soon
-              </button>
+                Apply for Official Pro Calisthenics Judge Card
+              </Link>
               <ol className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {STEPS.map((step, i) => (
                   <li key={step} className="rounded-lg border border-[#4274B9]/15 px-3 py-2 text-xs text-[#8494A7]">

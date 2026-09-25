@@ -21,7 +21,7 @@ import type {
   Athlete, Battle, BattleEvent, BattleVote, Proposal, ProposalVote,
   SiteConfig, RewardSnapshot, AthleteFormData, Sponsor, ApiResponse,
   ChatMessage, VerifiedAthleteChatInfo, EventFormData, BattleFormData,
-  PublicOrganization,
+  PublicOrganization, PublicJudge, JudgeAccount,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -910,6 +910,29 @@ export const api = {
         method: "POST", body: {}, adminWallet, sessionToken,
       }),
 
+    getJudgeQueue: (adminWallet: string, sessionToken: string) =>
+      request<{ applications: any[]; judges: any[] }>("/admin/judges", { adminWallet, sessionToken }),
+
+    approveJudgeApplication: (id: string, adminWallet: string, sessionToken: string) =>
+      request<{ id: string; status: string }>(`/admin/judges/applications/${id}/approve`, {
+        method: "POST", body: {}, adminWallet, sessionToken,
+      }),
+
+    rejectJudgeApplication: (id: string, adminWallet: string, sessionToken: string) =>
+      request<{ id: string; message: string }>(`/admin/judges/applications/${id}/reject`, {
+        method: "POST", body: {}, adminWallet, sessionToken,
+      }),
+
+    updateJudge: (id: string, body: Record<string, string>, adminWallet: string, sessionToken: string) =>
+      request<PublicJudge>(`/admin/judges/${id}`, {
+        method: "POST", body, adminWallet, sessionToken,
+      }),
+
+    revokeJudge: (id: string, adminWallet: string, sessionToken: string) =>
+      request<{ id: string; status: string }>(`/admin/judges/${id}/revoke`, {
+        method: "POST", body: {}, adminWallet, sessionToken,
+      }),
+
     // Sponsors
     getSponsors: (adminWallet: string, sessionToken: string) =>
       request<Sponsor[]>("/admin/sponsors", { adminWallet, sessionToken }),
@@ -1066,6 +1089,42 @@ export const api = {
       body,
       walletSessionToken,
     }),
+  getJudges: () => request<PublicJudge[]>("/judges"),
+  getJudgeAccount: (wallet: string, walletSessionToken: string) =>
+    request<JudgeAccount>(`/judges/me?wallet=${encodeURIComponent(wallet)}`, { walletSessionToken }),
+  submitJudgeApplication: (body: Record<string, unknown>, walletSessionToken: string) =>
+    request<{ id: string; status: string }>("/judges/apply", {
+      method: "POST",
+      body,
+      walletSessionToken,
+    }),
+  uploadJudgePhoto: async (
+    file: File,
+    wallet: string,
+    walletSessionToken: string,
+  ): Promise<ApiResponse<{ path: string }>> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("wallet", wallet);
+    try {
+      const res = await fetch(`${BASE_URL}/judges/photo`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${publicAnonKey}`,
+          "X-Wallet-Session": walletSessionToken,
+        },
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        return { success: false, error: sanitizeApiError(json.error || `Upload failed (${res.status})`) };
+      }
+      return { success: true, data: json.data };
+    } catch (e) {
+      return { success: false, error: sanitizeApiError(String(e)) };
+    }
+  },
+
   uploadOrganizationLogo: async (
     file: File,
     wallet: string,

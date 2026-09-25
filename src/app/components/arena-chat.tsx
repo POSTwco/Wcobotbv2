@@ -32,6 +32,7 @@ import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
 import { api } from "../lib/api";
 import type { ChatMessage, ChatMediaAttachment, VerifiedAthleteChatInfo } from "../lib/types";
+import { ChatRoleBadges, JudgeBadge } from "./judge-badge";
 import {
   playSendSound, playReceiveSound, playReactionSound,
   playEmotionSound, playGovernorEntrance, playErrorSound,
@@ -483,9 +484,12 @@ function MessageBubble({ message, myWallet, athleteMap, onReact, isGovernorViewe
   const isAthlete = message.isAthlete || !!athleteMap[message.wallet];
   const athleteInfo = athleteMap[message.wallet];
   const isMsgGovernor = !!message.isGovernor;
+  const isJudge = !!message.isJudge;
   const displayName = isAthlete
     ? (athleteInfo?.name || message.athleteName || "Athlete")
-    : shortWallet(message.wallet);
+    : isJudge
+      ? (message.judgeName || "Judge")
+      : shortWallet(message.wallet);
 
   const isAdminWallet = !!message.isAdmin;
 
@@ -586,7 +590,9 @@ function MessageBubble({ message, myWallet, athleteMap, onReact, isGovernorViewe
                 ? "bg-gradient-to-br from-[#D4A843]/60 to-[#B8902E]/40 text-[#D4A843] border border-[#D4A843]/30"
                 : isAthlete
                   ? "bg-gradient-to-br from-[#4274B9] to-[#6AA3E0] text-white"
-                  : "bg-[#162033] text-[#8494A7] border border-[#4274B9]/20"
+                  : isJudge
+                    ? "bg-gradient-to-br from-[#E8ECF0] to-[#8494A7] text-[#0B1120]"
+                    : "bg-[#162033] text-[#8494A7] border border-[#4274B9]/20"
           }`}>
             {message.wallet.split(".").pop()?.substring(0, 2)}
           </div>
@@ -596,19 +602,15 @@ function MessageBubble({ message, myWallet, athleteMap, onReact, isGovernorViewe
           isAdminWallet ? "text-[#D4A843]"
             : isMsgGovernor ? "text-[#D4A843]/90"
               : isAthlete ? "text-[#6AA3E0]"
-                : "text-[#8494A7]"
+                : isJudge ? "text-[#E8ECF0]"
+                  : "text-[#8494A7]"
         }`} style={{ fontFamily: "Orbitron, sans-serif" }}>
           {isAdminWallet ? "WCO ADMIN" : displayName}
         </span>
 
         {/* Badges */}
         {isMsgGovernor && isGovernorViewer && <GovernorBadge small />}
-        {isAthlete && (
-          <div className="flex items-center gap-0.5" title="Verified Athlete">
-            <Shield className="w-3 h-3 text-[#4274B9]" />
-            <span className="text-[0.45rem] text-[#4274B9] font-bold">VERIFIED</span>
-          </div>
-        )}
+        <ChatRoleBadges isAthlete={isAthlete} isJudge={isJudge} />
         {isAdminWallet && (
           <Shield className="w-3 h-3 text-[#D4A843]" />
         )}
@@ -730,6 +732,7 @@ export function ArenaChat() {
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [isGovernor, setIsGovernor] = useState(false);
   const [governorChecked, setGovernorChecked] = useState(false);
+  const [isSelfJudge, setIsSelfJudge] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
   const [cooldownEnd, setCooldownEnd] = useState(0); // timestamp when cooldown expires
@@ -749,6 +752,22 @@ export function ArenaChat() {
 
   const wallet = accountId || "";
   const isVerifiedAthlete = !!(wallet && athleteMap[wallet]);
+
+  useEffect(() => {
+    if (!connected || !wallet || !walletSessionToken) {
+      setIsSelfJudge(false);
+      return;
+    }
+    let cancel = false;
+    api.getJudgeAccount(wallet, walletSessionToken).then((res) => {
+      if (!cancel) setIsSelfJudge(!!(res.success && res.data?.status === "approved"));
+    }).catch(() => {
+      if (!cancel) setIsSelfJudge(false);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [connected, wallet, walletSessionToken]);
   const canShareMedia = isVerifiedAthlete || !!isAdmin;
 
   const attachMediaFromUrl = useCallback((raw: string, expect?: "youtube" | "instagram") => {
@@ -1433,6 +1452,11 @@ export function ArenaChat() {
                   {athleteMap[wallet] && (
                     <span className="ml-1 text-[#4274B9]">
                       <Shield className="w-2.5 h-2.5 inline" /> {athleteMap[wallet].name}
+                    </span>
+                  )}
+                  {isSelfJudge && (
+                    <span className="ml-1.5 inline-flex align-middle">
+                      <JudgeBadge small />
                     </span>
                   )}
                   {isAdmin && (

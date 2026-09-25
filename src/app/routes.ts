@@ -7,6 +7,7 @@ import { NFTsPage } from "./pages/nfts";
 import { GovernancePage } from "./pages/governance";
 import { LeaderboardPage } from "./pages/leaderboard";
 import { ApplyPage } from "./pages/apply";
+import { JudgeApplyPage } from "./pages/judge-apply";
 import { EventsPage } from "./pages/events";
 import { OrgAccountPage } from "./pages/org-account";
 import { OrgDashboardPage } from "./pages/org-dashboard";
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: "governance", Component: GovernancePage },
       { path: "leaderboard", Component: LeaderboardPage },
       { path: "apply", Component: ApplyPage },
+      { path: "judges/apply", Component: JudgeApplyPage },
       { path: "calisthenics", Component: CalisthenicsPage },
       { path: "calisthenics/workout/:id", Component: CalisthenicsWorkoutPage },
       { path: "calisthenics/history", Component: CalisthenicsHistoryPage },

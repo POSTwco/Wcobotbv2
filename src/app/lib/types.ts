@@ -211,6 +211,36 @@ export interface PublicOrganization {
   events: PublicOrgEvent[];
 }
 
+export interface PublicJudge {
+  id: string;
+  name: string;
+  country: string;
+  discipline: string;
+  bio: string;
+  hasPhoto: boolean;
+}
+
+export interface JudgeAccount {
+  status: "none" | "pending" | "approved" | "revoked";
+  application?: {
+    id: string;
+    status: string;
+    name: string;
+    fullName: string;
+    country: string;
+    discipline: string;
+    bio: string;
+    email: string;
+    phone: string;
+    instagram: string;
+    youtube: string;
+    website: string;
+    submittedAt: string;
+    hasPhoto: boolean;
+  };
+  judge?: PublicJudge;
+}
+
 export interface PublicOrgEvent {
   id: string;
   orgId: string;
@@ -604,6 +634,9 @@ export interface ChatMessage {
   isAthlete: boolean;
   athleteName?: string;
   isGovernor?: boolean;
+  /** Server-stamped from the approved judge roster. Clients cannot set this. */
+  isJudge?: boolean;
+  judgeName?: string;
   /** Server-side flag — true when the sender is a verified WCO admin wallet */
   isAdmin?: boolean;
   /** YouTube / Instagram share — only athletes & admins may attach */

@@ -183,6 +183,7 @@ import { validateChatMedia } from "./chat-media.tsx";
 import { mountMagicRoutes } from "./magic-accounts.tsx";
 import { mountEarlySupporterRoutes } from "./early-supporter.tsx";
 import { mountOrganizationRoutes } from "./organizations.tsx";
+import { mountJudgeRoutes, judgeNameForWallet, applyJudgeChatFlags } from "./judges.tsx";
 
 const app = new Hono();
 
@@ -5742,8 +5743,9 @@ app.get(`${PREFIX}/chat/messages`, async (c) => {
     }
 
     const messages: any[] = (await kv.get(CHAT_KV_KEY)) || [];
+    const stamped = await applyJudgeChatFlags(messages);
 
-    return c.json({ success: true, data: messages });
+    return c.json({ success: true, data: stamped });
   } catch (error) {
     console.log(`[CHAT] Error fetching messages: ${error}`);
     return c.json({ success: false, error: "Failed to fetch chat messages. Please try again." }, 500);
@@ -5837,6 +5839,7 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
     // Server-side admin tag — the frontend MUST NEVER contain admin wallet IDs.
     // This flag is the single source of truth for rendering the admin badge.
     const isAdminWallet = isAdmin(cleanWallet);
+    const judgeName = await judgeNameForWallet(cleanWallet);
 
     // ── 7b. MEDIA ATTACHMENT (athletes + admins only) ──
     let mediaAttachment: ReturnType<typeof validateChatMedia>["media"] = null;
@@ -5883,6 +5886,8 @@ app.post(`${PREFIX}/chat/messages`, async (c) => {
       athleteName,
       isGovernor,
       isAdmin: isAdminWallet,
+      isJudge: !!judgeName,
+      ...(judgeName ? { judgeName } : {}),
       ...(mediaAttachment ? { media: mediaAttachment } : {}),
     };
 
@@ -6608,6 +6613,7 @@ mountTournamentRoutes(app, PREFIX);
 // Early Supporter claim — defaults DISABLED (EARLY_SUPPORTER_ENABLED=false)
 mountEarlySupporterRoutes(app, PREFIX);
 mountOrganizationRoutes(app, PREFIX);
+mountJudgeRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);

@@ -103,6 +103,14 @@
       "index": true,
       "priority": 0.7
     },
+    "/judges/apply": {
+      "title": "Apply as Judge | WCO",
+      "description": "Apply for an Official Pro Calisthenics Judge Card. WCO admins review every application before a judge is listed and badged in Arena Chat.",
+      "ogImage": "/og/default.png",
+      "headline": "Apply as Judge",
+      "index": true,
+      "priority": 0.6
+    },
     "/calisthenics": {
       "title": "Calisthenics Routines | WCO Cali Engine",
       "description": "Generate daily bodyweight workouts with the WCO Cali Engine. Beginner to expert routines, PR tracking, and motion-guided coaching.",

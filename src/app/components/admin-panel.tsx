@@ -45,6 +45,7 @@ import {
   Megaphone, Rocket, Activity, Dumbbell, Gift, Film, Building2,
 } from "lucide-react";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
+import { JudgeAdminSection } from "./judge-admin-section";
 import { useWallet } from "./wallet-context";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -1017,6 +1018,8 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
         )}
       </div>
 
+      <JudgeAdminSection wallet={wallet} sessionToken={sessionToken} />
+
       {/* Athlete Onboarded Celebration Overlay */}
       <AthleteOnboardedOverlay
         show={showOnboarded}
@@ -1101,6 +1104,7 @@ function ManualTab() {
             </ol>
           </div>
           <p className="text-xs"><span className="text-[#D4A843]">First time?</span> Use "SEED INITIAL DATA" to auto-create Tony Gaste, Starboy, and Vitalii with their real skill ratings.</p>
+          <p className="text-xs">Judge applications are under Athlete Applications. Approve adds the person to Meet the Staff and their Arena Chat Judge badge. Reject deletes the application. Revoke removes an approved judge.</p>
         </div>
       ),
     },
