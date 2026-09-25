@@ -209,15 +209,25 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
           <div className="rounded-2xl border border-[#D4A843]/20 p-4 space-y-3">
             {(queue === "applications" || queue === "edits") && (
               <>
+                <p className="text-[0.65rem] text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>PUBLIC CARD</p>
+                <p className="text-xs text-[#8494A7]">Fans see the name, country, discipline, about text, and public socials after approval.</p>
                 <AdminField label="Name" value={selected.name || ""} onChange={(v) => setSelected({ ...selected, name: v })} />
                 <AdminField label="Country" value={selected.country || ""} onChange={(v) => setSelected({ ...selected, country: v })} />
-                <AdminField label="Email" value={selected.email || ""} onChange={(v) => setSelected({ ...selected, email: v })} />
                 <AdminField label="Discipline" value={selected.discipline || ""} onChange={(v) => setSelected({ ...selected, discipline: v })} />
-                <AdminField label="Bio" value={selected.bio || ""} onChange={(v) => setSelected({ ...selected, bio: v })} multiline />
+                <p className="text-xs text-[#8494A7]">Shown as {orgDisciplineLabel(selected.discipline) || "—"}</p>
+                <AdminField label="About" value={selected.bio || ""} onChange={(v) => setSelected({ ...selected, bio: v })} multiline />
                 <AdminField label="Instagram" value={selected.instagram || ""} onChange={(v) => setSelected({ ...selected, instagram: v })} />
                 <AdminField label="YouTube" value={selected.youtube || ""} onChange={(v) => setSelected({ ...selected, youtube: v })} />
                 <AdminField label="Website" value={selected.website || ""} onChange={(v) => setSelected({ ...selected, website: v })} />
-                <p className="text-xs text-[#8494A7]">Discipline label: {orgDisciplineLabel(selected.discipline)}</p>
+                <p className="text-[0.65rem] text-[#D4A843] pt-2" style={{ fontFamily: "Orbitron, sans-serif" }}>PRIVATE CONTACT</p>
+                <p className="text-xs text-[#8494A7]">Email, organizer names, and personal Instagram stay off the Events page.</p>
+                <AdminField label="Email (private)" value={selected.email || ""} onChange={(v) => setSelected({ ...selected, email: v })} />
+                {Array.isArray(selected.organizers) && (
+                  <p className="text-xs text-[#C5D0DC]">Organizers: {selected.organizers.filter(Boolean).join(", ") || "—"}</p>
+                )}
+                {Array.isArray(selected.personalInstagrams) && (
+                  <p className="text-xs text-[#C5D0DC]">Personal Instagram (private): {selected.personalInstagrams.filter(Boolean).join(", ") || "—"}</p>
+                )}
               </>
             )}
             {queue === "events" && (
@@ -231,9 +241,12 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
                 <AdminField label="Discipline" value={selected.discipline || ""} onChange={(v) => setSelected({ ...selected, discipline: v })} />
                 <AdminField label="Format (pvp, tournament, field)" value={selected.format || ""} onChange={(v) => setSelected({ ...selected, format: v })} />
                 <p className="text-xs text-[#8494A7]">{orgFormatLabel(selected.format)} · {(selected.athleteIds || []).length} athletes</p>
-                <label className="flex items-center gap-2 text-sm text-[#E8ECF0]">
-                  <input type="checkbox" checked={gamified} onChange={(e) => setGamified(e.target.checked)} />
-                  Gamify — create a draft battle event. Leave off for a calendar listing only.
+                <label className="flex items-start gap-2 text-sm text-[#E8ECF0]">
+                  <input type="checkbox" checked={gamified} onChange={(e) => setGamified(e.target.checked)} className="mt-1" />
+                  <span>
+                    Gamify this event
+                    <span className="block text-xs text-[#8494A7] mt-1">Off publishes a calendar card on the organization. On creates a draft in the Event Console. The organization still cannot open voting.</span>
+                  </span>
                 </label>
               </>
             )}

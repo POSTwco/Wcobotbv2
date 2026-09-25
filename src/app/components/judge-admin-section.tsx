@@ -136,13 +136,18 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
                   <div className="w-14 h-14 rounded-lg bg-[#162033] border border-dashed border-[#4274B9]/20" />
                 )}
                 <div className="min-w-0 flex-1">
+                  <p className="text-[0.55rem] text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>PUBLIC CARD</p>
                   <p className="text-[#E8ECF0] text-sm font-semibold">{app.name} <span className="text-[0.5rem] text-amber-400">PENDING</span></p>
-                  <p className="text-[#8494A7] text-[0.6rem]">{app.fullName} · {app.country} · <span className="font-mono text-[#6AA3E0]">{app.wallet}</span></p>
-                  <p className="text-[0.6rem] text-[#E8ECF0] mt-1">{orgDisciplineLabel(app.discipline)}</p>
+                  <p className="text-[#8494A7] text-[0.6rem]">{app.country} · {orgDisciplineLabel(app.discipline)}</p>
                   <p className="text-[#8494A7] text-[0.6rem] mt-1">{app.bio}</p>
                   <p className="text-[0.55rem] text-[#8494A7] mt-1">
-                    {app.email ? `✉ ${app.email} ` : ""}{app.phone ? `☎ ${app.phone} ` : ""}
                     {app.instagram ? `IG ${app.instagram} ` : ""}{app.youtube ? `YT ${app.youtube} ` : ""}{app.website || ""}
+                  </p>
+                  <p className="text-[0.55rem] text-[#D4A843] mt-2" style={{ fontFamily: "Orbitron, sans-serif" }}>PRIVATE — ADMINS ONLY</p>
+                  <p className="text-[#8494A7] text-[0.6rem]">Legal name: {app.fullName || "—"}</p>
+                  <p className="text-[#8494A7] text-[0.6rem]">Wallet: <span className="font-mono text-[#6AA3E0]">{app.wallet}</span></p>
+                  <p className="text-[0.55rem] text-[#8494A7] mt-1">
+                    {app.email ? `Email ${app.email} ` : "No email "}{app.phone ? `· Phone ${app.phone}` : ""}
                   </p>
                   {app.photoSignedUrl && (
                     <button type="button" onClick={() => downloadPhoto(app.id, app.name)} className="mt-1 text-[0.55rem] text-[#6AA3E0]">SAVE PHOTO</button>

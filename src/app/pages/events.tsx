@@ -99,12 +99,23 @@ export function EventsPage() {
             </div>
             <Link
               to="/events/account"
-              className="shrink-0 self-start inline-flex items-center justify-center px-4 sm:px-5 py-2.5 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all text-xs sm:text-sm font-semibold tracking-wide"
+              className="shrink-0 self-start inline-flex flex-col items-center justify-center px-4 sm:px-5 py-2.5 bg-[#4274B9] text-white rounded-xl hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all text-xs sm:text-sm font-semibold tracking-wide"
               style={{ fontFamily: "Orbitron, sans-serif" }}
             >
               Organization Sign In
+              <span className="block mt-0.5 text-[0.6rem] font-normal tracking-normal text-white/80" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                Host a competition under WCO
+              </span>
             </Link>
           </div>
+          <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+            {["Browse organizations", "Open a card", "Follow a live event into Battles"].map((step, i) => (
+              <li key={step} className="rounded-xl border border-[#4274B9]/20 bg-[#111827]/80 px-3 py-2 text-xs text-[#C5D0DC]">
+                <span className="text-[#6AA3E0] font-bold mr-2" style={{ fontFamily: "Orbitron, sans-serif" }}>{i + 1}</span>
+                {step}
+              </li>
+            ))}
+          </ol>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8494A7]" />
             <input

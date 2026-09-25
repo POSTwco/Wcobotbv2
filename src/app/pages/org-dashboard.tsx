@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useWallet } from "../components/wallet-context";
 import { api } from "../lib/api";
 import type { Athlete } from "../lib/types";
@@ -142,9 +143,13 @@ export function OrgDashboardPage() {
   if (!connected) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
-        <button type="button" onClick={() => connect()} disabled={isConnecting} className="px-5 py-2.5 rounded-xl bg-[#4274B9] text-white" style={{ fontFamily: "Orbitron, sans-serif" }}>
-          Connect Wallet
-        </button>
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl text-[#E8ECF0] mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>Organization dashboard</h1>
+          <p className="text-sm text-[#8494A7] mb-6">Connect the wallet that owns the organization. Drafts stay private until WCO approves them.</p>
+          <button type="button" onClick={() => connect()} disabled={isConnecting} className="px-5 py-3 rounded-xl bg-[#4274B9] text-white text-sm font-semibold disabled:opacity-50" style={{ fontFamily: "Orbitron, sans-serif" }}>
+            {isConnecting ? "Connecting…" : "Connect Wallet"}
+          </button>
+        </div>
       </div>
     );
   }
@@ -157,8 +162,9 @@ export function OrgDashboardPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="max-w-md text-center">
-          <p className="text-[#E8ECF0] mb-3">The dashboard opens after WCO approves this wallet’s organization.</p>
-          <Link to="/events/account" className="text-[#6AA3E0] text-sm">View application status</Link>
+          <h1 className="text-xl text-[#E8ECF0] mb-2" style={{ fontFamily: "Orbitron, sans-serif" }}>Approval comes first</h1>
+          <p className="text-sm text-[#8494A7] mb-4">The dashboard opens after WCO approves this wallet’s organization. You can check the application, or submit one, from the sign-in page.</p>
+          <Link to="/events/account" className="inline-flex px-4 py-2 rounded-xl bg-[#4274B9] text-white text-sm">View application status</Link>
         </div>
       </div>
     );
@@ -193,27 +199,48 @@ export function OrgDashboardPage() {
           <h2 className="text-xs text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>
             {form.draftId ? "EDIT DRAFT" : "NEW EVENT"}
           </h2>
-          <input className={inputCls} placeholder="Event name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input className={inputCls} type="datetime-local" value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} />
-          <input className={inputCls} placeholder="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-          <input className={inputCls} placeholder="Livestream https://" value={form.livestream} onChange={(e) => setForm({ ...form, livestream: e.target.value })} />
-          <input className={inputCls} placeholder="Registration link https://" value={form.registrationUrl} onChange={(e) => setForm({ ...form, registrationUrl: e.target.value })} />
-          <input className={inputCls} placeholder="Website https://" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
-          <div className="grid grid-cols-2 gap-2">
-            <select className={inputCls} value={form.discipline} onChange={(e) => setForm({ ...form, discipline: e.target.value })}>
-              {ORG_DISCIPLINES.map((id) => <option key={id} value={id}>{orgDisciplineLabel(id)}</option>)}
-            </select>
-            <select className={inputCls} value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as OrgEventFormat })}>
-              {ORG_FORMATS.map((id) => <option key={id} value={id}>{orgFormatLabel(id)}</option>)}
-            </select>
+          <p className="text-xs text-[#8494A7]">Save a private draft, then submit it. A commander signs before fans see anything. Signing confirms the draft and does not send HBAR.</p>
+          <Labeled label="Event name" hint="The name fans will read.">
+            <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Labeled>
+          <Labeled label="Date and time" hint="Optional if the date is not confirmed yet.">
+            <input className={inputCls} type="datetime-local" value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} />
+          </Labeled>
+          <Labeled label="Location" hint="City or venue. Shown on the organization card.">
+            <input className={inputCls} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+          </Labeled>
+          <Labeled label="Livestream" hint="https only. Fans see this on your card.">
+            <input className={inputCls} placeholder="https://" value={form.livestream} onChange={(e) => setForm({ ...form, livestream: e.target.value })} />
+          </Labeled>
+          <Labeled label="Registration link" hint="https only. Where athletes sign up off-platform.">
+            <input className={inputCls} placeholder="https://" value={form.registrationUrl} onChange={(e) => setForm({ ...form, registrationUrl: e.target.value })} />
+          </Labeled>
+          <Labeled label="Event website" hint="https only. Optional.">
+            <input className={inputCls} placeholder="https://" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+          </Labeled>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Labeled label="Discipline" hint="FreeStyle, Statics, or Both.">
+              <select className={inputCls} value={form.discipline} onChange={(e) => setForm({ ...form, discipline: e.target.value })}>
+                {ORG_DISCIPLINES.map((id) => <option key={id} value={id}>{orgDisciplineLabel(id)}</option>)}
+              </select>
+            </Labeled>
+            <Labeled label="Format" hint={formatHint(form.format)}>
+              <select className={inputCls} value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as OrgEventFormat })}>
+                {ORG_FORMATS.map((id) => <option key={id} value={id}>{orgFormatLabel(id)}</option>)}
+              </select>
+            </Labeled>
           </div>
-          <textarea className={inputCls} rows={3} placeholder="Note to WCO" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <p className="text-xs text-[#C5D0DC]">WCO decides whether this is a public calendar card or a real voting draft. Your organization cannot open voting.</p>
+          <Labeled label="Note to WCO" hint="Anything the reviewers should know. Fans do not see this.">
+            <textarea className={inputCls} rows={3} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          </Labeled>
           <div>
             <p className="text-xs text-[#8494A7] mb-1">
               Athletes from the WCO roster ({form.athleteIds.length} selected).
-              {form.format === "pvp" ? " Duals need an even count from 2 to 32." : " Tournament and Field need 3 to 12."}
+              {form.format === "pvp" ? " Duals need an even count from 2 to 32." : " Tournament and Best in Field need 3 to 12."}
             </p>
-            <input className={inputCls} placeholder="Search athletes" value={athleteQuery} onChange={(e) => setAthleteQuery(e.target.value)} />
+            <p className="text-xs text-[#8494A7] mb-2">Only approved athletes can be seated. A new person applies with a Pro Card and is linked after both approvals.</p>
+            <input className={inputCls} placeholder="Search athletes" value={athleteQuery} onChange={(e) => setAthleteQuery(e.target.value)} aria-label="Search athletes" />
             <div className="max-h-48 overflow-y-auto mt-2 space-y-1">
               {roster.map((a) => {
                 const on = form.athleteIds.includes(a.id);
@@ -259,7 +286,7 @@ export function OrgDashboardPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-[#E8ECF0] font-semibold">{draft.name}</p>
-                    <p className="text-xs text-[#8494A7]">{orgFormatLabel(draft.format)} · {draft.status}</p>
+                    <p className="text-xs text-[#8494A7]">{orgFormatLabel(draft.format)} · {draftStatusLabel(draft)}</p>
                   </div>
                   {(draft.status === "draft" || draft.status === "rejected") && (
                     <button type="button" className="text-xs text-[#6AA3E0]" onClick={() => setForm({
@@ -281,9 +308,12 @@ export function OrgDashboardPage() {
                 </div>
                 {draft.decisionNote && <p className="text-sm text-[#C5D0DC] mt-2 whitespace-pre-wrap">{draft.decisionNote}</p>}
                 {(draft.status === "draft" || draft.status === "rejected") && (
-                  <button type="button" disabled={busy} onClick={() => submitDraft(draft)} className="mt-3 text-xs px-3 py-1.5 rounded-lg border border-[#4274B9]/40 text-[#6AA3E0]">
-                    Sign and submit for review
-                  </button>
+                  <>
+                    <p className="text-xs text-[#8494A7] mt-3">A commander signs this before it is public.</p>
+                    <button type="button" disabled={busy} onClick={() => submitDraft(draft)} className="mt-2 text-xs px-3 py-1.5 rounded-lg border border-[#4274B9]/40 text-[#6AA3E0]">
+                      Sign and submit for review
+                    </button>
+                  </>
                 )}
                 {draft.gamified && draft.battleEventId && board && (
                   <div className="mt-3 text-sm text-[#C5D0DC] space-y-1">
@@ -309,4 +339,28 @@ export function OrgDashboardPage() {
   );
 }
 
-const inputCls = "w-full rounded-xl bg-[#0B1120] border border-[#4274B9]/25 px-3 py-2 text-sm text-[#E8ECF0]";
+const inputCls = "w-full rounded-xl bg-[#0B1120] border border-[#4274B9]/25 px-3 py-2 text-sm text-[#E8ECF0] outline-none focus:border-[#6AA3E0]/60";
+
+function Labeled({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="block text-xs text-[#8494A7]">
+      {label}
+      <div className="mt-1">{children}</div>
+      {hint ? <span className="block mt-1 text-[0.65rem] text-[#8494A7]/80">{hint}</span> : null}
+    </label>
+  );
+}
+
+function formatHint(format: string): string {
+  if (format === "pvp") return "1v1 Duals — even roster, 2 to 32 athletes.";
+  if (format === "tournament") return "Tournament — 3 to 12 athletes. Fans pick a champion.";
+  return "Best in Field — 3 to 12 athletes. Fans pick one athlete.";
+}
+
+function draftStatusLabel(draft: { status?: string; gamified?: boolean }): string {
+  if (draft.status === "submitted") return "In review";
+  if (draft.status === "approved" && draft.gamified) return "In the Event Console";
+  if (draft.status === "approved") return "Listed on your card";
+  if (draft.status === "rejected") return "Needs changes";
+  return "Draft";
+}
