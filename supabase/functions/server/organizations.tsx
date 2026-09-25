@@ -364,6 +364,29 @@ function isPublicBattleEvent(e: any): boolean {
   return true;
 }
 
+function isApprovedScheduleDraft(e: any): boolean {
+  if (!e || e.archivedAt || e.status === "cancelled") return false;
+  if (e.source !== "organization" || !e.orgId) return false;
+  if (isPublicBattleEvent(e)) return false;
+  return e.status === "draft" || e.votingStatus === "draft";
+}
+
+function scheduleDraftToPublic(e: any) {
+  return {
+    id: `scheduled-${e.id}`,
+    orgId: e.orgId,
+    name: e.name || "",
+    eventDate: e.startDate || "",
+    location: e.location || "",
+    livestream: "",
+    registrationUrl: "",
+    website: "",
+    discipline: "",
+    format: "calendar",
+    gamified: false,
+  };
+}
+
 function battleEventToPublic(e: any): any {
   return {
     id: `linked-${e.id}`,
@@ -480,7 +503,12 @@ async function listPublic(): Promise<any[]> {
     const linked = battleEvents
       .filter((e: any) => e && e.orgId === org.id && isPublicBattleEvent(e))
       .map(battleEventToPublic);
-    const events = [...linked, ...cards].sort((a, b) => String(b.eventDate).localeCompare(String(a.eventDate)));
+    // Commander approval of a gamified event creates a draft. The schedule
+    // lists its name, place, and date before voting is published.
+    const approvedDrafts = battleEvents
+      .filter((e: any) => e && e.orgId === org.id && isApprovedScheduleDraft(e))
+      .map(scheduleDraftToPublic);
+    const events = [...linked, ...cards, ...approvedDrafts].sort((a, b) => String(b.eventDate).localeCompare(String(a.eventDate)));
     return publicOrg(org, events);
   });
 }

@@ -8,7 +8,7 @@ import { Link } from "react-router";
 import { motion } from "motion/react";
 import { ChevronDown, Search } from "lucide-react";
 import { api } from "../lib/api";
-import type { PublicOrganization } from "../lib/types";
+import type { PublicOrgEvent, PublicOrganization } from "../lib/types";
 import { orgDisciplineLabel } from "../lib/org-sign";
 import { OrgMark } from "../components/org-mark";
 import { OrgDossier } from "../components/org-dossier";
@@ -72,6 +72,19 @@ export function EventsPage() {
   const openOrg = orgs.find((o) => o.id === openId) || null;
 
   const visibleRest = useMemo(() => (q ? filteredRest : rest), [q, filteredRest, rest]);
+  const schedule = useMemo(() => {
+    const rows = orgs.flatMap((org) => (org.events || []).filter((event) => event?.name));
+    return rows.sort((a, b) => {
+      const at = Date.parse(a.eventDate || "");
+      const bt = Date.parse(b.eventDate || "");
+      const aOk = Number.isFinite(at);
+      const bOk = Number.isFinite(bt);
+      if (aOk && bOk && at !== bt) return at - bt;
+      if (aOk && !bOk) return -1;
+      if (!aOk && bOk) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [orgs]);
 
   function focusOrg(org: PublicOrganization) {
     if (org.id !== featured?.id) setShowAll(true);
@@ -140,7 +153,8 @@ export function EventsPage() {
         {loading ? (
           <BOTBSpinner />
         ) : (
-          <>
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem] gap-6 items-start">
+          <div className="min-w-0">
             {featured && (q === "" || featured.name.toLowerCase().includes(q)) && (
               <FeaturedOrg
                 org={featured}
@@ -180,7 +194,14 @@ export function EventsPage() {
                 )}
               </div>
             )}
-          </>
+          </div>
+          <EventSchedule
+            events={schedule}
+            onOpen={(orgId) => {
+              if (orgs.some((org) => org.id === orgId)) setOpenId(orgId);
+            }}
+          />
+          </div>
         )}
       </div>
       {openOrg && <OrgDossier org={openOrg} onClose={() => setOpenId(null)} />}
@@ -242,6 +263,64 @@ function FeaturedOrg({
       </button>
     </TiltCard>
   );
+}
+
+function EventSchedule({
+  events,
+  onOpen,
+}: {
+  events: PublicOrgEvent[];
+  onOpen: (orgId: string) => void;
+}) {
+  return (
+    <aside className="lg:sticky lg:top-24 rounded-2xl border border-[#4274B9]/25 bg-[#111827] p-4 min-w-0">
+      <h2 className="text-xs text-[#E8ECF0] tracking-wide" style={{ fontFamily: "Orbitron, sans-serif" }}>
+        SCHEDULE
+      </h2>
+      <p className="text-[0.65rem] text-[#8494A7] mt-1 mb-3">Name, place, and date. Soonest first, after WCO approves the event.</p>
+      {events.length === 0 ? (
+        <p className="text-sm text-[#8494A7] rounded-xl border border-dashed border-[#4274B9]/30 px-3 py-4">
+          Approved events appear here by date.
+        </p>
+      ) : (
+        <ul className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
+          {events.map((event) => {
+            const when = scheduleDate(event.eventDate);
+            return (
+              <li key={event.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(event.orgId)}
+                  className="w-full text-left grid grid-cols-[4.25rem_minmax(0,1fr)] gap-2 rounded-xl border border-[#4274B9]/15 bg-[#0B1120]/70 px-2.5 py-2 hover:border-[#6AA3E0]/50"
+                >
+                  <span>
+                    <span className="block text-[0.6rem] uppercase tracking-wide text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>{when.month}</span>
+                    <span className="block text-lg leading-none text-[#E8ECF0] font-semibold">{when.day}</span>
+                    <span className="block text-[0.6rem] text-[#8494A7]">{when.year}</span>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm text-[#E8ECF0] font-semibold truncate">{event.name}</span>
+                    <span className="block text-xs text-[#8494A7] truncate mt-0.5">{event.location?.trim() || "Place to be announced"}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </aside>
+  );
+}
+
+function scheduleDate(value: string): { month: string; day: string; year: string } {
+  const parsed = Date.parse(value || "");
+  if (!Number.isFinite(parsed)) return { month: "Date", day: "TBA", year: "" };
+  const date = new Date(parsed);
+  return {
+    month: date.toLocaleDateString("en-US", { month: "short" }),
+    day: String(date.getDate()),
+    year: String(date.getFullYear()),
+  };
 }
 
 function orgFormatLabelSafe(format: string): string {
