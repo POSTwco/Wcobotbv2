@@ -328,16 +328,18 @@ export function AthletesPage() {
                     </div>
 
                     <div className={compact ? "p-2" : "p-3 sm:p-5"}>
-                      <div className="flex items-center gap-1.5 mb-0.5 min-w-0">
+                      <div className={`flex items-center mb-0.5 min-w-0 ${compact ? "gap-1" : "gap-1.5"}`}>
                         <h3
                           className="text-[#E8ECF0] font-bold truncate"
                           style={{ fontFamily: "Orbitron, sans-serif", fontSize: compact ? "0.6rem" : "0.8rem" }}
                         >
                           {athlete.name}
                         </h3>
-                        {!compact && athlete.competitionCategory && (
+                        {athlete.competitionCategory && (
                           <span
-                            className="shrink-0 px-1.5 py-0.5 rounded text-[0.45rem] font-bold tracking-wide"
+                            className={`shrink-0 rounded font-bold leading-none ${
+                              compact ? "px-1 py-0.5 text-[0.4rem] tracking-normal" : "px-1.5 py-0.5 text-[0.45rem] tracking-wide"
+                            }`}
                             style={{
                               fontFamily: "Orbitron, sans-serif",
                               background: "rgba(66,116,185,0.18)",
