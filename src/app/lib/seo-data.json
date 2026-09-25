@@ -47,6 +47,30 @@
       "index": true,
       "priority": 0.85
     },
+    "/events": {
+      "title": "Events | WCO Organizations",
+      "description": "Calisthenics organizations and the competitions they run under the World Calisthenics Organization. 1v1 duals, tournaments, and best-in-field events sanctioned by WCO.",
+      "ogImage": "/og/battles.png",
+      "headline": "Events",
+      "index": true,
+      "priority": 0.85
+    },
+    "/events/account": {
+      "title": "Organization Sign In | WCO",
+      "description": "Sign in or apply as a calisthenics organization. Applications stay private until the World Calisthenics Organization approves them.",
+      "ogImage": "/og/default.png",
+      "headline": "Organization Sign In",
+      "index": false,
+      "priority": 0.1
+    },
+    "/events/dashboard": {
+      "title": "Organization Dashboard | WCO",
+      "description": "Private dashboard for an approved organization to draft events for WCO review.",
+      "ogImage": "/og/default.png",
+      "headline": "Organization Dashboard",
+      "index": false,
+      "priority": 0.1
+    },
     "/nfts": {
       "title": "NFT Collection | WCO",
       "description": "Explore WCO Governor NFTs, Athlete NFTs, and Sigma collection on Hedera. Digital ownership meets real-world calisthenics competition.",

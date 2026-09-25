@@ -30,6 +30,7 @@ export function buildSocialMetaTags({
   return `
     <title>${title}</title>
     <meta name="description" content="${description}" />
+    <meta name="robots" content="${page.index === false ? "noindex, nofollow" : "index, follow"}" />
     <meta name="keywords" content="${escapeAttr(site.keywords)}" />
     <meta name="author" content="${escapeAttr(site.org)}" />
     <meta name="theme-color" content="${site.themeColor}" />

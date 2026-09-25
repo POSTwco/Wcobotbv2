@@ -74,7 +74,7 @@ function buildJsonLd(routePath, page) {
     };
   }
 
-  if (routePath === "/battles") {
+  if (routePath === "/battles" || routePath === "/events") {
     return {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
@@ -156,8 +156,6 @@ const template = fs.readFileSync(templatePath, "utf8");
 
 console.log("Generating prerendered SEO HTML...");
 for (const [routePath, page] of Object.entries(pages)) {
-  if (!page.index) continue;
-
   const html = injectMeta(template, routePath, page);
   const outPath =
     routePath === "/"

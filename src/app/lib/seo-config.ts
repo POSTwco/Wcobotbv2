@@ -46,7 +46,14 @@ export function absoluteTwitterImage(ogPath: string): string {
 
 export function resolvePageSeo(pathname: string): PageSeo & { path: string; canonical: string } {
   const path = pathname === "" ? "/" : pathname.replace(/\/$/, "") || "/";
-  const page = PAGE_SEO[path] ?? PAGE_SEO["/"];
+  const page = PAGE_SEO[path] ?? {
+    title: `${SITE.name} | ${SITE.org}`,
+    description: SITE.description,
+    ogImage: "/og/default.png",
+    headline: SITE.name,
+    index: false,
+    priority: 0,
+  };
   return {
     ...page,
     path,
@@ -95,7 +102,7 @@ export function buildJsonLd(pathname: string): Record<string, unknown> | null {
     };
   }
 
-  if (seo.path === "/battles") {
+  if (seo.path === "/battles" || seo.path === "/events") {
     return {
       "@context": "https://schema.org",
       "@type": "CollectionPage",

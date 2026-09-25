@@ -383,30 +383,33 @@ function battleEventToPublic(e: any): any {
   };
 }
 
-async function ensureWco(): Promise<void> {
+async function ensureWcoRecord(): Promise<void> {
   const existing = await kv.get(`organization:${WCO_ID}`);
-  if (!existing) {
-    await kv.set(`organization:${WCO_ID}`, {
-      id: WCO_ID,
-      name: "World Calisthenics Organization",
-      country: "United States",
-      discipline: "freestyle_statics",
-      bio: "The home organization of Battle of the Bars. WCO sanctions 1v1 duals, tournaments, and best-in-field events across calisthenics.",
-      website: "https://wcorg.io",
-      instagram: "",
-      youtube: "",
-      logoPath: "",
-      email: "",
-      organizers: ["WCO"],
-      personalInstagrams: ["", "", "", ""],
-      wallet: "",
-      status: "approved",
-      featured: true,
-      changelog: [],
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    });
-  }
+  if (existing) return;
+  await kv.set(`organization:${WCO_ID}`, {
+    id: WCO_ID,
+    name: "World Calisthenics Organization",
+    country: "United States",
+    discipline: "freestyle_statics",
+    bio: "The home organization of Battle of the Bars. WCO sanctions 1v1 duals, tournaments, and best-in-field events across calisthenics.",
+    website: "https://www.wcorg.io",
+    instagram: "",
+    youtube: "",
+    logoPath: "",
+    email: "",
+    organizers: ["WCO"],
+    personalInstagrams: ["", "", "", ""],
+    wallet: "",
+    status: "approved",
+    featured: true,
+    changelog: [],
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  });
+}
+
+/** Tags existing public events with WCO. Admin-only so a public read cannot rewrite events. */
+async function backfillWcoEvents(): Promise<void> {
   const backfill = await kv.get("org-backfill:wco-v1");
   if (backfill?.done) return;
   const events = await kv.getByPrefix("event:");
@@ -420,8 +423,35 @@ async function ensureWco(): Promise<void> {
   await kv.set("org-backfill:wco-v1", { done: true, at: nowIso() });
 }
 
+function redactChangelog(list: unknown): { at: string; fields: string[] }[] {
+  if (!Array.isArray(list)) return [];
+  return list.map((row: any) => ({
+    at: typeof row?.at === "string" ? row.at : "",
+    fields: Array.isArray(row?.fields) ? row.fields.filter((f: unknown) => typeof f === "string") : [],
+  }));
+}
+
+/** Owner payloads keep contact fields and drop commander wallet ids. */
+function redactForOwner(value: any): any {
+  if (!value || typeof value !== "object") return value;
+  const copy = { ...value };
+  delete copy.approvedBy;
+  delete copy.reviewedBy;
+  if ("changelog" in copy) copy.changelog = redactChangelog(copy.changelog);
+  return copy;
+}
+
+function ownerPayload(bundle: any) {
+  return {
+    org: bundle.org ? redactForOwner(bundle.org) : null,
+    application: bundle.application ? redactForOwner(bundle.application) : null,
+    edit: bundle.edit ? redactForOwner(bundle.edit) : null,
+    drafts: (bundle.drafts || []).map(redactForOwner),
+  };
+}
+
 async function listPublic(): Promise<any[]> {
-  await ensureWco();
+  await ensureWcoRecord();
   const orgs = await kv.getByPrefix("organization:");
   const calendar = await kv.getByPrefix("organization-event:");
   const battleEvents = await kv.getByPrefix("event:");
@@ -465,6 +495,7 @@ async function streamLogo(path: string): Promise<Response | null> {
     headers: {
       "Content-Type": data.type || type,
       "Cache-Control": "public, max-age=300",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
@@ -669,7 +700,7 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
       const wallet = String(c.req.query("wallet") || "");
       const sessionErr = await assertWalletSession(c, wallet);
       if (sessionErr) return c.json({ success: false, error: sessionErr }, 401);
-      const data = await ownerBundle(wallet);
+      const data = ownerPayload(await ownerBundle(wallet));
       return c.json({ success: true, data });
     } catch (error) {
       console.log(`[ORG] me error: ${error}`);
@@ -693,7 +724,7 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
           if (board) boards.push({ draftId: draft.id, ...board });
         }
       }
-      return c.json({ success: true, data: { ...bundle, boards } });
+      return c.json({ success: true, data: { ...ownerPayload(bundle), boards } });
     } catch (error) {
       console.log(`[ORG] dashboard error: ${error}`);
       return c.json({ success: false, error: "Failed to load dashboard" }, 500);
@@ -739,8 +770,11 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
       const sessionErr = await assertWalletSession(c, wallet);
       if (sessionErr) return c.json({ success: false, error: sessionErr }, 401);
       const ip = (c.req.header("x-forwarded-for") || "unknown").split(",")[0].trim().slice(0, 64);
-      const rl = await checkRateLimit(`orglgo:${wallet}:${ip}`, 8, 60 * 60 * 1000);
-      if (rl.limited) return c.json({ success: false, error: "Too many logo uploads. Wait and try again." }, 429);
+      const walletRl = await checkRateLimit(`orglgo:${wallet}`, 8, 60 * 60 * 1000);
+      const ipRl = await checkRateLimit(`orglgoip:${ip}`, 30, 60 * 60 * 1000);
+      if (walletRl.limited || ipRl.limited) {
+        return c.json({ success: false, error: "Too many logo uploads. Wait and try again." }, 429);
+      }
       const file = form.get("file");
       if (!(file instanceof File)) return c.json({ success: false, error: "No file provided" }, 400);
       if (file.size <= 0 || file.size > LOGO_MAX_BYTES) {
@@ -936,7 +970,8 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
 
   app.get(`${PREFIX}/admin/organizations`, requireAdminSession, async (c) => {
     try {
-      await ensureWco();
+      await ensureWcoRecord();
+      await backfillWcoEvents();
       const applications = await kv.getByPrefix("org-application:");
       const edits = (await kv.getByPrefix("org-edit:")).filter((e: any) => e && e.status === "pending");
       const drafts = await kv.getByPrefix("org-event-draft:");

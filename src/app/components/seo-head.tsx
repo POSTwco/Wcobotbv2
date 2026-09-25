@@ -21,6 +21,7 @@ export function SeoHead() {
       <html lang="en" />
       <title>{seo.title}</title>
       <meta name="description" content={seo.description} />
+      <meta name="robots" content={seo.index ? "index, follow" : "noindex, nofollow"} />
       <meta name="keywords" content={SITE.keywords} />
       <meta name="author" content={SITE.org} />
       <meta name="theme-color" content={SITE.themeColor} />

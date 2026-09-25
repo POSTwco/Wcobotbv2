@@ -35,4 +35,5 @@ fs.writeFileSync(distPath, sitemap);
 fs.mkdirSync(path.dirname(publicPath), { recursive: true });
 fs.writeFileSync(publicPath, sitemap);
 
-console.log(`Sitemap written (${Object.keys(pages).length} routes)`);
+const indexed = Object.values(pages).filter((page) => page.index).length;
+console.log(`Sitemap written (${indexed} indexed of ${Object.keys(pages).length} routes)`);
