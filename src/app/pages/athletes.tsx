@@ -9,9 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "motion/react";
 import {
-  Trophy, Flame, Target, TrendingUp, Loader2,
-  Instagram, Twitter, Youtube, Link2, Zap, User, ChevronDown,
-  Search, MessageCircle,
+  Flame, User, ChevronDown, Search, MessageCircle,
 } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useVIP } from "../components/vip/vip-context";
@@ -26,6 +24,7 @@ import { ErrorCard } from "../components/error-boundary";
 import { BOTBSpinner, SkeletonAthleteCard } from "../components/botb-spinner";
 import { InlineFlag } from "../components/country-flag";
 import { TiltCard } from "../components/ui-enhancements";
+import { AthleteDossier } from "../components/athlete-dossier";
 import { formatPower } from "../lib/format";
 
 // ---------------------------------------------------------------------------
@@ -51,8 +50,8 @@ export function AthletesPage() {
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedAthlete, setSelectedAthlete] = useState<string | null>(null);
   const [showAllAthletes, setShowAllAthletes] = useState(false);
+  const [dossier, setDossier] = useState<{ id: string; rosterIds: string[] } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const highlightTimer = useRef<number | null>(null);
@@ -66,7 +65,6 @@ export function AthletesPage() {
 
   const jumpToAthlete = useCallback((id: string) => {
     setHighlightedId(id);
-    setSelectedAthlete(id);
     window.setTimeout(() => {
       const el = document.getElementById(`athlete-card-${id}`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -74,6 +72,17 @@ export function AthletesPage() {
     if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
     highlightTimer.current = window.setTimeout(() => setHighlightedId(null), 3500);
   }, []);
+
+  const openProfile = useCallback((
+    id: string,
+    roster: Athlete[],
+    opts?: { expandRest?: boolean; reveal?: boolean },
+  ) => {
+    if (opts?.expandRest) setShowAllAthletes(true);
+    const ids = roster.map((a) => a.id);
+    setDossier({ id, rosterIds: ids.includes(id) ? ids : [id, ...ids] });
+    if (opts?.reveal) jumpToAthlete(id);
+  }, [jumpToAthlete]);
 
   const loadAthletes = useCallback(async () => {
     setLoading(true);
@@ -110,6 +119,15 @@ export function AthletesPage() {
       window.clearTimeout(t2);
     };
   }, [location.hash, loading]);
+
+  const dossierRoster = dossier
+    ? dossier.rosterIds
+        .map((id) => athletes.find((a) => a.id === id))
+        .filter((a): a is Athlete => !!a)
+    : [];
+  const dossierAthlete = dossier
+    ? athletes.find((a) => a.id === dossier.id) ?? null
+    : null;
 
   return (
     <div className="min-h-screen py-6 sm:py-8 overflow-x-hidden">
@@ -157,8 +175,7 @@ export function AthletesPage() {
                     );
                     if (!match) return;
                     const idx = sorted.findIndex((a) => a.id === match.id);
-                    if (idx >= 3) setShowAllAthletes(true);
-                    jumpToAthlete(match.id);
+                    openProfile(match.id, sorted, { expandRest: idx >= 3, reveal: true });
                   }}
                   placeholder="Search athletes by name…"
                   className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-[#111827] border border-[#4274B9]/25 text-[#E8ECF0] text-sm placeholder:text-[#8494A7]/50 outline-none focus:border-[#6AA3E0]/50"
@@ -227,11 +244,7 @@ export function AthletesPage() {
           const renderAthleteCard = (athlete: Athlete, i: number, compact = false) => {
               const borderColor = athlete.nftCardBorderColor || "#4274B9";
               const hasPfp = athlete.pfpUrl && athlete.pfpUrl !== "placeholder";
-              const isExpanded = selectedAthlete === athlete.id;
               const isHighlighted = highlightedId === athlete.id;
-              const winRate = athlete.wins + athlete.losses > 0
-                ? ((athlete.wins / (athlete.wins + athlete.losses)) * 100).toFixed(1)
-                : "0.0";
 
               return (
                 <TiltCard
@@ -246,7 +259,15 @@ export function AthletesPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(i * 0.04, 0.4) }}
-                    onClick={() => setSelectedAthlete(isExpanded ? null : athlete.id)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open profile for ${athlete.name}`}
+                    onClick={() => openProfile(athlete.id, compact ? (q ? filteredRest : rest) : sorted)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      openProfile(athlete.id, compact ? (q ? filteredRest : rest) : sorted);
+                    }}
                     className={`bg-[#111827] border overflow-hidden cursor-pointer hover:border-opacity-60 transition-all group scroll-mt-24 ${
                       compact ? "rounded-xl" : "rounded-2xl"
                     } ${isHighlighted ? "ring-2 ring-[#D4A843] ring-offset-2 ring-offset-[#0B1120]" : ""}`}
@@ -361,8 +382,8 @@ export function AthletesPage() {
                         </p>
                       )}
 
-                      {/* Skill bars — full cards only (or when compact expanded) */}
-                      {athlete.skills && (!compact || isExpanded) && (
+                      {/* Skill bars stay on the full top-3 cards. Compact tiles open the dossier. */}
+                      {!compact && athlete.skills && (
                         <div className={`space-y-1 ${compact ? "mb-1" : "mb-2"}`}>
                           {(["energy", "performance", "static", "aggression", "dynamic"] as const).map((skill) => {
                             const val = athlete.skills[skill] || 0;
@@ -384,103 +405,6 @@ export function AthletesPage() {
                         </div>
                       )}
 
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          className={`space-y-2 pt-2 border-t border-[#4274B9]/10 ${compact ? "space-y-1.5" : "space-y-3 pt-3"}`}
-                        >
-                          {athlete.bio && (
-                            <p className={`text-[#8494A7] leading-relaxed ${compact ? "text-[0.55rem]" : "text-xs"}`}>{athlete.bio}</p>
-                          )}
-                          {athlete.specialMove && (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-[#8494A7] flex items-center gap-2">
-                                <Target className="w-3 h-3" /> Special Move
-                              </span>
-                              <span className="text-[#f59e0b] text-xs">{athlete.specialMove}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-[#8494A7] flex items-center gap-2">
-                              <Trophy className="w-3 h-3" /> Win Rate
-                            </span>
-                            <span className="text-[#10b981]" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.7rem" }}>
-                              {winRate}%
-                            </span>
-                          </div>
-                          {athlete.totalVotes > 0 && (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-[#8494A7] flex items-center gap-2">
-                                <TrendingUp className="w-3 h-3" /> Total Votes
-                              </span>
-                              <span className="text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.7rem" }}>
-                                {athlete.totalVotes.toLocaleString()}
-                              </span>
-                            </div>
-                          )}
-
-                          {(athlete.socials?.instagram || athlete.socials?.twitter || athlete.socials?.youtube || athlete.socials?.website) && (
-                            <div className="flex items-center gap-3 pt-2 border-t border-[#4274B9]/10">
-                              {athlete.socials.instagram && (
-                                <a
-                                  href={athlete.socials.instagram.startsWith("http") ? athlete.socials.instagram : `https://instagram.com/${athlete.socials.instagram.replace("@", "")}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-pink-400/60 hover:text-pink-400 transition-colors"
-                                >
-                                  <Instagram className="w-4 h-4" />
-                                </a>
-                              )}
-                              {athlete.socials.twitter && (
-                                <a
-                                  href={athlete.socials.twitter.startsWith("http") ? athlete.socials.twitter : `https://x.com/${athlete.socials.twitter.replace("@", "")}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-sky-400/60 hover:text-sky-400 transition-colors"
-                                >
-                                  <Twitter className="w-4 h-4" />
-                                </a>
-                              )}
-                              {athlete.socials.youtube && (
-                                <a
-                                  href={athlete.socials.youtube.startsWith("http") ? athlete.socials.youtube : `https://youtube.com/${athlete.socials.youtube}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-red-400/60 hover:text-red-400 transition-colors"
-                                >
-                                  <Youtube className="w-4 h-4" />
-                                </a>
-                              )}
-                              {athlete.socials.website && (
-                                <a
-                                  href={athlete.socials.website}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-[#6AA3E0]/60 hover:text-[#6AA3E0] transition-colors"
-                                >
-                                  <Link2 className="w-4 h-4" />
-                                </a>
-                              )}
-                            </div>
-                          )}
-
-                          {athlete.nftSeriesName && (
-                            <div className="flex items-center justify-between text-sm pt-1">
-                              <span className="text-[#8494A7] flex items-center gap-2">
-                                <Zap className="w-3 h-3" /> NFT Series
-                              </span>
-                              <span className="text-[#D4A843] text-xs" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                                {athlete.nftSeriesName}
-                              </span>
-                            </div>
-                          )}
-                        </motion.div>
-                      )}
                     </div>
                   </motion.div>
                 </TiltCard>
@@ -508,8 +432,7 @@ export function AthletesPage() {
                       onClick={() => {
                         const hit = searchHits[0];
                         const idx = sorted.findIndex((a) => a.id === hit.id);
-                        if (idx >= 3) setShowAllAthletes(true);
-                        jumpToAthlete(hit.id);
+                        openProfile(hit.id, sorted, { expandRest: idx >= 3, reveal: true });
                       }}
                       className="text-[0.55rem] text-[#6AA3E0] hover:underline"
                       style={{ fontFamily: "Orbitron, sans-serif" }}
@@ -558,6 +481,15 @@ export function AthletesPage() {
           );
         })()}
       </div>
+
+      {dossierAthlete && dossierRoster.length > 0 && (
+        <AthleteDossier
+          athlete={dossierAthlete}
+          roster={dossierRoster}
+          onClose={() => setDossier(null)}
+          onSelect={(id) => setDossier((current) => (current ? { ...current, id } : current))}
+        />
+      )}
 
       {/* Sponsor marquee — same rolling strip as the home page */}
       <SponsorMarqueeStrip />
