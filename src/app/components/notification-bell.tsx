@@ -40,8 +40,12 @@ const POLL_INTERVAL = 30_000; // 30 seconds
 function NotificationIcon({ type }: { type: string }) {
   switch (type) {
     case "application_approved":
+    case "org_approved":
+    case "org_event_approved":
       return <CheckCircle className="w-4 h-4 text-[#10b981] shrink-0" />;
     case "application_rejected":
+    case "org_rejected":
+    case "org_event_rejected":
       return <XCircle className="w-4 h-4 text-red-400 shrink-0" />;
     default:
       return <Bell className="w-4 h-4 text-[#6AA3E0] shrink-0" />;
@@ -71,6 +75,7 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const prevUnreadRef = useRef(0);
@@ -283,9 +288,15 @@ export function NotificationBell() {
                               <span className="w-2 h-2 rounded-full bg-[#4274B9] shrink-0" />
                             )}
                           </div>
-                          <p className="text-[0.7rem] text-[#8494A7] leading-relaxed line-clamp-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId((id) => (id === notif.id ? null : notif.id))}
+                            className={`text-left text-[0.7rem] text-[#8494A7] leading-relaxed ${
+                              expandedId === notif.id ? "whitespace-pre-wrap" : "line-clamp-2"
+                            }`}
+                          >
                             {notif.message}
-                          </p>
+                          </button>
                           <div className="flex items-center justify-between mt-1.5">
                             <span className="text-[0.55rem] text-[#8494A7]/50">
                               {timeAgo(notif.createdAt)}

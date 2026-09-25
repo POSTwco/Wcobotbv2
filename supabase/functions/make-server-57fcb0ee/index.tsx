@@ -182,6 +182,7 @@ import { createTournamentEvent, mountTournamentRoutes } from "./tournament.tsx";
 import { validateChatMedia } from "./chat-media.tsx";
 import { mountMagicRoutes } from "./magic-accounts.tsx";
 import { mountEarlySupporterRoutes } from "./early-supporter.tsx";
+import { mountOrganizationRoutes } from "./organizations.tsx";
 
 const app = new Hono();
 
@@ -5216,6 +5217,18 @@ app.post(`${PREFIX}/applications`, async (c) => {
       return c.json({ success: false, error: "You already have a pending application. Please wait for admin review." }, 409);
     }
 
+    // Optional link from an approved organization's dashboard. The wallet must own that org.
+    let orgId = "";
+    if (typeof body.orgId === "string" && body.orgId.trim()) {
+      const requested = sanitizeString(body.orgId, 80);
+      const org = await kv.get(`organization:${requested}`);
+      const owner = await kv.get(`org-by-wallet:${body.wallet}`);
+      if (!org || (org as any).status !== "approved" || owner?.orgId !== requested) {
+        return c.json({ success: false, error: "Organization link is not valid for this wallet" }, 400);
+      }
+      orgId = requested;
+    }
+
     const id = generateId("app");
     const application = {
       id,
@@ -5249,6 +5262,7 @@ app.post(`${PREFIX}/applications`, async (c) => {
       submittedAt: now(),
       reviewedAt: null,
       reviewedBy: null,
+      orgId,
     };
 
     await kv.set(`application:${id}`, application);
@@ -5390,6 +5404,7 @@ app.post(`${PREFIX}/admin/applications/:id/approve`, requireAdminSession, async 
       // Hedera wallet from application — admin profile field + Arena Chat verified badge
       wallet: applicantWallet,
       applicantWallet,
+      orgId: app.orgId || "",
       createdAt: now(),
       updatedAt: now(),
     };
@@ -6592,6 +6607,7 @@ mountContestRoutes(app, PREFIX);
 mountTournamentRoutes(app, PREFIX);
 // Early Supporter claim — defaults DISABLED (EARLY_SUPPORTER_ENABLED=false)
 mountEarlySupporterRoutes(app, PREFIX);
+mountOrganizationRoutes(app, PREFIX);
 
 // ---------------------------------------------------------------------------
 Deno.serve(app.fetch);

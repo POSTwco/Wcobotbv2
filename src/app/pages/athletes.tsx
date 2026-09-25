@@ -20,6 +20,7 @@ import type { Athlete } from "../lib/types";
 import { competitionCategoryLabel } from "../lib/types";
 import { SponsorMarqueeStrip } from "../components/sponsor-showcase";
 import { ArenaChat } from "../components/arena-chat";
+import { StaffSection } from "../components/staff-section";
 import { ErrorCard } from "../components/error-boundary";
 import { BOTBSpinner, SkeletonAthleteCard } from "../components/botb-spinner";
 import { InlineFlag } from "../components/country-flag";
@@ -497,6 +498,7 @@ export function AthletesPage() {
       <SponsorMarqueeStrip />
       {/* Arena Chat — only visible when wallet is connected */}
       <ArenaChat />
+      <StaffSection />
     </div>
   );
 }

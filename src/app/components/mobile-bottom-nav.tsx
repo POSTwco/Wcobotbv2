@@ -15,7 +15,7 @@ import { Link, useLocation } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Home, Swords, Layers, MessageCircle, MoreHorizontal,
-  Users, Shield, FileText, Wallet, Dumbbell,
+  Users, Shield, FileText, Wallet, Dumbbell, Calendar,
   X, RefreshCw, Crown, ExternalLink, LogOut,
   Loader2, LayoutGrid,
 } from "lucide-react";
@@ -46,6 +46,7 @@ const TABS: NavTab[] = [
 
 const MORE_LINKS = [
   { to: "/athletes", label: "Athletes", icon: <Users className="w-5 h-5" /> },
+  { to: "/events", label: "Events", icon: <Calendar className="w-5 h-5" /> },
   { to: "/leaderboard", label: "Leaderboard", icon: <Crown className="w-5 h-5" /> },
   { to: "/governance", label: "Governors Hub", icon: <Shield className="w-5 h-5" /> },
   { to: "/whitepaper", label: "Whitepaper", icon: <FileText className="w-5 h-5" /> },

@@ -185,8 +185,47 @@ export interface BattleEvent {
   /** Soft-hide from default admin Active list (does not delete votes) */
   archivedAt?: string;
 
+  /** Set when a commander approves an organization submission */
+  orgId?: string;
+  gamified?: boolean;
+  source?: "organization" | "console";
+  organizationDraftId?: string;
+
   createdAt: string;
   updatedAt: string;
+}
+
+/** Public organization card. Private contact fields are never on this shape. */
+export interface PublicOrganization {
+  id: string;
+  name: string;
+  country: string;
+  discipline: string;
+  bio: string;
+  website: string;
+  instagram: string;
+  youtube: string;
+  featured: boolean;
+  hasLogo: boolean;
+  status: "approved";
+  events: PublicOrgEvent[];
+}
+
+export interface PublicOrgEvent {
+  id: string;
+  orgId: string;
+  name: string;
+  eventDate: string;
+  location: string;
+  livestream: string;
+  registrationUrl: string;
+  website: string;
+  discipline: string;
+  format: "pvp" | "tournament" | "field" | "calendar";
+  gamified: boolean;
+  battleEventId?: string;
+  status?: string;
+  votingStatus?: string;
 }
 
 export type EventStatus = "draft" | "active" | "completed" | "cancelled";

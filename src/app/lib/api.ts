@@ -21,6 +21,7 @@ import type {
   Athlete, Battle, BattleEvent, BattleVote, Proposal, ProposalVote,
   SiteConfig, RewardSnapshot, AthleteFormData, Sponsor, ApiResponse,
   ChatMessage, VerifiedAthleteChatInfo, EventFormData, BattleFormData,
+  PublicOrganization,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -933,6 +934,80 @@ export const api = {
 
     updateSponsorInquiryStatus: (id: string, status: string, adminWallet: string, sessionToken: string) =>
       request<any>(`/admin/sponsor-inquiries/${id}`, { method: "PATCH", body: { status }, adminWallet, sessionToken }),
+
+    getOrgQueue: (adminWallet: string, sessionToken: string) =>
+      request<{ applications: any[]; edits: any[]; drafts: any[]; orgs: any[] }>(
+        "/admin/organizations",
+        { adminWallet, sessionToken },
+      ),
+
+    saveOrgApplication: (id: string, fields: Record<string, unknown>, adminWallet: string, sessionToken: string) =>
+      request<any>(`/admin/organizations/applications/${id}`, {
+        method: "POST",
+        body: fields,
+        adminWallet,
+        sessionToken,
+      }),
+
+    decideOrgApplication: (
+      id: string,
+      body: Record<string, unknown>,
+      adminWallet: string,
+      sessionToken: string,
+      walletSessionToken: string,
+    ) =>
+      request<any>(`/admin/organizations/applications/${id}/decide`, {
+        method: "POST",
+        body,
+        adminWallet,
+        sessionToken,
+        walletSessionToken,
+      }),
+
+    decideOrgEdit: (
+      orgId: string,
+      body: Record<string, unknown>,
+      adminWallet: string,
+      sessionToken: string,
+      walletSessionToken: string,
+    ) =>
+      request<any>(`/admin/organizations/edits/${orgId}/decide`, {
+        method: "POST",
+        body,
+        adminWallet,
+        sessionToken,
+        walletSessionToken,
+      }),
+
+    decideOrgEvent: (
+      id: string,
+      body: Record<string, unknown>,
+      adminWallet: string,
+      sessionToken: string,
+      walletSessionToken: string,
+    ) =>
+      request<any>(`/admin/organizations/events/${id}/decide`, {
+        method: "POST",
+        body,
+        adminWallet,
+        sessionToken,
+        walletSessionToken,
+      }),
+
+    setOrgStatus: (
+      id: string,
+      body: Record<string, unknown>,
+      adminWallet: string,
+      sessionToken: string,
+      walletSessionToken: string,
+    ) =>
+      request<{ id: string; status: string }>(`/admin/organizations/${id}/suspend`, {
+        method: "POST",
+        body,
+        adminWallet,
+        sessionToken,
+        walletSessionToken,
+      }),
   },
 
   // Public application submission
@@ -948,6 +1023,64 @@ export const api = {
       const res = await fetch(`${BASE_URL}/applications/upload-pfp`, {
         method: "POST",
         headers: { Authorization: `Bearer ${publicAnonKey}` },
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        return { success: false, error: sanitizeApiError(json.error || `Upload failed (${res.status})`) };
+      }
+      return { success: true, data: json.data };
+    } catch (e) {
+      return { success: false, error: sanitizeApiError(String(e)) };
+    }
+  },
+
+  // Organizations (public directory + wallet-signed org account)
+  getOrganizations: () => request<PublicOrganization[]>("/organizations"),
+  getOrganization: (id: string) => request<PublicOrganization>(`/organizations/${id}`),
+  getOrganizationAccount: (wallet: string, walletSessionToken: string) =>
+    request<any>(`/organizations/me?wallet=${encodeURIComponent(wallet)}`, { walletSessionToken }),
+  getOrganizationDashboard: (wallet: string, walletSessionToken: string) =>
+    request<any>(`/organizations/dashboard?wallet=${encodeURIComponent(wallet)}`, { walletSessionToken }),
+  submitOrganization: (body: Record<string, unknown>, walletSessionToken: string) =>
+    request<{ id: string; status: string }>("/organizations/apply", {
+      method: "POST",
+      body,
+      walletSessionToken,
+    }),
+  submitOrganizationEdit: (body: Record<string, unknown>, walletSessionToken: string) =>
+    request<{ orgId: string; status: string }>("/organizations/edits", {
+      method: "POST",
+      body,
+      walletSessionToken,
+    }),
+  saveOrganizationEvent: (body: Record<string, unknown>, walletSessionToken: string) =>
+    request<{ id: string; status: string }>("/organizations/events", {
+      method: "POST",
+      body,
+      walletSessionToken,
+    }),
+  submitOrganizationEvent: (id: string, body: Record<string, unknown>, walletSessionToken: string) =>
+    request<{ id: string; status: string }>(`/organizations/events/${id}/submit`, {
+      method: "POST",
+      body,
+      walletSessionToken,
+    }),
+  uploadOrganizationLogo: async (
+    file: File,
+    wallet: string,
+    walletSessionToken: string,
+  ): Promise<ApiResponse<{ path: string }>> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("wallet", wallet);
+    try {
+      const res = await fetch(`${BASE_URL}/organizations/logo`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${publicAnonKey}`,
+          "X-Wallet-Session": walletSessionToken,
+        },
         body: fd,
       });
       const json = await res.json();

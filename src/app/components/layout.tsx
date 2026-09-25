@@ -115,6 +115,7 @@ export function Layout() {
                 <div className="space-y-2 text-sm text-[#8494A7]">
                   <Link to="/battles" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Battles</Link>
                   <Link to="/athletes" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Athletes</Link>
+                  <Link to="/events" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Events</Link>
                   <Link to="/nfts" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>NFT Collection</Link>
                   <Link to="/governance" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Governors Hub</Link>
                   <Link to="/calisthenics" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Workout</Link>

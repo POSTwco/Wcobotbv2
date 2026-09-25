@@ -80,6 +80,16 @@ const ZONES: MapZone[] = [
     expect: "Explore the roster",
   },
   {
+    id: "events",
+    label: "Events",
+    blurb: "Organizations and the competitions they run under WCO.",
+    to: "/events",
+    Icon: Trophy,
+    color: "#6AA3E0",
+    colorSoft: "rgba(106,163,224,0.16)",
+    expect: "Find an organization",
+  },
+  {
     id: "nfts",
     label: "NFTs",
     blurb: "Governors, Sigma, and Meta series — boosts, status, and collector energy.",

@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
   User, Globe, Youtube, Instagram, Twitter, Link2,
@@ -32,6 +33,8 @@ const DISCLAIMER_VERSION = "1.0.0";
 // ---------------------------------------------------------------------------
 export function ApplyPage() {
   const { connected, connect, accountId, isConnecting } = useWallet();
+  const [searchParams] = useSearchParams();
+  const orgId = searchParams.get("orgId") || "";
 
   const [form, setForm] = useState({
     name: "",
@@ -85,6 +88,7 @@ export function ApplyPage() {
       const res = await api.submitApplication({
         wallet: accountId,
         ...form,
+        ...(orgId ? { orgId } : {}),
         disclaimerAccepted: true,
         disclaimerVersion: DISCLAIMER_VERSION,
         disclaimerAcceptedAt: new Date().toISOString(),
@@ -103,7 +107,7 @@ export function ApplyPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [accountId, form, isValid]);
+  }, [accountId, form, isValid, orgId]);
 
   // ── Not connected ──────────────────────────────────────────────────────
   if (!connected) {
@@ -221,6 +225,12 @@ export function ApplyPage() {
             <span className="text-[#6AA3E0] text-xs font-mono">{accountId}</span>
           </div>
         </motion.div>
+
+        {orgId && (
+          <div className="mb-4 rounded-xl border border-[#4274B9]/30 bg-[#111827] px-4 py-3 text-sm text-[#C5D0DC]">
+            This athlete will be linked to your organization after WCO approves the Pro Card. They can be seated in an event once they are on the public roster.
+          </div>
+        )}
 
         {/* Form Card */}
         <motion.div

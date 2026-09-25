@@ -42,7 +42,7 @@ import {
   Vote, Camera, BookOpen, AlertTriangle, CheckCircle, Loader2,
   ChevronDown, Database, Fingerprint, Timer, X,
   ClipboardList, ExternalLink, Youtube, Download,
-  Megaphone, Rocket, Activity, Dumbbell, Gift, Film,
+  Megaphone, Rocket, Activity, Dumbbell, Gift, Film, Building2,
 } from "lucide-react";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 import { useWallet } from "./wallet-context";
@@ -69,12 +69,13 @@ import { AdminCommandCenter } from "./admin-command-center";
 import { AdminAuthEnvelope } from "./admin-auth-envelope";
 import { ContestTab } from "./contest/contest-tab";
 import { SiteMediaTab } from "./site-media-tab";
+import { OrgAdminTab } from "./org-admin-tab";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type AdminTab = "athletes" | "brackets" | "battles" | "proposals" | "sponsors" | "snapshots" | "manual" | "test-tools" | "launch" | "cali-editor" | "contest" | "site-media";
+type AdminTab = "athletes" | "brackets" | "organizations" | "battles" | "proposals" | "sponsors" | "snapshots" | "manual" | "test-tools" | "launch" | "cali-editor" | "contest" | "site-media";
 
 interface AdminSession {
   token: string;
@@ -89,6 +90,7 @@ interface AdminSession {
 const TABS: { id: AdminTab; label: string; icon: React.ReactNode; description: string }[] = [
   { id: "athletes", label: "Athletes", icon: <Users className="w-4 h-4" />, description: "Add, edit, and manage athlete profiles" },
   { id: "brackets", label: "Events", icon: <Trophy className="w-4 h-4" />, description: "Event Console — Duals, Tournament, Field" },
+  { id: "organizations", label: "Organizations", icon: <Building2 className="w-4 h-4" />, description: "Approve orgs, edits, and their events" },
   { id: "battles", label: "Battles", icon: <Swords className="w-4 h-4" />, description: "1v1 dual lifecycle & voting windows" },
   { id: "proposals", label: "Proposals", icon: <Vote className="w-4 h-4" />, description: "Create governance proposals" },
   { id: "sponsors", label: "Sponsors", icon: <Megaphone className="w-4 h-4" />, description: "Manage site sponsors and partnerships" },
@@ -401,6 +403,7 @@ export function AdminPanel() {
             >
               {activeTab === "athletes" && <AthletesTab wallet={session.wallet} sessionToken={session.token} />}
               {activeTab === "brackets" && <BracketBuilder wallet={session.wallet} sessionToken={session.token} />}
+              {activeTab === "organizations" && <OrgAdminTab wallet={session.wallet} sessionToken={session.token} />}
               {activeTab === "battles" && <BattlesTab wallet={session.wallet} sessionToken={session.token} />}
               {activeTab === "proposals" && <ProposalsTab wallet={session.wallet} sessionToken={session.token} />}
               {activeTab === "sponsors" && <SponsorsTab wallet={session.wallet} sessionToken={session.token} />}

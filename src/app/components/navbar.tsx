@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { to: "/", label: "Home" },
   { to: "/battles", label: "Battles" },
   { to: "/athletes", label: "Athletes" },
+  { to: "/events", label: "Events" },
   { to: "/nfts", label: "NFTs" },
   { to: "/governance", label: "Governors" },
   { to: "/leaderboard", label: "Leaderboard" },
