@@ -11,12 +11,12 @@ import { InlineFlag } from "./country-flag";
 
 const OFFICERS = [
   {
-    name: "Kyle",
+    name: "Brandon",
     title: "Chief Executive Officer",
     bio: "Leads World Calisthenics Organization and Battle of the Bars.",
   },
   {
-    name: "Brandon",
+    name: "Kyle",
     title: "Chief Technology Officer",
     bio: "Leads the platform, wallets, and competition systems.",
   },
