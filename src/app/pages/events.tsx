@@ -102,13 +102,12 @@ export function EventsPage() {
         <div className="mb-6 sm:mb-10">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
             <div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3">
                 <img src={botbShield} alt="BOTB" className="h-7 sm:h-8 w-auto" />
                 <h1 className="text-2xl sm:text-3xl" style={{ fontFamily: "Orbitron, sans-serif" }}>
                   <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">EVENTS</span>
                 </h1>
               </div>
-              <p className="text-[#8494A7]">Organizations and the competitions they run under WCO.</p>
             </div>
             <Link
               to="/events/account"
