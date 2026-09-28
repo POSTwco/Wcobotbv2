@@ -22,7 +22,7 @@ import { ATHLETE_COMPETITION_CATEGORIES, WCO_WEIGHT_CLASSES } from "../lib/types
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "../components/error-boundary";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
-import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
+import { ProApplyShell } from "../components/pro-apply-shell";
 import { COUNTRY_OPTIONS } from "../lib/country-flags";
 import { InlineFlag } from "../components/country-flag";
 
@@ -112,52 +112,41 @@ export function ApplyPage() {
   // ── Not connected ──────────────────────────────────────────────────────
   if (!connected) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full text-center"
-        >
-          <img src={botbShield} alt="BOTB" className="h-20 w-auto mx-auto mb-6 drop-shadow-2xl" />
-          <h1
-            className="text-2xl sm:text-3xl mb-8"
-            style={{ fontFamily: "Orbitron, sans-serif" }}
-          >
-            <span className="text-white">ENTER THE </span>
-            <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">ARENA</span>
-          </h1>
+      <ProApplyShell role="athlete" orgLocked={!!orgId}>
+        <div className="py-8 text-center">
           <button
+            type="button"
             onClick={connect}
             disabled={isConnecting}
-            className="flex items-center justify-center gap-2 mx-auto px-6 py-3 rounded-xl bg-[#4274B9] text-white hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#4274B9] text-white hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all disabled:opacity-50"
             style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
           >
             <Zap className="w-4 h-4" />
             {isConnecting ? "CONNECTING..." : "CONNECT WALLET TO APPLY"}
           </button>
-        </motion.div>
-      </div>
+        </div>
+      </ProApplyShell>
     );
   }
 
   // ── Submitted success ──────────────────────────────────────────────────
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
+      <ProApplyShell role="athlete" accountId={accountId} orgLocked={!!orgId}>
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-lg w-full text-center"
+          className="max-w-lg w-full text-center mx-auto py-6"
         >
           <div className="inline-flex p-4 rounded-full bg-[#10b981]/10 border border-[#10b981]/30 mb-6">
             <CheckCircle className="w-12 h-12 text-[#10b981]" />
           </div>
-          <h1
+          <h2
             className="text-2xl sm:text-3xl mb-4 text-[#E8ECF0]"
             style={{ fontFamily: "Orbitron, sans-serif" }}
           >
             APPLICATION SUBMITTED
-          </h1>
+          </h2>
           <p className="text-[#8494A7] text-sm mb-3 leading-relaxed">
             Your application has been received and is pending review by the WCO admin team.
             Once approved, you'll appear on the athlete roster and be eligible for battle matchups.
@@ -183,49 +172,13 @@ export function ApplyPage() {
             </a>
           </div>
         </motion.div>
-      </div>
+      </ProApplyShell>
     );
   }
 
   // ── Application Form ───────────────────────────────────────────────────
   return (
-    <div className="min-h-screen py-8 sm:py-12 px-4">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <img src={botbShield} alt="BOTB" className="h-16 w-auto mx-auto mb-4 drop-shadow-2xl" />
-          <h1
-            className="text-2xl sm:text-3xl mb-3"
-            style={{ fontFamily: "Orbitron, sans-serif" }}
-          >
-            <span className="text-white">JOIN THE </span>
-            <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">COMPETITION</span>
-          </h1>
-          <div
-            className="text-[#8494A7] text-sm max-w-2xl mx-auto leading-relaxed space-y-3"
-            style={{ fontFamily: "'DM Sans', sans-serif" }}
-          >
-            <p className="text-[#E8ECF0] font-semibold">
-              Apply for your Calisthenics Athlete Pro Card.
-            </p>
-            <p>
-              Recognized national and international competitors enter the official WCO roster,
-              unlock Battle of the Bars® selection potential, and build rankings across Pro/Elite
-              Comps Like Battle of the Bars®, SWUB, WSWCF Worlds, and other recognized competitions.
-              Wins, losses, and power levels update automatically on Hashgraph when each event
-              concludes.
-            </p>
-          </div>
-          <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-full bg-[#162033] border border-[#4274B9]/20">
-            <div className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
-            <span className="text-[#6AA3E0] text-xs font-mono">{accountId}</span>
-          </div>
-        </motion.div>
-
+    <ProApplyShell role="athlete" accountId={accountId} orgLocked={!!orgId}>
         {orgId && (
           <div className="mb-4 rounded-xl border border-[#4274B9]/30 bg-[#111827] px-4 py-3 text-sm text-[#C5D0DC]">
             This athlete will be linked to your organization after WCO approves the Pro Card. They can be seated in an event once they are on the public roster.
@@ -601,8 +554,7 @@ export function ApplyPage() {
             </p>
           </div>
         </motion.div>
-      </div>
-    </div>
+    </ProApplyShell>
   );
 }
 

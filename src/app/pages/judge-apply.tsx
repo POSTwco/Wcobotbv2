@@ -3,11 +3,11 @@
  * Wallet session required. Commanders approve it beside athlete applications.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { motion } from "motion/react";
 import { CheckCircle, Clock, Loader2, Scale, Shield, Zap } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
+import { ProApplyShell } from "../components/pro-apply-shell";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "../components/error-boundary";
@@ -136,42 +136,32 @@ export function JudgeApplyPage() {
     }
   }, [accountId, walletSessionToken, canSubmit, form]);
 
+  let body: ReactNode;
   if (!connected) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full text-center">
-          <Scale className="w-12 h-12 text-[#E8ECF0] mx-auto mb-4" />
-          <h1 className="text-2xl text-[#E8ECF0] mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>
-            PRO JUDGE CARD
-          </h1>
-          <p className="text-sm text-[#8494A7] mb-4">Connect the Hedera wallet that should wear the Judge badge in Arena Chat.</p>
-          <div className="flex justify-center mb-6"><JudgeBadge /></div>
-          <button
-            type="button"
-            onClick={connect}
-            disabled={isConnecting}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#4274B9] text-white disabled:opacity-50"
-            style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.75rem" }}
-          >
-            <Zap className="w-4 h-4" />
-            {isConnecting ? "CONNECTING..." : "CONNECT WALLET TO APPLY"}
-          </button>
-        </motion.div>
+    body = (
+      <div className="py-8 text-center">
+        <div className="flex justify-center mb-5"><JudgeBadge /></div>
+        <button
+          type="button"
+          onClick={connect}
+          disabled={isConnecting}
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#4274B9] text-white hover:bg-[#3563A0] disabled:opacity-50"
+          style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
+        >
+          <Zap className="w-4 h-4" />
+          {isConnecting ? "CONNECTING..." : "CONNECT WALLET TO APPLY"}
+        </button>
       </div>
     );
-  }
-
-  if (loadingAccount && !account && !submittedId) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#8494A7] text-sm">
+  } else if (loadingAccount && !account && !submittedId) {
+    body = (
+      <div className="py-10 flex items-center justify-center text-[#8494A7] text-sm">
         <Loader2 className="w-4 h-4 animate-spin mr-2" /> Checking this wallet…
       </div>
     );
-  }
-
-  if (submittedId || account?.status === "pending") {
+  } else if (submittedId || account?.status === "pending") {
     const id = submittedId || account?.application?.id || "";
-    return (
+    body = (
       <StatusScreen
         tone="waiting"
         title="Application in review"
@@ -179,10 +169,8 @@ export function JudgeApplyPage() {
         detail={id ? `Application ID: ${id}` : ""}
       />
     );
-  }
-
-  if (account?.status === "approved") {
-    return (
+  } else if (account?.status === "approved") {
+    body = (
       <StatusScreen
         tone="ready"
         title="You are a WCO judge"
@@ -190,21 +178,19 @@ export function JudgeApplyPage() {
         detail=""
       />
     );
-  }
-
-  const judgeChecks = [
-    { ok: form.name.trim().length >= 2, label: "Display name" },
-    { ok: form.fullName.trim().length >= 2, label: "Legal name" },
-    { ok: !!form.country, label: "Country" },
-    { ok: !!form.discipline, label: "Discipline" },
-    { ok: form.bio.trim().length >= 20, label: "Experience (20 characters)" },
-    { ok: !!form.photoPath, label: "Profile photo" },
-    { ok: hasSocial, label: "Instagram, YouTube, or website" },
-    { ok: disclaimerAccepted, label: "Disclaimer" },
-  ];
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-10">
+  } else {
+    const judgeChecks = [
+      { ok: form.name.trim().length >= 2, label: "Display name" },
+      { ok: form.fullName.trim().length >= 2, label: "Legal name" },
+      { ok: !!form.country, label: "Country" },
+      { ok: !!form.discipline, label: "Discipline" },
+      { ok: form.bio.trim().length >= 20, label: "Experience (20 characters)" },
+      { ok: !!form.photoPath, label: "Profile photo" },
+      { ok: hasSocial, label: "Instagram, YouTube, or website" },
+      { ok: disclaimerAccepted, label: "Disclaimer" },
+    ];
+    body = (
+    <>
       <ol className="grid grid-cols-3 gap-2 mb-6">
         {["Connect wallet", "Registration", "Submitted"].map((step, i) => (
           <li key={step} className={`rounded-lg border px-2 py-2 ${i === 1 ? "border-[#6AA3E0]/50 bg-[#4274B9]/10" : "border-[#4274B9]/15"}`}>
@@ -213,11 +199,9 @@ export function JudgeApplyPage() {
           </li>
         ))}
       </ol>
-      <div className="mb-6">
-        <p className="text-[0.65rem] tracking-wide text-[#8494A7]" style={{ fontFamily: "Orbitron, sans-serif" }}>OFFICIAL PRO CALISTHENICS JUDGE CARD</p>
-        <h1 className="text-2xl text-[#E8ECF0] mt-2" style={{ fontFamily: "Orbitron, sans-serif" }}>Judge registration</h1>
-        <p className="text-sm text-[#8494A7] mt-2">WCO admins approve the card before your name is public. The wallet confirms the form. It does not send HBAR.</p>
-        <div className="mt-3 flex items-center gap-2 text-xs text-[#8494A7]">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-sm text-[#8494A7]">The wallet confirms the form. It does not send HBAR.</p>
+        <div className="flex items-center gap-2 text-xs text-[#8494A7]">
           <span>Arena Chat badge after approval</span>
           <JudgeBadge />
         </div>
@@ -333,7 +317,14 @@ export function JudgeApplyPage() {
           </button>
         </div>
       </div>
-    </div>
+    </>
+    );
+  }
+
+  return (
+    <ProApplyShell role="judge" accountId={connected ? accountId : ""}>
+      {body}
+    </ProApplyShell>
   );
 }
 
@@ -341,17 +332,15 @@ const fieldClass = "mt-1 w-full bg-[#162033] border border-[#4274B9]/20 rounded-
 
 function StatusScreen({ title, body, detail, tone }: { title: string; body: string; detail: string; tone: "waiting" | "ready" }) {
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4">
-      <div className="max-w-lg text-center">
+    <div className="max-w-lg mx-auto text-center py-6">
         {tone === "waiting"
           ? <Clock className="w-12 h-12 text-[#D4A843] mx-auto mb-4" />
           : <CheckCircle className="w-12 h-12 text-[#10b981] mx-auto mb-4" />}
-        <h1 className="text-2xl text-[#E8ECF0] mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>{title}</h1>
+        <h2 className="text-2xl text-[#E8ECF0] mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>{title}</h2>
         <p className="text-sm text-[#8494A7] mb-4">{body}</p>
         {detail ? <p className="text-xs font-mono text-[#6AA3E0] mb-4">{detail}</p> : null}
         <div className="flex justify-center mb-5"><JudgeBadge /></div>
         <Link to="/athletes#wco-staff" className="text-xs text-[#6AA3E0] underline">Back to Meet the Staff</Link>
-      </div>
     </div>
   );
 }
