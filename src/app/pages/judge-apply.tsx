@@ -70,6 +70,7 @@ export function JudgeApplyPage() {
   }, [connected, accountId, walletSessionToken]);
 
   const hasSocial = !!(form.instagram.trim() || form.youtube.trim() || form.website.trim());
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
   const canSubmit = !!(
     form.name.trim().length >= 2 &&
     form.fullName.trim().length >= 2 &&
@@ -78,6 +79,7 @@ export function JudgeApplyPage() {
     form.bio.trim().length >= 20 &&
     form.photoPath &&
     hasSocial &&
+    emailOk &&
     disclaimerAccepted &&
     accountId &&
     walletSessionToken
@@ -187,6 +189,7 @@ export function JudgeApplyPage() {
       { ok: form.bio.trim().length >= 20, label: "Experience (20 characters)" },
       { ok: !!form.photoPath, label: "Profile photo" },
       { ok: hasSocial, label: "Instagram, YouTube, or website" },
+      { ok: emailOk, label: "Email" },
       { ok: disclaimerAccepted, label: "Disclaimer" },
     ];
     body = (
@@ -265,14 +268,14 @@ export function JudgeApplyPage() {
 
         <section className="space-y-3 rounded-2xl border border-[#D4A843]/25 bg-[#111827] p-4">
           <h2 className="text-xs text-[#D4A843]" style={{ fontFamily: "Orbitron, sans-serif" }}>PRIVATE CONTACT</h2>
-          <p className="text-xs text-[#8494A7]">Admins only. Legal name, email, and phone are not published.</p>
+          <p className="text-xs text-[#8494A7]">Admins only. Email is required. Phone is optional. None of this is published.</p>
           <label className="block text-[0.65rem] text-[#8494A7]">
             Legal name
             <input value={form.fullName} onChange={(e) => setField("fullName", e.target.value)} maxLength={150} className={fieldClass} placeholder="Name on the application" />
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block text-[0.65rem] text-[#8494A7]">Email
-              <input value={form.email} onChange={(e) => setField("email", e.target.value)} className={fieldClass} placeholder="Optional" />
+              <input type="email" autoComplete="email" required value={form.email} onChange={(e) => setField("email", e.target.value)} maxLength={200} className={fieldClass} placeholder="name@email.com" />
             </label>
             <label className="block text-[0.65rem] text-[#8494A7]">Phone
               <input value={form.phone} onChange={(e) => setField("phone", e.target.value)} className={fieldClass} placeholder="Optional" />

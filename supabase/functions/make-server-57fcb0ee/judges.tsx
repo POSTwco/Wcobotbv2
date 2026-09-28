@@ -341,7 +341,7 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
       if (!instagram && !youtube && !website) {
         return c.json({ success: false, error: "Add Instagram, YouTube, or a website" }, 400);
       }
-      if (email && !looksLikeEmail(email)) return c.json({ success: false, error: "Email address is not valid" }, 400);
+      if (!looksLikeEmail(email)) return c.json({ success: false, error: "A valid email is required" }, 400);
       if (body.disclaimerAccepted !== true || text(body.disclaimerVersion, 20) !== DISCLAIMER_VERSION) {
         return c.json({ success: false, error: "Accept the judge disclaimer to apply" }, 400);
       }
