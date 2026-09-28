@@ -12,19 +12,18 @@ import { api } from "../lib/api";
 import { COUNTRY_OPTIONS } from "../lib/country-flags";
 import { InlineFlag } from "../components/country-flag";
 import {
-  ORG_DISCIPLINES,
   applyCanonical,
-  orgDisciplineLabel,
   signCanonical,
   type OrgApplyFields,
 } from "../lib/org-sign";
+import { OrgDisciplineChecks } from "../components/org-discipline-checks";
 import { toast } from "sonner";
 
 const empty = {
   name: "",
   country: "",
   email: "",
-  discipline: "freestyle",
+  discipline: "",
   logoPath: "",
   instagram: "",
   youtube: "",
@@ -70,10 +69,11 @@ export function OrgAccountPage() {
   const checks = useMemo(() => ([
     { ok: form.name.trim().length >= 2, label: "Organization name" },
     { ok: !!form.country, label: "Country of operation" },
+    { ok: form.discipline === "freestyle" || form.discipline === "statics" || form.discipline === "freestyle_statics", label: "FreeStyle, Statics, or both" },
     { ok: emailOk, label: "Contact email" },
     { ok: hasOrganizer, label: "At least one organizer" },
     { ok: hasChannel, label: "Instagram or YouTube" },
-  ]), [form.name, form.country, emailOk, hasOrganizer, hasChannel]);
+  ]), [form.name, form.country, form.discipline, emailOk, hasOrganizer, hasChannel]);
   const ready = checks.every((item) => item.ok);
 
   async function onLogo(file: File | undefined) {
@@ -212,13 +212,13 @@ export function OrgAccountPage() {
                 </select>
               </span>
             </label>
-            <label className="block text-xs text-[#8494A7]">
-              What you run
-              <select value={form.discipline} onChange={(e) => setForm({ ...form, discipline: e.target.value })} className={inputCls}>
-                {ORG_DISCIPLINES.map((id) => <option key={id} value={id}>{orgDisciplineLabel(id)}</option>)}
-              </select>
-              <Hint>FreeStyle is movement, Statics is holds, Both covers both.</Hint>
-            </label>
+            <div>
+              <p className="text-xs text-[#8494A7]">What you run</p>
+              <div className="mt-1">
+                <OrgDisciplineChecks value={form.discipline} onChange={(discipline) => setForm({ ...form, discipline })} />
+              </div>
+              <Hint>Check FreeStyle, Statics, or both. FreeStyle is movement. Statics is holds.</Hint>
+            </div>
             <label className="block text-xs text-[#8494A7]">
               About the organization
               <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} rows={4} className={inputCls} placeholder="Who you are and the events you host." />

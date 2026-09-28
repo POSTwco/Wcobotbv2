@@ -12,7 +12,6 @@ import { useWallet } from "../components/wallet-context";
 import { api } from "../lib/api";
 import type { Athlete } from "../lib/types";
 import {
-  ORG_DISCIPLINES,
   ORG_FORMATS,
   eventCanonical,
   orgDisciplineLabel,
@@ -20,6 +19,7 @@ import {
   signCanonical,
   type OrgEventFormat,
 } from "../lib/org-sign";
+import { OrgDisciplineChecks } from "../components/org-discipline-checks";
 import { toast } from "sonner";
 
 const blank = {
@@ -219,11 +219,13 @@ export function OrgDashboardPage() {
             <input className={inputCls} placeholder="https://" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
           </Labeled>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Labeled label="Discipline" hint="FreeStyle, Statics, or Both.">
-              <select className={inputCls} value={form.discipline} onChange={(e) => setForm({ ...form, discipline: e.target.value })}>
-                {ORG_DISCIPLINES.map((id) => <option key={id} value={id}>{orgDisciplineLabel(id)}</option>)}
-              </select>
-            </Labeled>
+            <div>
+              <p className="text-xs text-[#8494A7]">Discipline</p>
+              <div className="mt-1">
+                <OrgDisciplineChecks value={form.discipline} onChange={(discipline) => setForm({ ...form, discipline })} />
+              </div>
+              <span className="block mt-1 text-[0.65rem] text-[#8494A7]/80">Check FreeStyle, Statics, or both.</span>
+            </div>
             <Labeled label="Format" hint={formatHint(form.format)}>
               <select className={inputCls} value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as OrgEventFormat })}>
                 {ORG_FORMATS.map((id) => <option key={id} value={id}>{orgFormatLabel(id)}</option>)}

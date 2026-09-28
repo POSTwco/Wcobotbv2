@@ -15,7 +15,22 @@ export type OrgEventAction = "create" | "update" | "submit";
 export function orgDisciplineLabel(id?: string | null): string {
   if (id === "freestyle") return "FreeStyle";
   if (id === "statics") return "Statics";
-  if (id === "freestyle_statics") return "Both";
+  if (id === "freestyle_statics") return "FreeStyle & Statics";
+  return "";
+}
+
+/** Two checks. Both checked is still stored as freestyle_statics. */
+export function orgDisciplineChecks(value?: string | null): { freestyle: boolean; statics: boolean } {
+  return {
+    freestyle: value === "freestyle" || value === "freestyle_statics",
+    statics: value === "statics" || value === "freestyle_statics",
+  };
+}
+
+export function orgDisciplineFromChecks(freestyle: boolean, statics: boolean): OrgDiscipline | "" {
+  if (freestyle && statics) return "freestyle_statics";
+  if (freestyle) return "freestyle";
+  if (statics) return "statics";
   return "";
 }
 

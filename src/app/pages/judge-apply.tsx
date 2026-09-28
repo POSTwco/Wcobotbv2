@@ -243,7 +243,7 @@ export function JudgeApplyPage() {
               <option value="">Select discipline...</option>
               {DISCIPLINES.map((id) => <option key={id} value={id}>{orgDisciplineLabel(id)}</option>)}
             </select>
-            <span className="block mt-1 text-[0.55rem] text-[#8494A7]/80">FreeStyle, Statics, or Both.</span>
+            <span className="block mt-1 text-[0.55rem] text-[#8494A7]/80">FreeStyle, Statics, or both.</span>
           </label>
           <div>
             <p className="text-[0.65rem] text-[#8494A7] mb-1">Profile photo</p>
