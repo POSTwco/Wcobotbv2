@@ -5,9 +5,10 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { CheckCircle, Clock, Loader2, Scale, Shield, Zap } from "lucide-react";
+import { CheckCircle, Clock, Loader2, Scale, Shield } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
 import { ProApplyShell } from "../components/pro-apply-shell";
+import { ApplyAccountChoices } from "../components/apply-account-choices";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 import { sanitizeErrorMessage } from "../components/error-boundary";
@@ -35,7 +36,7 @@ const EMPTY = {
 };
 
 export function JudgeApplyPage() {
-  const { connected, connect, accountId, isConnecting, walletSessionToken } = useWallet();
+  const { connected, accountId, walletSessionToken } = useWallet();
   const [form, setForm] = useState(EMPTY);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -143,16 +144,7 @@ export function JudgeApplyPage() {
     body = (
       <div className="py-8 text-center">
         <div className="flex justify-center mb-5"><JudgeBadge /></div>
-        <button
-          type="button"
-          onClick={connect}
-          disabled={isConnecting}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#4274B9] text-white hover:bg-[#3563A0] disabled:opacity-50"
-          style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
-        >
-          <Zap className="w-4 h-4" />
-          {isConnecting ? "CONNECTING..." : "CONNECT WALLET TO APPLY"}
-        </button>
+        <ApplyAccountChoices />
       </div>
     );
   } else if (loadingAccount && !account && !submittedId) {
@@ -176,7 +168,7 @@ export function JudgeApplyPage() {
       <StatusScreen
         tone="ready"
         title="You are a WCO judge"
-        body={`${account.judge?.name || "Your card"} is on Meet the Staff. Arena Chat shows your Judge badge when you send a message.`}
+        body={`${account.judge?.name || "Your card"} is on Meet the Judges. Arena Chat shows your Judge badge when you send a message.`}
         detail=""
       />
     );
@@ -222,7 +214,7 @@ export function JudgeApplyPage() {
       <div className="space-y-4">
         <section className="space-y-3 rounded-2xl border border-[#4274B9]/25 bg-[#111827] p-4">
           <h2 className="text-xs text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>IDENTITY</h2>
-          <p className="text-xs text-[#8494A7]">Fans see the display name, country, discipline, and photo on Meet the Staff.</p>
+          <p className="text-xs text-[#8494A7]">Fans see the display name, country, discipline, and photo on Meet the Judges.</p>
           <label className="block text-[0.65rem] text-[#8494A7]">
             Display name
             <input value={form.name} onChange={(e) => setField("name", e.target.value)} maxLength={100} className={fieldClass} placeholder="Name fans should see" />
@@ -343,7 +335,7 @@ function StatusScreen({ title, body, detail, tone }: { title: string; body: stri
         <p className="text-sm text-[#8494A7] mb-4">{body}</p>
         {detail ? <p className="text-xs font-mono text-[#6AA3E0] mb-4">{detail}</p> : null}
         <div className="flex justify-center mb-5"><JudgeBadge /></div>
-        <Link to="/athletes#wco-staff" className="text-xs text-[#6AA3E0] underline">Back to Meet the Staff</Link>
+        <Link to="/athletes#wco-staff" className="text-xs text-[#6AA3E0] underline">Back to Meet the Judges</Link>
     </div>
   );
 }

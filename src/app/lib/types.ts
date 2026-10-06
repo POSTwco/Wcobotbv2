@@ -218,6 +218,9 @@ export interface PublicJudge {
   discipline: string;
   bio: string;
   hasPhoto: boolean;
+  instagram?: string;
+  youtube?: string;
+  website?: string;
 }
 
 export interface JudgeAccount {

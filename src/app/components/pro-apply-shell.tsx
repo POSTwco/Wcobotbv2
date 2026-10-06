@@ -15,7 +15,7 @@ const COPY: Record<Role, { title: string; line: string }> = {
   },
   judge: {
     title: "JUDGE PRO CARD",
-    line: "WCO reviews this application. Approval lists you on Meet the Staff and shows the Judge badge in Arena Chat.",
+    line: "WCO reviews this application. Approval lists you on Meet the Judges and shows the Judge badge in Arena Chat.",
   },
 };
 

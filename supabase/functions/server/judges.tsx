@@ -8,6 +8,8 @@
  *
  * Public JSON is an allowlist. Email, phone, legal name, wallet, and
  * the commander who reviewed stay off public and owner responses.
+ * publicFields hides photo, country, bio, or links without deleting them.
+ * A missing flag stays visible so older judge records do not go blank.
  * Arena Chat reads approved judge names from the judge records.
  */
 
@@ -89,14 +91,24 @@ function photoPathFor(wallet: string, input: unknown): string {
   return s;
 }
 
+function flagOn(row: any, key: "photo" | "country" | "bio" | "links"): boolean {
+  const flags = row?.publicFields;
+  if (!flags || typeof flags !== "object") return true;
+  return flags[key] !== false;
+}
+
 function publicJudge(row: any) {
+  const links = flagOn(row, "links");
   return {
     id: String(row.id || ""),
     name: String(row.name || ""),
-    country: String(row.country || ""),
+    country: flagOn(row, "country") ? String(row.country || "") : "",
     discipline: String(row.discipline || ""),
-    bio: String(row.bio || ""),
-    hasPhoto: !!row.photoPath,
+    bio: flagOn(row, "bio") ? String(row.bio || "") : "",
+    hasPhoto: flagOn(row, "photo") && !!row.photoPath,
+    instagram: links ? String(row.instagram || "") : "",
+    youtube: links ? String(row.youtube || "") : "",
+    website: links ? String(row.website || "") : "",
   };
 }
 
@@ -259,7 +271,7 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
     try {
       const id = c.req.param("id");
       const row: any = await kv.get(`judge:${id}`);
-      if (!row || row.status !== "approved" || !row.photoPath) {
+      if (!row || row.status !== "approved" || !row.photoPath || !flagOn(row, "photo")) {
         return c.json({ success: false, error: "Photo not found" }, 404);
       }
       const res = await streamPhoto(row.photoPath);
@@ -466,6 +478,7 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
         instagram: application.instagram || "",
         youtube: application.youtube || "",
         website: application.website || "",
+        publicFields: { photo: true, country: true, bio: true, links: true },
         status: "approved",
         applicationId: id,
         createdAt: nowIso(),
@@ -553,14 +566,44 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
       if (!row || row.status !== "approved") return c.json({ success: false, error: "Approved judge not found" }, 404);
       const body = await c.req.json();
       const name = text(body.name, 100);
+      const fullName = text(body.fullName, 150);
       const country = text(body.country, 80);
       const discipline = text(body.discipline, 40);
       const bio = text(body.bio, 2000);
+      const email = text(body.email, 200);
+      const phone = text(body.phone, 50);
+      const websiteRaw = text(body.website, 300);
+      const website = httpsUrl(body.website);
+      const instagram = handle(body.instagram);
+      const youtube = handle(body.youtube);
       if (name.length < 2) return c.json({ success: false, error: "Display name is required" }, 400);
+      if (fullName.length < 2) return c.json({ success: false, error: "Legal name is required" }, 400);
       if (!country) return c.json({ success: false, error: "Country is required" }, 400);
       if (!DISCIPLINES.has(discipline)) return c.json({ success: false, error: "Choose FreeStyle, Statics, or Both" }, 400);
       if (bio.length < 20) return c.json({ success: false, error: "Judging experience must be at least 20 characters" }, 400);
-      const updated = { ...row, name, country, discipline, bio, updatedAt: nowIso() };
+      if (!looksLikeEmail(email)) return c.json({ success: false, error: "A valid email is required" }, 400);
+      if (websiteRaw && !website) return c.json({ success: false, error: "Website must start with https://" }, 400);
+      const publicFields = {
+        photo: body.showPhoto !== false,
+        country: body.showCountry !== false,
+        bio: body.showBio !== false,
+        links: body.showLinks !== false,
+      };
+      const updated = {
+        ...row,
+        name,
+        fullName,
+        country,
+        discipline,
+        bio,
+        email,
+        phone,
+        instagram,
+        youtube,
+        website,
+        publicFields,
+        updatedAt: nowIso(),
+      };
       await kv.set(`judge:${id}`, updated);
       clearJudgeNameCache();
       return c.json({ success: true, data: publicJudge(updated) });

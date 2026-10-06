@@ -1,32 +1,19 @@
 /**
- * WCO staff strip on the Athletes page, under Arena Chat.
- * Officers stay as the published leadership pair. Judges come from
- * approved Pro Judge Cards.
+ * Judge strip on the Athletes page, under Arena Chat.
+ * Officers live on the contact page. This dropdown is approved judges only.
  */
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { ChevronDown, Shield } from "lucide-react";
+import { ChevronDown, Scale } from "lucide-react";
 import { InlineFlag } from "./country-flag";
 import { api } from "../lib/api";
 import { orgDisciplineLabel } from "../lib/org-sign";
 import { JudgeBadge } from "./judge-badge";
+import { JudgeDossier } from "./judge-dossier";
 import { JudgeMark } from "./judge-mark";
 import type { PublicJudge } from "../lib/types";
-
-const OFFICERS = [
-  {
-    name: "Brandon",
-    title: "Chief Executive Officer",
-    bio: "Leads World Calisthenics Organization and Battle of the Bars.",
-  },
-  {
-    name: "Kyle",
-    title: "Chief Technology Officer",
-    bio: "Leads the platform, wallets, and competition systems.",
-  },
-];
 
 const STEPS = ["Create an account", "Pro Judge Registration", "Application submitted"];
 
@@ -34,6 +21,7 @@ export function StaffSection() {
   const [open, setOpen] = useState(false);
   const [judges, setJudges] = useState<PublicJudge[]>([]);
   const [judgesReady, setJudgesReady] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancel = false;
@@ -49,6 +37,8 @@ export function StaffSection() {
     };
   }, []);
 
+  const selected = openId ? judges.find((judge) => judge.id === openId) ?? null : null;
+
   return (
     <section id="wco-staff" className="py-8 sm:py-12 scroll-mt-24">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -59,8 +49,8 @@ export function StaffSection() {
           aria-expanded={open}
         >
           <span className="flex items-center gap-2 text-[#E8ECF0]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-            <Shield className="w-4 h-4 text-[#6AA3E0]" />
-            MEET THE STAFF
+            <Scale className="w-4 h-4 text-[#E8ECF0]" />
+            MEET THE JUDGES
           </span>
           <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3 }}>
             <ChevronDown className="w-4 h-4 text-[#4274B9]" />
@@ -74,58 +64,40 @@ export function StaffSection() {
             transition={{ duration: 0.35 }}
             className="mt-4 space-y-6"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {OFFICERS.map((person) => (
-                <article key={person.title} className="rounded-2xl border border-[#4274B9]/25 bg-[#111827] p-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-14 h-14 rounded-xl bg-[#0B1120] border border-[#4274B9]/30 flex items-center justify-center text-[#6AA3E0] font-bold"
-                      style={{ fontFamily: "Orbitron, sans-serif" }}
-                    >
-                      {person.name.slice(0, 1)}
-                    </div>
-                    <div>
-                      <h3 className="text-[#E8ECF0] font-bold" style={{ fontFamily: "Orbitron, sans-serif" }}>{person.name}</h3>
-                      <p className="text-xs text-[#6AA3E0]">{person.title}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-[#C5D0DC] mt-3 leading-relaxed">{person.bio}</p>
-                  <p className="text-[0.65rem] text-[#8494A7] mt-2">Profile coming soon</p>
-                </article>
-              ))}
-            </div>
-
-            <div>
-              <h3 className="text-xs tracking-wide text-[#8494A7] mb-3" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                REGISTERED JUDGES
-              </h3>
-              {judges.length === 0 ? (
-                <p className="text-sm text-[#8494A7] rounded-xl border border-dashed border-[#4274B9]/30 px-3 py-4">
-                  {judgesReady
-                    ? "Judges appear here after WCO approves their Pro Judge Card."
-                    : "The live judge list is updating."}
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {judges.map((judge) => (
-                    <article key={judge.id} className="rounded-xl border border-[#4274B9]/25 bg-[#111827] p-3">
-                      <div className="flex items-center gap-3">
-                        <JudgeMark id={judge.id} hasPhoto={judge.hasPhoto} name={judge.name} className="w-14 h-14 rounded-xl object-cover border border-[#E8ECF0]/20 shrink-0" />
-                        <div className="min-w-0">
-                          <h4 className="text-sm text-[#E8ECF0] font-semibold truncate">{judge.name}</h4>
+            {judges.length === 0 ? (
+              <p className="text-sm text-[#8494A7] rounded-xl border border-dashed border-[#4274B9]/30 px-3 py-4">
+                {judgesReady
+                  ? "Judges appear here after WCO approves their Pro Judge Card."
+                  : "The live judge list is updating."}
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {judges.map((judge) => (
+                  <button
+                    key={judge.id}
+                    type="button"
+                    onClick={() => setOpenId(judge.id)}
+                    className="rounded-xl border border-[#4274B9]/25 bg-[#111827] p-3 text-left hover:border-[#E8ECF0]/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <JudgeMark id={judge.id} hasPhoto={judge.hasPhoto} name={judge.name} className="w-14 h-14 rounded-xl object-cover border border-[#E8ECF0]/20 shrink-0" />
+                      <div className="min-w-0">
+                        <h3 className="text-sm text-[#E8ECF0] font-semibold truncate">{judge.name}</h3>
+                        {judge.country ? (
                           <p className="text-xs text-[#8494A7] mt-1 flex items-center gap-1.5">
                             <InlineFlag country={judge.country} /> {judge.country}
                           </p>
-                          <div className="mt-1"><JudgeBadge small /></div>
-                        </div>
+                        ) : null}
+                        <div className="mt-1"><JudgeBadge small /></div>
                       </div>
+                    </div>
+                    {orgDisciplineLabel(judge.discipline) ? (
                       <p className="text-[0.65rem] text-[#6AA3E0] mt-2">{orgDisciplineLabel(judge.discipline)}</p>
-                      {judge.bio ? <p className="text-xs text-[#C5D0DC] mt-2 line-clamp-3">{judge.bio}</p> : null}
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="rounded-2xl border border-[#4274B9]/20 bg-[#0B1120]/50 p-4">
               <Link
@@ -147,6 +119,14 @@ export function StaffSection() {
           </motion.div>
         )}
       </div>
+      {selected ? (
+        <JudgeDossier
+          judge={selected}
+          roster={judges}
+          onClose={() => setOpenId(null)}
+          onSelect={setOpenId}
+        />
+      ) : null}
     </section>
   );
 }

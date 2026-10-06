@@ -18,7 +18,22 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [editId, setEditId] = useState("");
-  const [edit, setEdit] = useState({ name: "", country: "", discipline: "", bio: "" });
+  const [edit, setEdit] = useState({
+    name: "",
+    fullName: "",
+    country: "",
+    discipline: "",
+    bio: "",
+    email: "",
+    phone: "",
+    instagram: "",
+    youtube: "",
+    website: "",
+    showPhoto: true,
+    showCountry: true,
+    showBio: true,
+    showLinks: true,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,13 +194,36 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
                   <p className="text-sm text-[#E8ECF0] font-semibold">{judge.name}</p>
                   <p className="text-[0.6rem] text-[#8494A7]">{judge.country} · {orgDisciplineLabel(judge.discipline)} · <span className="font-mono">{judge.wallet}</span></p>
                   <p className="text-[0.6rem] text-[#C5D0DC] mt-1">{judge.bio}</p>
+                  <p className="text-[0.55rem] text-[#8494A7] mt-1">
+                    Shown: name, discipline
+                    {judge.publicFields?.photo === false ? "" : ", photo"}
+                    {judge.publicFields?.country === false ? "" : ", country"}
+                    {judge.publicFields?.bio === false ? "" : ", experience"}
+                    {judge.publicFields?.links === false ? "" : ", links"}
+                  </p>
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => {
+                      const flags = judge.publicFields || {};
                       setEditId(judge.id);
-                      setEdit({ name: judge.name || "", country: judge.country || "", discipline: judge.discipline || "", bio: judge.bio || "" });
+                      setEdit({
+                        name: judge.name || "",
+                        fullName: judge.fullName || "",
+                        country: judge.country || "",
+                        discipline: judge.discipline || "",
+                        bio: judge.bio || "",
+                        email: judge.email || "",
+                        phone: judge.phone || "",
+                        instagram: judge.instagram || "",
+                        youtube: judge.youtube || "",
+                        website: judge.website || "",
+                        showPhoto: flags.photo !== false,
+                        showCountry: flags.country !== false,
+                        showBio: flags.bio !== false,
+                        showLinks: flags.links !== false,
+                      });
                     }}
                     className="px-2 py-1 text-[0.55rem] rounded bg-[#4274B9]/10 text-[#6AA3E0]"
                   >
@@ -197,13 +235,44 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
                 </div>
               </div>
               {editId === judge.id && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} className="bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Display name" />
-                  <input value={edit.country} onChange={(e) => setEdit({ ...edit, country: e.target.value })} className="bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Country" />
-                  <select value={edit.discipline} onChange={(e) => setEdit({ ...edit, discipline: e.target.value })} className="bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]">
-                    {DISCIPLINES.map((id) => <option key={id} value={id}>{orgDisciplineLabel(id)}</option>)}
-                  </select>
-                  <textarea value={edit.bio} onChange={(e) => setEdit({ ...edit, bio: e.target.value })} rows={3} className="sm:col-span-2 bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" />
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-lg border border-[#E8ECF0]/15 p-2 space-y-2">
+                    <p className="text-[0.55rem] text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>SHOWN ON MEET THE JUDGES</p>
+                    <p className="text-[0.55rem] text-[#8494A7]">Display name and discipline stay on the card. Uncheck a box to hide that piece. The saved text stays here.</p>
+                    <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Display name" />
+                    <select value={edit.discipline} onChange={(e) => setEdit({ ...edit, discipline: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]">
+                      {DISCIPLINES.map((id) => <option key={id} value={id}>{orgDisciplineLabel(id)}</option>)}
+                    </select>
+                    <label className="flex items-center gap-2 text-[0.6rem] text-[#C5D0DC]">
+                      <input type="checkbox" checked={edit.showPhoto} onChange={(e) => setEdit({ ...edit, showPhoto: e.target.checked })} />
+                      Show photo
+                    </label>
+                    <label className="flex items-center gap-2 text-[0.6rem] text-[#C5D0DC]">
+                      <input type="checkbox" checked={edit.showCountry} onChange={(e) => setEdit({ ...edit, showCountry: e.target.checked })} />
+                      Show country
+                    </label>
+                    <input value={edit.country} onChange={(e) => setEdit({ ...edit, country: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Country" />
+                    <label className="flex items-center gap-2 text-[0.6rem] text-[#C5D0DC]">
+                      <input type="checkbox" checked={edit.showBio} onChange={(e) => setEdit({ ...edit, showBio: e.target.checked })} />
+                      Show experience
+                    </label>
+                    <textarea value={edit.bio} onChange={(e) => setEdit({ ...edit, bio: e.target.value })} rows={3} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Judging experience" />
+                    <label className="flex items-center gap-2 text-[0.6rem] text-[#C5D0DC]">
+                      <input type="checkbox" checked={edit.showLinks} onChange={(e) => setEdit({ ...edit, showLinks: e.target.checked })} />
+                      Show links
+                    </label>
+                    <input value={edit.instagram} onChange={(e) => setEdit({ ...edit, instagram: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Instagram" />
+                    <input value={edit.youtube} onChange={(e) => setEdit({ ...edit, youtube: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="YouTube" />
+                    <input value={edit.website} onChange={(e) => setEdit({ ...edit, website: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="https:// website" />
+                  </div>
+                  <div className="rounded-lg border border-[#D4A843]/25 p-2 space-y-2">
+                    <p className="text-[0.55rem] text-[#D4A843]" style={{ fontFamily: "Orbitron, sans-serif" }}>ADMINS ONLY</p>
+                    <p className="text-[0.55rem] text-[#8494A7]">Legal name, email, and phone stay off Meet the Judges. The wallet owns the Judge badge and is not edited here.</p>
+                    <input value={edit.fullName} onChange={(e) => setEdit({ ...edit, fullName: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Legal name" />
+                    <input value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Email" />
+                    <input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} className="w-full bg-[#162033] border border-[#4274B9]/20 rounded px-2 py-1 text-xs text-[#E8ECF0]" placeholder="Phone (optional)" />
+                    <p className="text-[0.6rem] text-[#8494A7] font-mono break-all">{judge.wallet}</p>
+                  </div>
                   <button type="button" disabled={busy === judge.id} onClick={() => saveEdit(judge.id)} className="px-2 py-1 text-[0.55rem] rounded bg-[#10b981]/10 text-[#10b981] disabled:opacity-50">SAVE</button>
                 </div>
               )}

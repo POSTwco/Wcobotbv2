@@ -151,6 +151,14 @@
       "index": true,
       "priority": 0.3
     },
+    "/contact": {
+      "title": "Contact | WCO",
+      "description": "Contact the World Calisthenics Organization. Email info@worldcalisthenics.org.",
+      "ogImage": "/og/default.png",
+      "headline": "Contact",
+      "index": false,
+      "priority": 0.1
+    },
     "/whitepaper": {
       "title": "Whitepaper | Battle of the Bars",
       "description": "Technical whitepaper for Battle of the Bars - token-weighted voting, Hedera HTS, calisthenics engine, and WCO ecosystem architecture.",

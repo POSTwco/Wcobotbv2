@@ -131,6 +131,7 @@ export function Layout() {
                   <a href="https://docs.hedera.com" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>HTS Tokens</a>
                   <Link to="/whitepaper" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Whitepaper</Link>
                   <Link to="/leaderboard" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Leaderboard</Link>
+                  <Link to="/contact" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Contact</Link>
                 </div>
               </div>
               <div>

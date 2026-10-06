@@ -1104,7 +1104,7 @@ function ManualTab() {
             </ol>
           </div>
           <p className="text-xs"><span className="text-[#D4A843]">First time?</span> Use "SEED INITIAL DATA" to auto-create Tony Gaste, Starboy, and Vitalii with their real skill ratings.</p>
-          <p className="text-xs">Judge applications are under Athlete Applications. Approve adds the person to Meet the Staff and their Arena Chat Judge badge. Reject deletes the application. Revoke removes an approved judge.</p>
+          <p className="text-xs">Judge applications are under Athlete Applications. Approve adds the person to Meet the Judges and their Arena Chat Judge badge. Reject deletes the application. Revoke removes an approved judge.</p>
         </div>
       ),
     },

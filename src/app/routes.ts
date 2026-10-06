@@ -23,6 +23,7 @@ import { CalisthenicsEliteCustomPage } from "./pages/calisthenics-elite-custom";
 import { PrivacyPage } from "./pages/privacy";
 import { TermsPage } from "./pages/terms";
 import { WhitepaperPage } from "./pages/whitepaper";
+import { ContactPage } from "./pages/contact";
 import { ManageAssetsPage } from "./pages/manage-assets";
 import { RouteErrorPage, NotFoundPage } from "./components/error-boundary";
 
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
       { path: "privacy", Component: PrivacyPage },
       { path: "terms", Component: TermsPage },
       { path: "whitepaper", Component: WhitepaperPage },
+      { path: "contact", Component: ContactPage },
       { path: "*", Component: NotFoundPage },
     ],
   },

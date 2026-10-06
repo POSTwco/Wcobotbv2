@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   User, Globe, Youtube, Instagram, Twitter, Link2,
   Shield, AlertTriangle, CheckCircle, Loader2,
-  Zap, FileText, ChevronDown, ExternalLink, Mail, Phone,
+  FileText, ChevronDown, ExternalLink, Mail, Phone,
   Dumbbell,
 } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { sanitizeErrorMessage } from "../components/error-boundary";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import { ProApplyShell } from "../components/pro-apply-shell";
+import { ApplyAccountChoices } from "../components/apply-account-choices";
 import { COUNTRY_OPTIONS } from "../lib/country-flags";
 import { InlineFlag } from "../components/country-flag";
 
@@ -32,7 +33,7 @@ const DISCLAIMER_VERSION = "1.0.0";
 // Main Component
 // ---------------------------------------------------------------------------
 export function ApplyPage() {
-  const { connected, connect, accountId, isConnecting } = useWallet();
+  const { connected, accountId } = useWallet();
   const [searchParams] = useSearchParams();
   const orgId = searchParams.get("orgId") || "";
 
@@ -114,16 +115,7 @@ export function ApplyPage() {
     return (
       <ProApplyShell role="athlete" orgLocked={!!orgId}>
         <div className="py-8 text-center">
-          <button
-            type="button"
-            onClick={connect}
-            disabled={isConnecting}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#4274B9] text-white hover:bg-[#3563A0] hover:shadow-lg hover:shadow-[#4274B9]/25 transition-all disabled:opacity-50"
-            style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
-          >
-            <Zap className="w-4 h-4" />
-            {isConnecting ? "CONNECTING..." : "CONNECT WALLET TO APPLY"}
-          </button>
+          <ApplyAccountChoices />
         </div>
       </ProApplyShell>
     );

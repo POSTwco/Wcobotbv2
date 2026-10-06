@@ -923,7 +923,22 @@ export const api = {
         method: "POST", body: {}, adminWallet, sessionToken,
       }),
 
-    updateJudge: (id: string, body: Record<string, string>, adminWallet: string, sessionToken: string) =>
+    updateJudge: (id: string, body: {
+      name: string;
+      fullName: string;
+      country: string;
+      discipline: string;
+      bio: string;
+      email: string;
+      phone: string;
+      instagram: string;
+      youtube: string;
+      website: string;
+      showPhoto: boolean;
+      showCountry: boolean;
+      showBio: boolean;
+      showLinks: boolean;
+    }, adminWallet: string, sessionToken: string) =>
       request<PublicJudge>(`/admin/judges/${id}`, {
         method: "POST", body, adminWallet, sessionToken,
       }),
