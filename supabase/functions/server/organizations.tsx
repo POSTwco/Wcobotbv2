@@ -174,6 +174,11 @@ interface EventFields {
   format: string;
   note: string;
   athleteIds: string[];
+  description: string;
+  endDate: string;
+  prizePool: number;
+  elimination: string;
+  performanceRounds: number;
 }
 
 function normalizeEvent(raw: any, action: string): EventFields {
@@ -191,7 +196,31 @@ function normalizeEvent(raw: any, action: string): EventFields {
     format: typeof raw?.format === "string" ? raw.format : "",
     note: orgText(raw?.note, 2000),
     athleteIds: ids.map((id: unknown) => orgText(id, 80)).filter(Boolean),
+    description: orgText(raw?.description, 2000),
+    endDate: orgText(raw?.endDate, 40),
+    prizePool: prizePoolValue(raw?.prizePool),
+    elimination: raw?.format === "tournament" ? "single" : "none",
+    performanceRounds: Number(raw?.performanceRounds) === 2 ? 2 : 1,
   };
+}
+
+function prizePoolValue(input: unknown): number {
+  const n = Number(input);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1_000_000_000, Math.floor(n)));
+}
+
+function boardSizeValue(input: unknown, fields: EventFields): number {
+  const n = Number(input);
+  if (Number.isInteger(n) && n >= 1 && n <= 32) return n;
+  return fields.format === "pvp" ? Math.max(2, fields.athleteIds.length || 2) : Math.max(3, fields.athleteIds.length || 8);
+}
+
+function seatIdsValue(raw: unknown, fields: EventFields): string[] {
+  const list = Array.isArray(raw) ? raw : fields.athleteIds;
+  const cleaned = list.slice(0, 32).map((id) => orgText(id, 80));
+  if (cleaned.filter(Boolean).join(",") !== fields.athleteIds.join(",")) return fields.athleteIds;
+  return cleaned.length ? cleaned : fields.athleteIds;
 }
 
 function eventCanonical(f: EventFields): string {
@@ -208,6 +237,11 @@ function eventCanonical(f: EventFields): string {
     `format=${f.format}`,
     `note=${f.note}`,
     `athletes=${f.athleteIds.join(",")}`,
+    `description=${f.description}`,
+    `endDate=${f.endDate}`,
+    `prizePool=${f.prizePool}`,
+    `elimination=${f.elimination}`,
+    `rounds=${f.performanceRounds}`,
   ].join("\n");
 }
 
@@ -627,18 +661,23 @@ function formatCountError(format: string, count: number): string | null {
 async function createGamifiedEvent(draft: any, org: any, adminWallet: string): Promise<any> {
   const athleteIds: string[] = draft.athleteIds || [];
   const bracket = athleteIds.map((athleteId: string, i: number) => ({ seat: i + 1, athleteId }));
-  const description = `Submitted by ${org?.name || "an organization"}. ${draft.note || ""}`.trim();
+  const description = String(draft.description || "").trim()
+    || `Submitted by ${org?.name || "an organization"}. ${draft.note || ""}`.trim();
+  const endDate = draft.endDate || "";
+  const prizePool = prizePoolValue(draft.prizePool);
+  const judgedRounds = draft.performanceRounds === 2 ? 2 : 1;
   if (draft.format === "tournament" || draft.format === "field") {
     const { event } = await createTournamentEvent({
       name: draft.name,
       description,
       location: draft.location || "",
       startDate: draft.eventDate || "",
-      endDate: "",
-      totalPrizePool: 0,
+      endDate,
+      totalPrizePool: prizePool,
       bracket,
       format: draft.format,
-      elimination: "single",
+      elimination: draft.format === "tournament" ? "single" : "none",
+      performanceRounds: judgedRounds,
     });
     event.orgId = draft.orgId;
     event.gamified = true;
@@ -672,8 +711,8 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
       athlete1Id: a,
       athlete2Id: b,
       votingOpensAt: draft.eventDate || "",
-      votingClosesAt: "",
-      totalPool: 0,
+      votingClosesAt: endDate,
+      totalPool: prizePool,
       votes1Count: 0,
       votes2Count: 0,
       votes1Weighted: 0,
@@ -681,7 +720,7 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
       winnerId: "",
       rewardDistributed: false,
       location: draft.location || "",
-      prize: "TBD",
+      prize: prizePool > 0 ? String(prizePool) : "TBD",
       createdAt: nowIso(),
       updatedAt: nowIso(),
     });
@@ -692,8 +731,8 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
     description,
     location: draft.location || "",
     startDate: draft.eventDate || "",
-    endDate: "",
-    totalPrizePool: 0,
+    endDate,
+    totalPrizePool: prizePool,
     status: "draft",
     format: "pvp",
     elimination: "none",
@@ -942,6 +981,7 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
       const verified = await verifyOrgSignature(c, wallet, body.message, body.signature, "WCO-ORG-EVENT-DRAFT-v1", canonical);
       if (!verified.ok) return c.json({ success: false, error: verified.error }, verified.status);
       const id = existing?.id || generateId("orgevt");
+      const seatIds = seatIdsValue(body.seatIds, fields);
       const draft = {
         ...(existing || {}),
         id,
@@ -955,6 +995,8 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
         battleEventId: existing?.battleEventId || "",
         calendarEventId: existing?.calendarEventId || "",
         decisionNote: "",
+        seatIds,
+        boardSize: seatIds.length || boardSizeValue(body.boardSize, fields),
         changelog: existing?.changelog || [],
         createdAt: existing?.createdAt || nowIso(),
         updatedAt: nowIso(),
@@ -982,6 +1024,10 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
       if (!DISCIPLINES.has(fields.discipline) || !FORMATS.has(fields.format)) {
         return c.json({ success: false, error: "Discipline and format are required" }, 400);
       }
+      const countErr = formatCountError(fields.format, fields.athleteIds.length);
+      if (countErr) return c.json({ success: false, error: countErr }, 400);
+      const athErr = await athletesExist(fields.athleteIds);
+      if (athErr) return c.json({ success: false, error: athErr }, 400);
       const canonical = eventCanonical(fields);
       const verified = await verifyOrgSignature(c, wallet, body.message, body.signature, "WCO-ORG-EVENT-v1", canonical);
       if (!verified.ok) return c.json({ success: false, error: verified.error }, verified.status);

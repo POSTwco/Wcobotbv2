@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
+import type { Athlete } from "../lib/types";
 import { useWallet } from "./wallet-context";
 import {
   applyCanonical,
@@ -29,6 +30,7 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
   const [note, setNote] = useState("");
   const [gamified, setGamified] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +46,12 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    api.getAthletes().then((res) => {
+      if (res.success && res.data) setAthletes(res.data);
+    }).catch(() => {});
+  }, []);
 
   function select(item: any) {
     setSelected(item);
@@ -102,6 +110,7 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
     const fields = {
       name: selected.name || "",
       eventDate: selected.eventDate || "",
+      endDate: selected.endDate || "",
       location: selected.location || "",
       livestream: selected.livestream || "",
       registrationUrl: selected.registrationUrl || "",
@@ -109,6 +118,10 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
       discipline: selected.discipline,
       format: selected.format,
       note: selected.note || "",
+      description: selected.description || "",
+      prizePool: Number(selected.prizePool) || 0,
+      elimination: selected.format === "tournament" ? "single" : "none",
+      performanceRounds: selected.performanceRounds === 2 ? 2 : 1,
       athleteIds: selected.athleteIds || [],
       draftId: selected.id,
       action: "submit" as const,
@@ -240,12 +253,20 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
                 <AdminField label="Website" value={selected.website || ""} onChange={(v) => setSelected({ ...selected, website: v })} />
                 <AdminField label="Discipline" value={selected.discipline || ""} onChange={(v) => setSelected({ ...selected, discipline: v })} />
                 <AdminField label="Format (pvp, tournament, field)" value={selected.format || ""} onChange={(v) => setSelected({ ...selected, format: v })} />
-                <p className="text-xs text-[#8494A7]">{orgFormatLabel(selected.format)} · {(selected.athleteIds || []).length} athletes</p>
+                <AdminField label="Public description" value={selected.description || ""} onChange={(v) => setSelected({ ...selected, description: v })} multiline />
+                <AdminField label="Closes" value={selected.endDate || ""} onChange={(v) => setSelected({ ...selected, endDate: v })} />
+                <AdminField label="Prize pool" value={String(selected.prizePool || 0)} onChange={(v) => setSelected({ ...selected, prizePool: Number(v) || 0 })} />
+                <p className="text-xs text-[#8494A7]">{orgFormatLabel(selected.format)} · {(selected.athleteIds || []).length} athletes{selected.format === "field" ? ` · ${selected.performanceRounds === 2 ? 2 : 1} judged rounds` : ""}</p>
+                <div className="rounded-lg border border-[#4274B9]/20 bg-[#0B1120] p-2 space-y-1">
+                  {boardLines(selected, athletes).map((line) => (
+                    <p key={line} className="text-xs text-[#E8ECF0]">{line}</p>
+                  ))}
+                </div>
                 <label className="flex items-start gap-2 text-sm text-[#E8ECF0]">
                   <input type="checkbox" checked={gamified} onChange={(e) => setGamified(e.target.checked)} className="mt-1" />
                   <span>
-                    Gamify this event
-                    <span className="block text-xs text-[#8494A7] mt-1">Off publishes a calendar card on the organization. On creates a draft in the Event Console. The organization still cannot open voting.</span>
+                    Populate this as an Only Gains draft
+                    <span className="block text-xs text-[#8494A7] mt-1">Off lists a calendar card on the organization. No game asset is created. On creates a draft in the Event Console from this board, including the description, dates, prize, and seats. The organization still cannot open voting.</span>
                   </span>
                 </label>
               </>
@@ -319,6 +340,22 @@ function QueueButton({
       {label}
     </button>
   );
+}
+
+function boardLines(selected: any, athletes: Athlete[]): string[] {
+  const names = new Map(athletes.map((a) => [a.id, a.name]));
+  const ids: string[] = Array.isArray(selected.athleteIds) ? selected.athleteIds : [];
+  if (!ids.length) return ["No athletes seated."];
+  if (selected.format === "pvp") {
+    const lines: string[] = [];
+    for (let i = 0; i < ids.length; i += 2) {
+      const a = names.get(ids[i]) || ids[i];
+      const b = ids[i + 1] ? names.get(ids[i + 1]) || ids[i + 1] : "open";
+      lines.push(`Battle ${i / 2 + 1}: ${a} vs ${b}`);
+    }
+    return lines;
+  }
+  return ids.map((id, i) => `#${i + 1} ${names.get(id) || id}`);
 }
 
 function AdminField({

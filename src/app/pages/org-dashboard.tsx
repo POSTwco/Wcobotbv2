@@ -4,45 +4,28 @@
  * or onto the public calendar.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Loader2 } from "lucide-react";
-import type { ReactNode } from "react";
 import { useWallet } from "../components/wallet-context";
 import { api } from "../lib/api";
 import type { Athlete } from "../lib/types";
 import {
-  ORG_FORMATS,
   eventCanonical,
   orgDisciplineLabel,
   orgFormatLabel,
   signCanonical,
-  type OrgEventFormat,
 } from "../lib/org-sign";
-import { OrgDisciplineChecks } from "../components/org-discipline-checks";
+import { OrgEventBuilder, blankOrgEvent, orgEventFromRecord, type OrgEventDraft } from "../components/org-event-builder";
 import { toast } from "sonner";
-
-const blank = {
-  draftId: "",
-  name: "",
-  eventDate: "",
-  location: "",
-  livestream: "",
-  registrationUrl: "",
-  website: "",
-  discipline: "freestyle",
-  format: "pvp" as OrgEventFormat,
-  note: "",
-  athleteIds: [] as string[],
-};
 
 export function OrgDashboardPage() {
   const { connected, connect, accountId, signMessage, walletSessionToken, isConnecting } = useWallet();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [athletes, setAthletes] = useState<Athlete[]>([]);
-  const [form, setForm] = useState(blank);
-  const [athleteQuery, setAthleteQuery] = useState("");
+  const [form, setForm] = useState(blankOrgEvent);
+  const [builderKey, setBuilderKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [notices, setNotices] = useState<any[]>([]);
 
@@ -74,32 +57,53 @@ export function OrgDashboardPage() {
     load();
   }, [load]);
 
-  const roster = useMemo(() => {
-    const q = athleteQuery.trim().toLowerCase();
-    return athletes.filter((a) => !q || a.name.toLowerCase().includes(q)).slice(0, 40);
-  }, [athletes, athleteQuery]);
+  function signedEvent(draft: OrgEventDraft, action: "create" | "update" | "submit") {
+    return eventCanonical({
+      action,
+      draftId: action === "create" ? "" : draft.draftId,
+      name: draft.name,
+      eventDate: draft.eventDate,
+      endDate: draft.endDate,
+      location: draft.location,
+      livestream: draft.livestream,
+      registrationUrl: draft.registrationUrl,
+      website: draft.website,
+      discipline: draft.discipline,
+      format: draft.format,
+      note: draft.note,
+      description: draft.description,
+      prizePool: draft.prizePool,
+      elimination: draft.format === "tournament" ? "single" : "none",
+      performanceRounds: draft.performanceRounds,
+      athleteIds: draft.athleteIds,
+    });
+  }
 
-  async function saveDraft(action: "create" | "update") {
-    if (!accountId || !walletSessionToken) return;
-    const canonical = eventCanonical({ ...form, action, draftId: action === "create" ? "" : form.draftId });
+  async function saveDraft(payload: OrgEventDraft, reset = true): Promise<string> {
+    if (!accountId || !walletSessionToken) return "";
+    const action = payload.draftId ? "update" : "create";
     setBusy(true);
     try {
-      const signed = await signCanonical(signMessage, "WCO-ORG-EVENT-DRAFT-v1", accountId, canonical);
+      const signed = await signCanonical(signMessage, "WCO-ORG-EVENT-DRAFT-v1", accountId, signedEvent(payload, action));
       if (!signed) {
         toast.error("Wallet signature is required");
-        return;
+        return "";
       }
       const res = await api.saveOrganizationEvent(
-        { wallet: accountId, ...form, draftId: action === "create" ? "" : form.draftId, ...signed },
+        { wallet: accountId, ...payload, draftId: action === "create" ? "" : payload.draftId, ...signed },
         walletSessionToken,
       );
-      if (!res.success) {
+      if (!res.success || !res.data) {
         toast.error(res.error || "Could not save");
-        return;
+        return "";
       }
-      toast.success("Draft saved");
-      setForm(blank);
-      await load();
+      if (reset) {
+        toast.success("Draft saved");
+        setForm(blankOrgEvent());
+        setBuilderKey((n) => n + 1);
+        await load();
+      }
+      return res.data.id;
     } finally {
       setBusy(false);
     }
@@ -107,20 +111,7 @@ export function OrgDashboardPage() {
 
   async function submitDraft(draft: any) {
     if (!accountId || !walletSessionToken) return;
-    const canonical = eventCanonical({
-      action: "submit",
-      draftId: draft.id,
-      name: draft.name,
-      eventDate: draft.eventDate || "",
-      location: draft.location || "",
-      livestream: draft.livestream || "",
-      registrationUrl: draft.registrationUrl || "",
-      website: draft.website || "",
-      discipline: draft.discipline,
-      format: draft.format,
-      note: draft.note || "",
-      athleteIds: draft.athleteIds || [],
-    });
+    const canonical = signedEvent(orgEventFromRecord(draft), "submit");
     setBusy(true);
     try {
       const signed = await signCanonical(signMessage, "WCO-ORG-EVENT-v1", accountId, canonical);
@@ -134,10 +125,21 @@ export function OrgDashboardPage() {
         return;
       }
       toast.success("Sent to WCO for approval");
+      setForm(blankOrgEvent());
+      setBuilderKey((n) => n + 1);
       await load();
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submitBuilt(payload: OrgEventDraft) {
+    const id = await saveDraft(payload, false);
+    if (!id) return;
+    setForm({ ...payload, draftId: id });
+    setBuilderKey((n) => n + 1);
+    toast.message("Draft saved. Sign once more to send it to WCO.");
+    await submitDraft({ ...payload, id });
   }
 
   if (!connected) {
@@ -176,7 +178,7 @@ export function OrgDashboardPage() {
 
   return (
     <div className="min-h-screen py-8 px-4">
-      <div className="max-w-3xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-8">
         <header>
           <p className="text-xs text-[#8494A7]" style={{ fontFamily: "Orbitron, sans-serif" }}>ORGANIZATION DASHBOARD</p>
           <h1 className="text-2xl text-[#E8ECF0]" style={{ fontFamily: "Orbitron, sans-serif" }}>{org.name}</h1>
@@ -199,83 +201,16 @@ export function OrgDashboardPage() {
           <h2 className="text-xs text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>
             {form.draftId ? "EDIT DRAFT" : "NEW EVENT"}
           </h2>
-          <p className="text-xs text-[#8494A7]">Save a private draft, then submit it. A commander signs before fans see anything. Signing confirms the draft and does not send HBAR.</p>
-          <Labeled label="Event name" hint="The name fans will read.">
-            <input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </Labeled>
-          <Labeled label="Date and time" hint="Optional if the date is not confirmed yet.">
-            <input className={inputCls} type="datetime-local" value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} />
-          </Labeled>
-          <Labeled label="Location" hint="City or venue. Shown on the organization card.">
-            <input className={inputCls} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-          </Labeled>
-          <Labeled label="Livestream" hint="https only. Fans see this on your card.">
-            <input className={inputCls} placeholder="https://" value={form.livestream} onChange={(e) => setForm({ ...form, livestream: e.target.value })} />
-          </Labeled>
-          <Labeled label="Registration link" hint="https only. Where athletes sign up off-platform.">
-            <input className={inputCls} placeholder="https://" value={form.registrationUrl} onChange={(e) => setForm({ ...form, registrationUrl: e.target.value })} />
-          </Labeled>
-          <Labeled label="Event website" hint="https only. Optional.">
-            <input className={inputCls} placeholder="https://" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
-          </Labeled>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div>
-              <p className="text-xs text-[#8494A7]">Discipline</p>
-              <div className="mt-1">
-                <OrgDisciplineChecks value={form.discipline} onChange={(discipline) => setForm({ ...form, discipline })} />
-              </div>
-              <span className="block mt-1 text-[0.65rem] text-[#8494A7]/80">Check FreeStyle, Statics, or both.</span>
-            </div>
-            <Labeled label="Format" hint={formatHint(form.format)}>
-              <select className={inputCls} value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value as OrgEventFormat })}>
-                {ORG_FORMATS.map((id) => <option key={id} value={id}>{orgFormatLabel(id)}</option>)}
-              </select>
-            </Labeled>
-          </div>
-          <p className="text-xs text-[#C5D0DC]">WCO decides whether this is a public calendar card or a real voting draft. Your organization cannot open voting.</p>
-          <Labeled label="Note to WCO" hint="Anything the reviewers should know. Fans do not see this.">
-            <textarea className={inputCls} rows={3} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-          </Labeled>
-          <div>
-            <p className="text-xs text-[#8494A7] mb-1">
-              Athletes from the WCO roster ({form.athleteIds.length} selected).
-              {form.format === "pvp" ? " Duals need an even count from 2 to 32." : " Tournament and Best in Field need 3 to 12."}
-            </p>
-            <p className="text-xs text-[#8494A7] mb-2">Only approved athletes can be seated. A new person applies with a Pro Card and is linked after both approvals.</p>
-            <input className={inputCls} placeholder="Search athletes" value={athleteQuery} onChange={(e) => setAthleteQuery(e.target.value)} aria-label="Search athletes" />
-            <div className="max-h-48 overflow-y-auto mt-2 space-y-1">
-              {roster.map((a) => {
-                const on = form.athleteIds.includes(a.id);
-                return (
-                  <label key={a.id} className="flex items-center gap-2 text-sm text-[#E8ECF0]">
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => {
-                        setForm({
-                          ...form,
-                          athleteIds: on ? form.athleteIds.filter((id) => id !== a.id) : [...form.athleteIds, a.id],
-                        });
-                      }}
-                    />
-                    {a.name}
-                  </label>
-                );
-              })}
-            </div>
-            <Link to={`/apply?orgId=${encodeURIComponent(org.id)}`} className="inline-block mt-2 text-xs text-[#6AA3E0]">
-              Add an athlete with a Pro Card application
-            </Link>
-          </div>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => saveDraft(form.draftId ? "update" : "create")}
-            className="px-4 py-2 rounded-xl bg-[#4274B9] text-white text-sm disabled:opacity-50"
-            style={{ fontFamily: "Orbitron, sans-serif" }}
-          >
-            {busy ? "Waiting for wallet…" : "Sign and save draft"}
-          </button>
+          <p className="text-xs text-[#8494A7]">Build the card the way the Event Console does. A partial board stays a private draft. A finished board is an approval request. WCO decides whether it becomes an Only Gains draft or a calendar listing.</p>
+          <OrgEventBuilder
+            key={builderKey}
+            initial={form}
+            athletes={athletes}
+            orgId={org.id}
+            busy={busy}
+            onSave={(payload) => { void saveDraft(payload); }}
+            onSubmit={(payload) => { void submitBuilt(payload); }}
+          />
         </section>
 
         <section className="space-y-3">
@@ -291,27 +226,18 @@ export function OrgDashboardPage() {
                     <p className="text-xs text-[#8494A7]">{orgFormatLabel(draft.format)} · {draftStatusLabel(draft)}</p>
                   </div>
                   {(draft.status === "draft" || draft.status === "rejected") && (
-                    <button type="button" className="text-xs text-[#6AA3E0]" onClick={() => setForm({
-                      draftId: draft.id,
-                      name: draft.name || "",
-                      eventDate: draft.eventDate || "",
-                      location: draft.location || "",
-                      livestream: draft.livestream || "",
-                      registrationUrl: draft.registrationUrl || "",
-                      website: draft.website || "",
-                      discipline: draft.discipline || "freestyle",
-                      format: draft.format || "pvp",
-                      note: draft.note || "",
-                      athleteIds: draft.athleteIds || [],
-                    })}>
+                    <button type="button" className="text-xs text-[#6AA3E0]" onClick={() => {
+                      setForm(orgEventFromRecord(draft));
+                      setBuilderKey((n) => n + 1);
+                    }}>
                       Edit
                     </button>
                   )}
                 </div>
                 {draft.decisionNote && <p className="text-sm text-[#C5D0DC] mt-2 whitespace-pre-wrap">{draft.decisionNote}</p>}
-                {(draft.status === "draft" || draft.status === "rejected") && (
+                {(draft.status === "draft" || draft.status === "rejected") && boardReady(draft) && (
                   <>
-                    <p className="text-xs text-[#8494A7] mt-3">A commander signs this before it is public.</p>
+                    <p className="text-xs text-[#8494A7] mt-3">Every seat is filled. A commander signs this before it is public.</p>
                     <button type="button" disabled={busy} onClick={() => submitDraft(draft)} className="mt-2 text-xs px-3 py-1.5 rounded-lg border border-[#4274B9]/40 text-[#6AA3E0]">
                       Sign and submit for review
                     </button>
@@ -341,22 +267,10 @@ export function OrgDashboardPage() {
   );
 }
 
-const inputCls = "w-full rounded-xl bg-[#0B1120] border border-[#4274B9]/25 px-3 py-2 text-sm text-[#E8ECF0] outline-none focus:border-[#6AA3E0]/60";
-
-function Labeled({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <label className="block text-xs text-[#8494A7]">
-      {label}
-      <div className="mt-1">{children}</div>
-      {hint ? <span className="block mt-1 text-[0.65rem] text-[#8494A7]/80">{hint}</span> : null}
-    </label>
-  );
-}
-
-function formatHint(format: string): string {
-  if (format === "pvp") return "1v1 Duals — even roster, 2 to 32 athletes.";
-  if (format === "tournament") return "Tournament — 3 to 12 athletes. Fans pick a champion.";
-  return "Best in Field — 3 to 12 athletes. Fans pick one athlete.";
+function boardReady(draft: { format?: string; athleteIds?: string[] }): boolean {
+  const count = draft.athleteIds?.length || 0;
+  if (draft.format === "pvp") return count >= 2 && count <= 32 && count % 2 === 0;
+  return count >= 3 && count <= 12;
 }
 
 function draftStatusLabel(draft: { status?: string; gamified?: boolean }): string {

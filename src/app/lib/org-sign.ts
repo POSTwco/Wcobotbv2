@@ -164,6 +164,11 @@ export interface OrgEventFields {
   format: string;
   note: string;
   athleteIds: string[];
+  description: string;
+  endDate: string;
+  prizePool: number;
+  elimination: string;
+  performanceRounds: number;
 }
 
 export function normalizeEvent(f: OrgEventFields): OrgEventFields {
@@ -180,7 +185,18 @@ export function normalizeEvent(f: OrgEventFields): OrgEventFields {
     format: f.format,
     note: orgText(f.note, 2000),
     athleteIds: (f.athleteIds || []).map((id) => orgText(id, 80)).filter(Boolean),
+    description: orgText(f.description, 2000),
+    endDate: orgText(f.endDate, 40),
+    prizePool: prizePoolValue(f.prizePool),
+    elimination: f.format === "tournament" ? "single" : "none",
+    performanceRounds: Number(f.performanceRounds) === 2 ? 2 : 1,
   };
+}
+
+function prizePoolValue(input: unknown): number {
+  const n = Number(input);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1_000_000_000, Math.floor(n)));
 }
 
 export function eventCanonical(f: OrgEventFields): string {
@@ -198,6 +214,11 @@ export function eventCanonical(f: OrgEventFields): string {
     `format=${n.format}`,
     `note=${n.note}`,
     `athletes=${n.athleteIds.join(",")}`,
+    `description=${n.description}`,
+    `endDate=${n.endDate}`,
+    `prizePool=${n.prizePool}`,
+    `elimination=${n.elimination}`,
+    `rounds=${n.performanceRounds}`,
   ].join("\n");
 }
 
