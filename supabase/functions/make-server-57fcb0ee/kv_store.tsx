@@ -76,12 +76,35 @@ export const mdel = async (keys: string[]): Promise<void> => {
   }
 };
 
-// Search for key-value pairs by prefix.
+function likePrefix(prefix: string): string {
+  return prefix.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_") + "%";
+}
+
+// Search for key-value pairs by prefix. Returns values only.
 export const getByPrefix = async (prefix: string): Promise<any[]> => {
-  const supabase = client()
-  const { data, error } = await supabase.from("kv_store_f75faf6c").select("key, value").like("key", prefix + "%");
-  if (error) {
-    throw new Error(error.message);
+  const rows = await getEntriesByPrefix(prefix);
+  return rows.map((row) => row.value);
+};
+
+// Same prefix scan, keeping keys. Pages past the 1000-row default.
+export const getEntriesByPrefix = async (prefix: string): Promise<{ key: string; value: any }[]> => {
+  const supabase = client();
+  const pattern = likePrefix(prefix);
+  const pageSize = 1000;
+  const out: { key: string; value: any }[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("kv_store_f75faf6c")
+      .select("key, value")
+      .like("key", pattern)
+      .order("key", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      throw new Error(error.message);
+    }
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < pageSize) break;
   }
-  return data?.map((d) => d.value) ?? [];
+  return out;
 };

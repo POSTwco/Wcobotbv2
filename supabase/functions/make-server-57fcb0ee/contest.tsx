@@ -20,6 +20,7 @@
 import type { Context, Next } from "npm:hono";
 import type { Hono } from "npm:hono";
 import * as kv from "./kv_store.tsx";
+import { touchWalletSeen } from "./wallet-seen.tsx";
 import { acquireLock } from "./scaling.tsx";
 import {
   isValidHederaAccountId,
@@ -624,6 +625,12 @@ export function mountContestRoutes(app: Hono, PREFIX: string) {
           401,
         );
       }
+      const token = (c.req.header("X-Wallet-Session") || "").trim();
+      const session = token ? await kv.get(`wsession:${token}`) : null;
+      const source = session?.authProvider === "magic" ? "magic" : "hashpack";
+      touchWalletSeen(accountId, source).catch((err) => {
+        console.log(`[WALLET-SEEN] login-ping touch failed: ${err}`);
+      });
       const entry: any = await kv.get(`contest:entry:${accountId}`);
       if (!entry || entry.accountId !== accountId) {
         return c.json({ success: true, data: { entered: false } });

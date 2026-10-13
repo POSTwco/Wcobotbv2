@@ -29,6 +29,7 @@ interface VisitData {
   last30d: number;
   total: number;
   walletsConnected: number;
+  walletSeen?: { total: number; hashpack: number; magic: number; new24h: number };
   walletsVoted: number;
   workoutsGenerated: number;
   userWallets: number;
@@ -102,6 +103,7 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
           last30d: d.last30d || 0,
           total: d.total || 0,
           walletsConnected: d.walletsConnected || 0,
+          walletSeen: d.walletSeen,
           walletsVoted: d.walletsVoted || 0,
           workoutsGenerated: d.workoutsGenerated || 0,
           userWallets: d.userWallets || 0,
@@ -167,7 +169,7 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
     load();
     const id = setInterval(() => {
       if (document.visibilityState === "visible") load();
-    }, 45000); // ~45s balanced poll
+    }, 5000);
     return () => clearInterval(id);
   }, [load]);
 
@@ -265,7 +267,8 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
             <div className="text-[#D4A843] text-[0.55rem] uppercase tracking-widest font-bold flex items-center gap-1"><Users className="w-3 h-3" /> WALLETS</div>
             <div className="mt-1 text-xl font-bold text-white tabular-nums" style={{ fontFamily: "Orbitron, sans-serif" }}>{fmt(master.everConnected)}</div>
             <div className="text-[0.55rem] text-[#8494A7]">EVER CONNECTED • {fmt(master.caliActive)} ACTIVE IN TRAINING</div>
-            <div className="text-[0.6rem] mt-0.5 text-emerald-400">{master.conversion}% TRAINING CONVERSION</div>
+            <div className="text-[0.55rem] text-[#8494A7]">HashPack {fmt(visit?.walletSeen?.hashpack || 0)} · Magic {fmt(visit?.walletSeen?.magic || 0)}</div>
+            <div className="text-[0.6rem] mt-0.5 text-emerald-400">{fmt(visit?.walletSeen?.new24h || 0)} NEW IN 24H • {master.conversion}% TRAINING</div>
           </div>
 
           {/* Sign-ins Gate */}

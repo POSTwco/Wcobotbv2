@@ -21,6 +21,7 @@
 
 import { Hono } from "npm:hono";
 import * as kv from "./kv_store.tsx";
+import { touchWalletSeen } from "./wallet-seen.tsx";
 import {
   isValidHederaAccountId,
   verifyWalletOnMirrorNode,
@@ -377,6 +378,9 @@ export function mountMagicRoutes(app: Hono, PREFIX: string) {
 
       const existing = await kv.get(`magic-user:${issuer}`);
       if (existing && (existing as any).accountId && isValidHederaAccountId((existing as any).accountId)) {
+        touchWalletSeen((existing as any).accountId, "magic").catch((err) => {
+          console.log(`[WALLET-SEEN] magic ensure touch failed: ${err}`);
+        });
         return c.json({
           success: true,
           data: {
@@ -438,6 +442,9 @@ export function mountMagicRoutes(app: Hono, PREFIX: string) {
       );
 
       console.log(`[MAGIC] Created Hedera account ${accountId} for issuer ${issuer.substring(0, 24)}…`);
+      touchWalletSeen(accountId, "magic").catch((err) => {
+        console.log(`[WALLET-SEEN] magic create touch failed: ${err}`);
+      });
 
       return c.json({
         success: true,
@@ -539,6 +546,9 @@ export function mountMagicRoutes(app: Hono, PREFIX: string) {
       );
 
       console.log(`[MAGIC] Session registered for ${wallet} (issuer ${identity.issuer.substring(0, 20)}…)`);
+      touchWalletSeen(wallet, "magic").catch((err) => {
+        console.log(`[WALLET-SEEN] magic register touch failed: ${err}`);
+      });
 
       return c.json({
         success: true,

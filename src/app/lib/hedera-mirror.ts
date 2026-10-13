@@ -230,12 +230,11 @@ export async function getAccountBalance(
     network
   );
 
-  if (!data.balances?.length) {
-    console.warn(`[BOTB Mirror] No balance data for account ${accountId}`);
+  const entry = data.balances?.find((row) => row.account === accountId);
+  if (!entry) {
+    console.warn(`[BOTB Mirror] No balance row for account ${accountId}`);
     return { hbarBalance: 0, tokens: [] };
   }
-
-  const entry = data.balances[0];
   const hbarBalance = entry.balance / TINYBAR_DIVISOR;
 
   console.log(

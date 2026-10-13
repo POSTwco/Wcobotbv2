@@ -243,11 +243,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // ------------------------------------------------------------------
   // Balance Fetching
   // ------------------------------------------------------------------
+  const balanceReqRef = useRef(0);
   const doFetchBalances = useCallback(
     async (acctId: string, net: HederaNetwork | null, isInitial = false) => {
-      if (isInitial) setIsLoadingBalances(true);
+      const req = ++balanceReqRef.current;
+      if (isInitial) {
+        setIsLoadingBalances(true);
+        setBalances(ZERO_BALANCES);
+      }
       try {
         const data = await fetchWalletBalances(acctId, net ?? undefined);
+        if (balanceReqRef.current !== req || accountIdRef.current !== acctId) return;
         setBalances(data);
         setNftCategories(data.categorized);
         setRawNfts(data.nfts);
@@ -257,7 +263,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error("[BOTB Wallet Context] Balance fetch error:", err);
       } finally {
-        if (isInitial) setIsLoadingBalances(false);
+        if (isInitial && balanceReqRef.current === req) setIsLoadingBalances(false);
       }
     },
     []
@@ -291,6 +297,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     (sess: SessionTypes.Struct, acctId: string, net: HederaNetwork | null) => {
       // Sync singleton state in wallet-connect.ts so signMessage() works
       syncSessionState(sess, acctId, net ?? "mainnet");
+      accountIdRef.current = acctId;
       setSession(sess);
       setAccountId(acctId);
       setNetwork(net);
@@ -308,6 +315,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const setMagicConnectedState = useCallback(
     (acctId: string, net: HederaNetwork, token: string) => {
+      accountIdRef.current = acctId;
       setSession(null);
       setAccountId(acctId);
       setNetwork(net);
@@ -327,6 +335,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clearConnectedState = useCallback(() => {
+    accountIdRef.current = null;
     setSession(null);
     setAccountId(null);
     setNetwork(null);

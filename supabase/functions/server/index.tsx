@@ -140,6 +140,7 @@ import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
+import { countWalletSeen, touchWalletSeen } from "./wallet-seen.tsx";
 import {
   requireAdminSession,
   extractAdminWallet,
@@ -872,8 +873,10 @@ app.post(`${PREFIX}/wallet/register`, async (c) => {
       [sessionData, { token }],
     );
 
-    // All-time unique-wallet metric (idempotent, hashed, fire-and-forget)
-    recordWalletConnected(wallet).catch(() => {});
+    // Permanent wallet registry. Contest state does not gate this.
+    touchWalletSeen(wallet, "hashpack").catch((err) => {
+      console.log(`[WALLET-SEEN] register touch failed: ${err}`);
+    });
 
     console.log(`[WALLET-SESSION] Registered session for ${wallet} (topic: ${wcTopic.substring(0, 16)}…, TTL: 4h)`);
 
@@ -1118,13 +1121,12 @@ app.post(`${PREFIX}/track-visit`, async (c) => {
 // WALLET ENGAGEMENT COUNTERS — All-time unique wallet metrics
 // ---------------------------------------------------------------------------
 // Two separate counters:
-//   1. wconn:total      Unique wallets that have ever connected (registered a session)
-//   2. wvoted:total     Unique wallets that have ever cast a vote
+//   1. wallet:seen:<accountId>  Live unique wallets (the WALLETS card counts this prefix)
+//   2. wvoted:total              Unique wallets that have ever cast a vote
 //
-// PRIVACY: We never expose wallet IDs in any admin endpoint. Wallets ARE
-// public on-chain identifiers, but to comply with "no client-side leakage"
-// we store dedupe markers as HMAC hashes (`wconn:{hash}`, `wvoted:{hash}`)
-// rather than the raw wallet. The admin endpoint returns ONLY the counts.
+// PRIVACY: Visit-stats returns counts only. Connected wallets are stored as
+// wallet:seen:<accountId> in kv_store_f75faf6c. Vote dedupe stays HMAC (`wvoted:{hash}`).
+// The WALLETS card counts the wallet:seen prefix live. It does not read wconn:total.
 //
 // TAMPER-PROOFING:
 //   - Hooks fire only on the SUCCESS path of /wallet/register and /vote/*
@@ -1144,28 +1146,6 @@ async function hashWallet(wallet: string, scope: string): Promise<string> {
   );
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${scope}|${wallet}`));
   return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/** Increment all-time unique wallet-connected counter. Idempotent per wallet. */
-async function recordWalletConnected(wallet: string): Promise<void> {
-  try {
-    if (!wallet) return;
-    const hash = await hashWallet(wallet, "wconn");
-    const markerKey = `wconn:${hash}`;
-    if (await kv.get(markerKey)) return; // Already counted
-
-    const release = await acquireLock(`wccounter:total`);
-    try {
-      if (await kv.get(markerKey)) return;
-      await kv.set(markerKey, 1);
-      const total = (Number(await kv.get(`wconn:total`)) || 0) + 1;
-      await kv.set(`wconn:total`, total);
-    } finally {
-      release();
-    }
-  } catch (err) {
-    console.log(`[WALLET-METRIC] connected counter error (non-fatal): ${err}`);
-  }
 }
 
 /** Increment all-time unique wallet-voted counter. Idempotent per wallet. */
@@ -1205,8 +1185,8 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
     const total = Number(await kv.get(`vcount:total`)) || 0;
     const last7d = dailyVals.slice(0, 7).reduce((s: number, v: number) => s + v, 0);
     const last30d = dailyVals.reduce((s: number, v: number) => s + v, 0);
-    const [walletsConnected, walletsVoted, workoutsGenerated, userWallets] = await kv.mget([
-      `wconn:total`,
+    const seen = await countWalletSeen();
+    const [walletsVoted, workoutsGenerated, userWallets] = await kv.mget([
       `wvoted:total`,
       `cali:gen:total`,
       `caliuser:total`,
@@ -1219,13 +1199,14 @@ app.get(`${PREFIX}/admin/visit-stats`, requireAdminSession, async (c) => {
         last7d,
         last30d,
         total,
-        walletsConnected: Number(walletsConnected) || 0,
+        walletsConnected: seen.total,
+        walletSeen: seen,
         walletsVoted: Number(walletsVoted) || 0,
         workoutsGenerated: Number(workoutsGenerated) || 0,
         userWallets: Number(userWallets) || 0,
         breakdown: days.map((d, i) => ({ date: d, count: dailyVals[i] || 0 })),
         retentionDays: VISIT_HASH_RETENTION_DAYS,
-        privacyNote: "IPs and wallet IDs are HMAC-hashed; raw values are never returned by this endpoint.",
+        privacyNote: "Visit IPs stay HMAC-hashed. The WALLETS card is a live count of wallet:seen keys and does not return account IDs.",
       },
     });
   } catch (e) {

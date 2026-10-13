@@ -25,7 +25,7 @@
  *   - /cali/verify          :  5 / wallet / min
  *   - /cali/session/refresh : 12 / wallet / hour
  *
- * KEY NAMESPACE in kv_store_57fcb0ee:
+ * KEY NAMESPACE in kv_store_f75faf6c:
  *   cali:nonce:<nonce>           short-lived challenge record (5 min TTL marker)
  *   cali:eligible:<accountId>    { balance, checkedAt, expiresAt } — 24h TTL
  *   cali:rl:<key>:<window>       rate-limit counters (delegated to admin-auth)

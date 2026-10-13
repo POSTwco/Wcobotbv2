@@ -17,6 +17,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
 import { applyCors, clientIp, rateLimit, safeClientError } from "./lib/magic-security";
+import { touchWalletSeen } from "./lib/wallet-seen";
 
 const KV_TABLE = "kv_store_f75faf6c";
 const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
@@ -226,6 +227,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       [`wsession:${token}`, `wsession-wallet:${wallet}`],
       [sessionData, { token }],
     );
+    try {
+      await touchWalletSeen(kvClient(), KV_TABLE, wallet, "magic");
+    } catch (err) {
+      console.error("[WALLET-SEEN] register touch failed", String((err as any)?.message || err).slice(0, 160));
+    }
 
     console.log(`[MAGIC-REG] Session for ${wallet}`);
     return res.status(200).json({

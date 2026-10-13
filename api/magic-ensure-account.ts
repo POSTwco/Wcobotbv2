@@ -29,6 +29,7 @@ import {
 import { createClient } from "@supabase/supabase-js";
 import { Magic } from "@magic-sdk/admin";
 import { applyCors, clientIp, rateLimit, safeClientError } from "./lib/magic-security";
+import { touchWalletSeen } from "./lib/wallet-seen";
 
 const KV_TABLE = "kv_store_f75faf6c";
 const DEFAULT_SUPABASE_URL = "https://wotsoauebnoyvegcvouo.supabase.co";
@@ -557,6 +558,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const existing = await kvGet(`magic-user:${identity.issuer}`);
     if (existing?.accountId && /^0\.0\.\d+$/.test(existing.accountId)) {
+      try {
+        await touchWalletSeen(kvClient(), KV_TABLE, existing.accountId, "magic");
+      } catch (err) {
+        console.error("[WALLET-SEEN] ensure touch failed", String((err as any)?.message || err).slice(0, 160));
+      }
       return res.status(200).json({
         success: true,
         data: {
@@ -604,6 +610,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       [`magic-user:${identity.issuer}`, `magic-account:${accountId}`],
       [record, { issuer: identity.issuer }],
     );
+    try {
+      await touchWalletSeen(kvClient(), KV_TABLE, accountId, "magic");
+    } catch (err) {
+      console.error("[WALLET-SEEN] ensure create touch failed", String((err as any)?.message || err).slice(0, 160));
+    }
 
     return res.status(200).json({
       success: true,
