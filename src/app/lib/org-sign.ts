@@ -169,6 +169,7 @@ export interface OrgEventFields {
   prizePool: number;
   elimination: string;
   performanceRounds: number;
+  announcementDate: string;
 }
 
 export function normalizeEvent(f: OrgEventFields): OrgEventFields {
@@ -190,6 +191,7 @@ export function normalizeEvent(f: OrgEventFields): OrgEventFields {
     prizePool: prizePoolValue(f.prizePool),
     elimination: f.format === "tournament" ? "single" : "none",
     performanceRounds: Number(f.performanceRounds) === 2 ? 2 : 1,
+    announcementDate: orgText(f.announcementDate, 40),
   };
 }
 
@@ -219,6 +221,7 @@ export function eventCanonical(f: OrgEventFields): string {
     `prizePool=${n.prizePool}`,
     `elimination=${n.elimination}`,
     `rounds=${n.performanceRounds}`,
+    `announcementDate=${n.announcementDate}`,
   ].join("\n");
 }
 

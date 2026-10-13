@@ -179,6 +179,7 @@ interface EventFields {
   prizePool: number;
   elimination: string;
   performanceRounds: number;
+  announcementDate: string;
 }
 
 function normalizeEvent(raw: any, action: string): EventFields {
@@ -201,6 +202,7 @@ function normalizeEvent(raw: any, action: string): EventFields {
     prizePool: prizePoolValue(raw?.prizePool),
     elimination: raw?.format === "tournament" ? "single" : "none",
     performanceRounds: Number(raw?.performanceRounds) === 2 ? 2 : 1,
+    announcementDate: orgText(raw?.announcementDate, 40),
   };
 }
 
@@ -242,6 +244,7 @@ function eventCanonical(f: EventFields): string {
     `prizePool=${f.prizePool}`,
     `elimination=${f.elimination}`,
     `rounds=${f.performanceRounds}`,
+    `announcementDate=${f.announcementDate}`,
   ].join("\n");
 }
 
@@ -405,6 +408,12 @@ function isApprovedScheduleDraft(e: any): boolean {
   return e.status === "draft" || e.votingStatus === "draft";
 }
 
+function announced(raw: unknown): boolean {
+  const day = String(raw || "").trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return true;
+  return day <= new Date().toISOString().slice(0, 10);
+}
+
 function scheduleDraftToPublic(e: any) {
   return {
     id: `scheduled-${e.id}`,
@@ -520,7 +529,7 @@ async function listPublic(): Promise<any[]> {
   });
   return approved.map((org: any) => {
     const cards = calendar
-      .filter((c: any) => c && c.orgId === org.id && c.visibility === "public" && c.gamified === false)
+      .filter((c: any) => c && c.orgId === org.id && c.visibility === "public" && c.gamified === false && announced(c.announcementDate))
       .map((c: any) => ({
         id: c.id,
         orgId: c.orgId,
@@ -540,7 +549,7 @@ async function listPublic(): Promise<any[]> {
     // Commander approval of a gamified event creates a draft. The schedule
     // lists its name, place, and date before voting is published.
     const approvedDrafts = battleEvents
-      .filter((e: any) => e && e.orgId === org.id && isApprovedScheduleDraft(e))
+      .filter((e: any) => e && e.orgId === org.id && isApprovedScheduleDraft(e) && announced(e.announcementDate))
       .map(scheduleDraftToPublic);
     const events = [...linked, ...cards, ...approvedDrafts].sort((a, b) => String(b.eventDate).localeCompare(String(a.eventDate)));
     return publicOrg(org, events);
@@ -663,16 +672,16 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
   const bracket = athleteIds.map((athleteId: string, i: number) => ({ seat: i + 1, athleteId }));
   const description = String(draft.description || "").trim()
     || `Submitted by ${org?.name || "an organization"}. ${draft.note || ""}`.trim();
-  const endDate = draft.endDate || "";
   const prizePool = prizePoolValue(draft.prizePool);
   const judgedRounds = draft.performanceRounds === 2 ? 2 : 1;
+  const announcementDate = draft.announcementDate || "";
   if (draft.format === "tournament" || draft.format === "field") {
     const { event } = await createTournamentEvent({
       name: draft.name,
       description,
       location: draft.location || "",
       startDate: draft.eventDate || "",
-      endDate,
+      endDate: "",
       totalPrizePool: prizePool,
       bracket,
       format: draft.format,
@@ -683,6 +692,7 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
     event.gamified = true;
     event.source = "organization";
     event.organizationDraftId = draft.id;
+    event.announcementDate = announcementDate;
     event.updatedAt = nowIso();
     await kv.set(`event:${event.id}`, event);
     return event;
@@ -710,8 +720,8 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
       bracketPosition: i + 1,
       athlete1Id: a,
       athlete2Id: b,
-      votingOpensAt: draft.eventDate || "",
-      votingClosesAt: endDate,
+      votingOpensAt: "",
+      votingClosesAt: "",
       totalPool: prizePool,
       votes1Count: 0,
       votes2Count: 0,
@@ -731,7 +741,8 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
     description,
     location: draft.location || "",
     startDate: draft.eventDate || "",
-    endDate,
+    endDate: "",
+    announcementDate,
     totalPrizePool: prizePool,
     status: "draft",
     format: "pvp",
@@ -1291,7 +1302,7 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
       if (!verified.ok) return c.json({ success: false, error: verified.error }, verified.status);
 
       const changes: string[] = [];
-      for (const k of ["name", "eventDate", "location", "livestream", "registrationUrl", "website", "discipline", "format", "note"]) {
+      for (const k of ["name", "eventDate", "announcementDate", "location", "livestream", "registrationUrl", "website", "discipline", "format", "note"]) {
         if (String(draft[k] || "") !== String((fields as any)[k] || "")) {
           changes.push(`${k}: "${draft[k] || ""}" → "${(fields as any)[k] || ""}"`);
         }
@@ -1337,6 +1348,7 @@ export function mountOrganizationRoutes(app: Hono, PREFIX: string) {
         orgId: draft.orgId,
         name: draft.name,
         eventDate: draft.eventDate || "",
+        announcementDate: draft.announcementDate || "",
         location: draft.location || "",
         livestream: draft.livestream || "",
         registrationUrl: draft.registrationUrl || "",

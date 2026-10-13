@@ -25,6 +25,7 @@ export type OrgEventDraft = {
   draftId: string;
   name: string;
   eventDate: string;
+  announcementDate: string;
   endDate: string;
   location: string;
   livestream: string;
@@ -45,6 +46,7 @@ export const blankOrgEvent = (): OrgEventDraft => ({
   draftId: "",
   name: "",
   eventDate: "",
+  announcementDate: "",
   endDate: "",
   location: "",
   livestream: "",
@@ -71,7 +73,8 @@ export function orgEventFromRecord(draft: any): OrgEventDraft {
     draftId: draft.id || "",
     name: draft.name || "",
     eventDate: draft.eventDate || "",
-    endDate: draft.endDate || "",
+    announcementDate: draft.announcementDate || "",
+    endDate: "",
     location: draft.location || "",
     livestream: draft.livestream || "",
     registrationUrl: draft.registrationUrl || "",
@@ -240,11 +243,13 @@ export function OrgEventBuilder({
                 <input className={inputCls} type="number" min={0} value={draft.prizePool || ""} onChange={(e) => setDraft({ ...draft, prizePool: Number(e.target.value) || 0 })} placeholder="0" />
               </span>
             </label>
-            <label className="text-xs text-[#8494A7]">Opens
-              <input className={inputCls} type="datetime-local" value={draft.eventDate} onChange={(e) => setDraft({ ...draft, eventDate: e.target.value })} />
+            <label className="text-xs text-[#8494A7]">Announcement date
+              <input className={inputCls} type="date" value={draft.announcementDate} onChange={(e) => setDraft({ ...draft, announcementDate: e.target.value })} />
+              <span className="block text-[0.6rem] text-[#8494A7]/80 mt-1">The day you want this listed on the site. WCO publishes it.</span>
             </label>
-            <label className="text-xs text-[#8494A7]">Closes
-              <input className={inputCls} type="datetime-local" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} />
+            <label className="text-xs text-[#8494A7]">Event date and hour
+              <input className={inputCls} type="datetime-local" value={draft.eventDate} onChange={(e) => setDraft({ ...draft, eventDate: e.target.value })} />
+              <span className="block text-[0.6rem] text-[#8494A7]/80 mt-1">When the live event happens. WCO adds voting and token amounts later.</span>
             </label>
             <label className="sm:col-span-2 text-xs text-[#8494A7]">Public description
               <textarea className={inputCls} rows={2} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="What fans and the Event Console should show" />

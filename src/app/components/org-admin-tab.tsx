@@ -110,7 +110,8 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
     const fields = {
       name: selected.name || "",
       eventDate: selected.eventDate || "",
-      endDate: selected.endDate || "",
+      announcementDate: selected.announcementDate || "",
+      endDate: "",
       location: selected.location || "",
       livestream: selected.livestream || "",
       registrationUrl: selected.registrationUrl || "",
@@ -246,7 +247,8 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
             {queue === "events" && (
               <>
                 <AdminField label="Name" value={selected.name || ""} onChange={(v) => setSelected({ ...selected, name: v })} />
-                <AdminField label="Date" value={selected.eventDate || ""} onChange={(v) => setSelected({ ...selected, eventDate: v })} />
+                <AdminField label="Announcement date" value={selected.announcementDate || ""} onChange={(v) => setSelected({ ...selected, announcementDate: v })} />
+                <AdminField label="Event date and hour" value={selected.eventDate || ""} onChange={(v) => setSelected({ ...selected, eventDate: v })} />
                 <AdminField label="Location" value={selected.location || ""} onChange={(v) => setSelected({ ...selected, location: v })} />
                 <AdminField label="Livestream" value={selected.livestream || ""} onChange={(v) => setSelected({ ...selected, livestream: v })} />
                 <AdminField label="Registration" value={selected.registrationUrl || ""} onChange={(v) => setSelected({ ...selected, registrationUrl: v })} />
@@ -254,7 +256,7 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
                 <AdminField label="Discipline" value={selected.discipline || ""} onChange={(v) => setSelected({ ...selected, discipline: v })} />
                 <AdminField label="Format (pvp, tournament, field)" value={selected.format || ""} onChange={(v) => setSelected({ ...selected, format: v })} />
                 <AdminField label="Public description" value={selected.description || ""} onChange={(v) => setSelected({ ...selected, description: v })} multiline />
-                <AdminField label="Closes" value={selected.endDate || ""} onChange={(v) => setSelected({ ...selected, endDate: v })} />
+                <p className="text-xs text-[#8494A7]">Voting windows and token amounts are added in the Event Console after this request is accepted.</p>
                 <AdminField label="Prize pool" value={String(selected.prizePool || 0)} onChange={(v) => setSelected({ ...selected, prizePool: Number(v) || 0 })} />
                 <p className="text-xs text-[#8494A7]">{orgFormatLabel(selected.format)} · {(selected.athleteIds || []).length} athletes{selected.format === "field" ? ` · ${selected.performanceRounds === 2 ? 2 : 1} judged rounds` : ""}</p>
                 <div className="rounded-lg border border-[#4274B9]/20 bg-[#0B1120] p-2 space-y-1">
@@ -266,7 +268,7 @@ export function OrgAdminTab({ wallet, sessionToken }: { wallet: string; sessionT
                   <input type="checkbox" checked={gamified} onChange={(e) => setGamified(e.target.checked)} className="mt-1" />
                   <span>
                     Populate this as an Only Gains draft
-                    <span className="block text-xs text-[#8494A7] mt-1">Off lists a calendar card on the organization. No game asset is created. On creates a draft in the Event Console from this board, including the description, dates, prize, and seats. The organization still cannot open voting.</span>
+                    <span className="block text-xs text-[#8494A7] mt-1">Off lists a calendar card on the organization once the announcement date arrives. No game asset is created. On creates a draft in the Event Console from this board, including the description, announcement date, event time, prize, and seats. Voting and token amounts stay here for commanders. The organization still cannot open voting.</span>
                   </span>
                 </label>
               </>
