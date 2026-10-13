@@ -16,8 +16,22 @@ import { InlineFlag } from "./country-flag";
 
 const ORBITRON = { fontFamily: "Orbitron, sans-serif" } as const;
 
+function eventDateLabel(value: string): string {
+  const parsed = Date.parse(value || "");
+  if (!Number.isFinite(parsed)) return "Date to be announced";
+  const date = new Date(parsed);
+  const hasTime = value.includes("T");
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    ...(hasTime ? { hour: "numeric", minute: "2-digit" } : {}),
+  });
+}
+
 export function TournamentCard({
   event,
+  organizer = "World Calisthenics Organization",
   athleteMap,
   myVote,
   connected,
@@ -29,6 +43,7 @@ export function TournamentCard({
   onVoted,
 }: {
   event: BattleEvent;
+  organizer?: string;
   athleteMap: Map<string, Athlete>;
   myVote?: TournamentVote | null;
   connected: boolean;
@@ -162,11 +177,16 @@ export function TournamentCard({
             <h3 className="text-lg sm:text-xl font-black text-[#E8ECF0] truncate" style={ORBITRON}>
               {event.name}
             </h3>
+            <p className="text-xs text-[#8494A7] mt-0.5">
+              {organizer}
+              <span className="text-[#4274B9]"> · </span>
+              {eventDateLabel(event.startDate)}
+              {event.location ? ` · ${event.location}` : ""}
+            </p>
             <p className="text-[0.65rem] text-[#8494A7] mt-0.5">
               {isField
                 ? `${entrantIds.length} individuals · no 1v1 fights · pick exactly one · ${event.performanceRounds || 1} judged round${(event.performanceRounds || 1) > 1 ? "s" : ""}`
                 : `${entrantIds.length} athletes · single elimination · pick one champion`}
-              {event.location ? ` · ${event.location}` : ""}
             </p>
           </div>
           <div className="text-right text-[0.55rem] text-[#8494A7]">

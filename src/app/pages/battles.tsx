@@ -29,7 +29,7 @@ import { useLiveBattles, useAthleteMap, useMyVotes, useAllocations, useEvents } 
 import { api } from "../lib/api";
 import { generateSecureNonce } from "../lib/api";
 import { signatureCancelledMessage, signaturePromptMessage } from "../lib/magic-signing-guidance";
-import type { Battle, Athlete, BattleVote } from "../lib/types";
+import type { Battle, Athlete, BattleVote, PublicOrganization } from "../lib/types";
 import { ErrorCard } from "../components/error-boundary";
 import { VoteCelebration, type CelebrationData } from "../components/vote-celebration";
 import { BattleLoader } from "../components/battle-loader";
@@ -145,6 +145,41 @@ function daysLeftText(days: number): string {
   return `in ${days} days`;
 }
 
+function battleDateLabel(value: string): string {
+  const parsed = Date.parse(value || "");
+  if (!Number.isFinite(parsed)) return "Date to be announced";
+  const date = new Date(parsed);
+  const hasTime = value.includes("T");
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    ...(hasTime ? { hour: "numeric", minute: "2-digit" } : {}),
+  });
+}
+
+function DateMark({ value }: { value: string }) {
+  const parsed = Date.parse(value || "");
+  if (!Number.isFinite(parsed)) {
+    return (
+      <span>
+        <span className="block text-[0.6rem] uppercase tracking-wide text-[#6AA3E0]" style={ORBITRON}>Date</span>
+        <span className="block text-lg leading-none text-[#E8ECF0] font-semibold">TBA</span>
+      </span>
+    );
+  }
+  const date = new Date(parsed);
+  return (
+    <span>
+      <span className="block text-[0.6rem] uppercase tracking-wide text-[#6AA3E0]" style={ORBITRON}>
+        {date.toLocaleDateString("en-US", { month: "short" })}
+      </span>
+      <span className="block text-lg leading-none text-[#E8ECF0] font-semibold">{date.getDate()}</span>
+      <span className="block text-[0.6rem] text-[#8494A7]">{date.getFullYear()}</span>
+    </span>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // BattlesPage
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -166,7 +201,18 @@ export function BattlesPage() {
   const { voteMap, refresh: refreshMyVotes } = useMyVotes(connected ? accountId : null);
   const { allocations, refresh: refreshAllocations } = useAllocations(connected ? accountId : null);
   const { data: events, refresh: refreshEvents } = useEvents();
+  const [orgs, setOrgs] = useState<PublicOrganization[]>([]);
   const [myTournamentVotes, setMyTournamentVotes] = useState<Map<string, TournamentVote>>(new Map());
+
+  useEffect(() => {
+    let cancel = false;
+    api.getOrganizations().then((res) => {
+      if (!cancel && res.success && Array.isArray(res.data)) setOrgs(res.data);
+    }).catch(() => {});
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   const tournamentEvents = useMemo(
     () =>
@@ -592,6 +638,47 @@ export function BattlesPage() {
   const showTournaments = filter === "all" || filter === "tournaments";
   const showBattles = filter !== "tournaments";
 
+  const organizerName = useCallback((orgId?: string) => {
+    if (!orgId) return "World Calisthenics Organization";
+    return orgs.find((org) => org.id === orgId)?.name || "World Calisthenics Organization";
+  }, [orgs]);
+
+  const battleGroups = useMemo(() => {
+    const eventById = new Map((events || []).map((event) => [event.id, event]));
+    const buckets = new Map<string, Battle[]>();
+    for (const battle of filteredBattles) {
+      const key = battle.eventId || "standalone";
+      const list = buckets.get(key) || [];
+      list.push(battle);
+      buckets.set(key, list);
+    }
+    return [...buckets.entries()].map(([eventId, list]) => {
+      const event = eventId === "standalone" ? undefined : eventById.get(eventId);
+      const rows = [...list].sort((a, b) => (a.bracketPosition || 0) - (b.bracketPosition || 0));
+      const when = event?.startDate || rows[0]?.votingClosesAt || rows[0]?.votingOpensAt || "";
+      return {
+        eventId,
+        event,
+        name: event?.name || (eventId === "standalone" ? "Independent matchups" : "Event"),
+        organizer: organizerName(event?.orgId),
+        when,
+        location: event?.location || rows.find((row) => row.location)?.location || "",
+        description: event?.description || "",
+        prize: event?.totalPrizePool || 0,
+        battles: rows,
+      };
+    }).sort((a, b) => {
+      const at = Date.parse(a.when || "");
+      const bt = Date.parse(b.when || "");
+      const aOk = Number.isFinite(at);
+      const bOk = Number.isFinite(bt);
+      if (aOk && bOk && at !== bt) return at - bt;
+      if (aOk && !bOk) return -1;
+      if (!aOk && bOk) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredBattles, events, organizerName]);
+
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen relative overflow-x-hidden">
@@ -676,6 +763,7 @@ export function BattlesPage() {
                 <TournamentCard
                   key={evt.id}
                   event={evt}
+                  organizer={organizerName(evt.orgId)}
                   athleteMap={athleteMap}
                   myVote={myTournamentVotes.get(evt.id)}
                   connected={connected}
@@ -709,8 +797,22 @@ export function BattlesPage() {
               </p>
             </motion.div>
           ) : showBattles && filteredBattles.length > 0 ? (
-            <div className="space-y-6 sm:space-y-8">
-              {filteredBattles.map((battle, i) => {
+            <div className="space-y-8">
+              {battleGroups.map((group) => (
+              <section key={group.eventId} className="rounded-2xl border border-[#4274B9]/25 bg-[#111827] p-3 sm:p-4">
+                <div className="grid grid-cols-[4.25rem_minmax(0,1fr)] gap-3 mb-4">
+                  <DateMark value={group.when} />
+                  <div className="min-w-0">
+                    <p className="text-[0.6rem] uppercase tracking-wide text-[#6AA3E0]" style={ORBITRON}>Event</p>
+                    <h2 className="text-sm sm:text-base text-[#E8ECF0] font-semibold truncate" style={ORBITRON}>{group.name}</h2>
+                    <p className="text-xs text-[#8494A7] truncate mt-0.5">{group.organizer}</p>
+                    <p className="text-xs text-[#8494A7] truncate">{battleDateLabel(group.when)}{group.location ? ` · ${group.location}` : ""} · {group.battles.length} battle{group.battles.length === 1 ? "" : "s"}</p>
+                    {group.description ? <p className="text-xs text-[#C5D0DC] mt-1 line-clamp-2">{group.description}</p> : null}
+                    {group.prize > 0 ? <p className="text-[0.65rem] text-[#D4A843] mt-1" style={ORBITRON}>{group.prize.toLocaleString()} WCO prize pool</p> : null}
+                  </div>
+                </div>
+                <div className="space-y-6">
+              {group.battles.map((battle, i) => {
                 const status = statusLabel(battle.status);
                 const a1 = getAthlete(battle.athlete1Id);
                 const a2 = getAthlete(battle.athlete2Id);
@@ -883,6 +985,14 @@ export function BattlesPage() {
                         <h3 className="text-[#E8ECF0] font-bold text-base sm:text-xl tracking-tight" style={ORBITRON}>
                           {battle.title}
                         </h3>
+                        <p className="text-xs text-[#8494A7] mt-1">
+                          {group.name}
+                          <span className="text-[#4274B9]"> · </span>
+                          {group.organizer}
+                          <span className="text-[#4274B9]"> · </span>
+                          {battleDateLabel(battle.votingClosesAt || battle.votingOpensAt || group.when)}
+                          {battle.location ? ` · ${battle.location}` : ""}
+                        </p>
 
                         {/* ── Competition date + countdown ── */}
                         {(() => {
@@ -1188,6 +1298,9 @@ export function BattlesPage() {
                   </motion.div>
                 );
               })}
+                </div>
+              </section>
+              ))}
             </div>
           ) : null}
         </div>
