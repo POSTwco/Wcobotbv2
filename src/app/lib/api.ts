@@ -923,6 +923,34 @@ export const api = {
         method: "POST", body: {}, adminWallet, sessionToken,
       }),
 
+    uploadJudgePhoto: async (
+      id: string,
+      file: File,
+      adminWallet: string,
+      sessionToken: string,
+    ): Promise<ApiResponse<{ path: string; photoSignedUrl: string }>> => {
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const res = await fetch(`${BASE_URL}/admin/judges/${encodeURIComponent(id)}/photo`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+            "X-Admin-Wallet": adminWallet,
+            "X-Admin-Session": sessionToken,
+          },
+          body: fd,
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          return { success: false, error: sanitizeApiError(json.error || `Upload failed (${res.status})`) };
+        }
+        return { success: true, data: json.data };
+      } catch (e) {
+        return { success: false, error: sanitizeApiError(String(e)) };
+      }
+    },
+
     updateJudge: (id: string, body: {
       name: string;
       fullName: string;

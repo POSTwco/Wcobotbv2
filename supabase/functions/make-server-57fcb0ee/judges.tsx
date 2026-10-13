@@ -558,6 +558,45 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
     }
   });
 
+  app.post(`${PREFIX}/admin/judges/:id/photo`, requireAdminSession, async (c) => {
+    try {
+      const id = c.req.param("id");
+      const row: any = await kv.get(`judge:${id}`);
+      if (!row || row.status !== "approved") return c.json({ success: false, error: "Approved judge not found" }, 404);
+      const form = await c.req.formData();
+      const file = form.get("file");
+      if (!(file instanceof File)) return c.json({ success: false, error: "No file provided" }, 400);
+      if (file.size <= 0 || file.size > PHOTO_MAX_BYTES) {
+        return c.json({ success: false, error: "Photo must be a PNG, JPEG, or WEBP under 5 MB" }, 400);
+      }
+      if (!PHOTO_MIME.has(file.type)) {
+        return c.json({ success: false, error: "Only PNG, JPEG, or WEBP images are allowed" }, 400);
+      }
+      const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+      const wallet = String(row.wallet || "judge").replace(/[^0-9a-zA-Z.]/g, "");
+      const path = `pfps/judge-${wallet}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const { error: upErr } = await supabaseAdmin.storage.from(PFP_BUCKET).upload(path, bytes, {
+        contentType: file.type,
+        upsert: false,
+      });
+      if (upErr) {
+        console.log(`[JUDGE] admin photo upload failed: ${upErr.message}`);
+        return c.json({ success: false, error: "Upload failed. Please try again." }, 500);
+      }
+      const previous = String(row.photoPath || "");
+      const updated = { ...row, photoPath: path, updatedAt: nowIso() };
+      await kv.set(`judge:${id}`, updated);
+      if (previous && previous !== path && previous.startsWith("pfps/judge-")) {
+        await supabaseAdmin.storage.from(PFP_BUCKET).remove([previous]);
+      }
+      return c.json({ success: true, data: { path, photoSignedUrl: await signedPhoto(path) } });
+    } catch (error) {
+      console.log(`[JUDGE] admin photo error: ${error}`);
+      return c.json({ success: false, error: "Failed to update photo" }, 500);
+    }
+  });
+
   app.post(`${PREFIX}/admin/judges/:id`, requireAdminSession, async (c) => {
     try {
       const id = c.req.param("id");

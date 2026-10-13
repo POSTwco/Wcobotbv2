@@ -23,11 +23,13 @@ export function JudgeMark({
   hasPhoto,
   name,
   className = "",
+  iconClassName = "w-5 h-5 text-[#E8ECF0]",
 }: {
   id: string;
   hasPhoto: boolean;
   name: string;
   className?: string;
+  iconClassName?: string;
 }) {
   const [src, setSrc] = useState("");
 
@@ -48,11 +50,11 @@ export function JudgeMark({
   }, [id, hasPhoto]);
 
   if (src) {
-    return <img src={src} alt="" className={className} />;
+    return <img src={src} alt={name} className={className} />;
   }
   return (
-    <div className={`flex items-center justify-center bg-[#0B1120] text-[#E8ECF0] ${className}`} aria-hidden>
-      <Scale className="w-5 h-5" />
+    <div className={`flex items-center justify-center bg-[#0B1120] ${className}`} aria-hidden>
+      <Scale className={iconClassName} />
       <span className="sr-only">{name}</span>
     </div>
   );

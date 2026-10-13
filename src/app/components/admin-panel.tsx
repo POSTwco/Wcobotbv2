@@ -822,6 +822,8 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
         )}
       </AnimatePresence>
 
+      <JudgeAdminSection wallet={wallet} sessionToken={sessionToken} />
+
       {/* ── Athlete Applications ────────────────────────────────── */}
       <div className="mt-6 pt-4 border-t border-[#D4A843]/10">
         <div className="flex items-center gap-2 mb-3">
@@ -1018,8 +1020,6 @@ function AthletesTab({ wallet, sessionToken }: { wallet: string; sessionToken: s
         )}
       </div>
 
-      <JudgeAdminSection wallet={wallet} sessionToken={sessionToken} />
-
       {/* Athlete Onboarded Celebration Overlay */}
       <AthleteOnboardedOverlay
         show={showOnboarded}
@@ -1104,7 +1104,7 @@ function ManualTab() {
             </ol>
           </div>
           <p className="text-xs"><span className="text-[#D4A843]">First time?</span> Use "SEED INITIAL DATA" to auto-create Tony Gaste, Starboy, and Vitalii with their real skill ratings.</p>
-          <p className="text-xs">Judge applications are under Athlete Applications. Approve adds the person to Meet the Judges and their Arena Chat Judge badge. Reject deletes the application. Revoke removes an approved judge.</p>
+          <p className="text-xs">Judge Management sits under the athlete list on this tab. EDIT opens the judge card: name, country, discipline, experience, photo, and links. Approve a pending application to add someone. Revoke removes the public card and the Arena Chat badge.</p>
         </div>
       ),
     },
