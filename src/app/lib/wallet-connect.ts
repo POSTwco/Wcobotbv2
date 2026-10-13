@@ -865,21 +865,22 @@ export async function completeSessionApproval(
 // ══════════════════════════════════════════════════════════════════════════
 
 export async function disconnectWallet(reason?: string): Promise<void> {
-  if (!currentSession) {
-    console.log("[BOTB WC] disconnectWallet: no active session");
-    return;
-  }
-
-  const topic = currentSession.topic;
-  const accountId = currentAccountId;
-  console.log(`[BOTB WC] Disconnecting | Account: ${accountId} | Topic: ${topic}`);
-
+  const message = reason ?? "User disconnected from Battle of the Bars";
   try {
     const client = await getSignClient();
-    await client.disconnect({
-      topic,
-      reason: { code: 6000, message: reason ?? "User disconnected from Battle of the Bars" },
-    });
+    const sessions = client.session.getAll();
+    await Promise.allSettled(
+      sessions.map((sess) =>
+        client.disconnect({
+          topic: sess.topic,
+          reason: { code: 6000, message },
+        }),
+      ),
+    );
+    const pairings = client.core.pairing.getPairings();
+    await Promise.allSettled(
+      pairings.map((pairing) => client.core.pairing.disconnect({ topic: pairing.topic })),
+    );
   } catch (error) {
     console.warn("[BOTB WC] Disconnect send error:", error);
   }

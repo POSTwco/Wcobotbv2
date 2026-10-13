@@ -235,6 +235,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const initRef = useRef(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const connectCancelledRef = useRef(false);
+  const preferHashpackRef = useRef(false);
+  const accountIdRef = useRef<string | null>(null);
   const cancelApprovalRef = useRef<((reason: Error) => void) | null>(null);
   const connectResolverRef = useRef<((accountId: string | null) => void) | null>(null);
 
@@ -379,14 +381,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         // Prefer Magic restore when SDK session is still alive (mutual exclusivity with WC).
         // Also recover when sessionStorage was cleared but Magic cookie/session remains.
         let restoredMagic = false;
+        let storedProvider: string | null = null;
         try {
-          if (canUseMagic()) {
+          storedProvider = sessionStorage.getItem(MAGIC_STORAGE.provider);
+        } catch { /* ignore */ }
+        try {
+          // Magic account creation is only for an email session the user already chose.
+          if (storedProvider === "magic" && canUseMagic() && !preferHashpackRef.current) {
             const loggedIn = await magicIsLoggedIn();
             if (loggedIn) {
               const didToken = await magicGetDidToken();
               const publicKeyDer = await magicGetPublicKeyDer();
               if (didToken && publicKeyDer) {
                 const ensure = await api.magicEnsureAccount(didToken, publicKeyDer);
+                if (preferHashpackRef.current || cancelled) return;
                 if (ensure.success && ensure.data?.accountId) {
                   const reg = await api.registerMagicWalletSession(ensure.data.accountId, didToken);
                   if (reg.success && reg.data?.token) {
@@ -494,88 +502,76 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // Runs in parallel with admin check / balance fetch (non-blocking).
   // ------------------------------------------------------------------
   useEffect(() => {
-    // Magic sessions register via createAccountWithMagic — do not clear their token here
-    if (walletProvider === "magic") {
-      return;
-    }
+    // Magic sessions register inside the email flow. Do not wipe a HashPack token
+    // just because this effect re-ran before the session object settled.
+    if (walletProvider === "magic") return;
+    if (!accountId || !connected || !session?.topic) return;
 
-    if (!accountId || !connected || !session) {
-      setWalletSessionToken(null);
-      walletSessionTokenRef.current = null;
-      try {
-        sessionStorage.removeItem("wcoWalletSessionToken");
-        sessionStorage.removeItem(MAGIC_STORAGE.sessionToken);
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-
+    const topic = session.topic;
+    const acct = accountId;
     let cancelled = false;
+
+    try {
+      const savedToken = sessionStorage.getItem("wcoWalletSessionToken");
+      const savedAccount = sessionStorage.getItem("wcoWalletSessionAccount");
+      if (savedToken && savedAccount === acct) {
+        setWalletSessionToken(savedToken);
+        walletSessionTokenRef.current = savedToken;
+      }
+    } catch { /* ignore */ }
 
     async function registerSession() {
       try {
-        const wcTopic = session!.topic;
-        console.log(`[BOTB Wallet Context] Registering wallet session for ${accountId} (topic: ${wcTopic.substring(0, 16)}…)`);
-
-        const res = await api.registerWalletSession(accountId!, wcTopic);
-
-        if (cancelled) return;
+        console.log(`[BOTB Wallet Context] Registering wallet session for ${acct} (topic: ${topic.substring(0, 16)}…)`);
+        const res = await api.registerWalletSession(acct, topic);
+        if (accountIdRef.current !== acct) return;
 
         if (res.success && res.data?.token) {
           setWalletSessionToken(res.data.token);
           walletSessionTokenRef.current = res.data.token;
           try {
             sessionStorage.setItem("wcoWalletSessionToken", res.data.token);
-          } catch {
-            /* ignore */
-          }
+            sessionStorage.setItem("wcoWalletSessionAccount", acct);
+          } catch { /* ignore */ }
           console.log(`[BOTB Wallet Context] Wallet session registered ✓ (TTL: ${Math.round((res.data.ttlMs || 0) / 3600000)}h)`);
 
-          // Wallet still logs on the admin Contest list. Public contest copy stays off while hidden.
-          try {
-            const enterRes = await api.contest.enter(res.data.token);
-            if (!CONTEST_PUBLIC_HIDDEN && enterRes.success && enterRes.data) {
-              const d = enterRes.data as {
-                alreadyEntered?: boolean;
-                entryNumber?: number;
-                message?: string;
-              };
-              if (!d.alreadyEntered && d.entryNumber) {
-                toast.success(d.message || `You're contest entry #${d.entryNumber}`, {
-                  duration: 6000,
-                });
+          if (!CONTEST_PUBLIC_HIDDEN) {
+            try {
+              const enterRes = await api.contest.enter(res.data.token);
+              if (enterRes.success && enterRes.data) {
+                const d = enterRes.data as {
+                  alreadyEntered?: boolean;
+                  entryNumber?: number;
+                  message?: string;
+                };
+                if (!d.alreadyEntered && d.entryNumber) {
+                  toast.success(d.message || `You're contest entry #${d.entryNumber}`, { duration: 6000 });
+                }
+              } else if (enterRes.code === "CONTEST_FULL") {
+                toast.message("Connect-to-Enter contest is full (5,000 wallets)", { duration: 4000 });
               }
-            } else if (!CONTEST_PUBLIC_HIDDEN && enterRes.code === "CONTEST_FULL") {
-              toast.message("Connect-to-Enter contest is full (5,000 wallets)", {
-                duration: 4000,
-              });
+              api.contest.loginPing(res.data.token).catch(() => {});
+            } catch (contestErr) {
+              console.log("[BOTB Wallet Context] Contest enter skipped:", contestErr);
             }
-            api.contest.loginPing(res.data.token).catch(() => {});
-          } catch (contestErr) {
-            console.log("[BOTB Wallet Context] Contest enter skipped:", contestErr);
           }
         } else {
           console.error(`[BOTB Wallet Context] Wallet session registration failed:`, res.error);
-          // Don't block the user — they can still browse, just can't vote/chat
-          setWalletSessionToken(null);
-          walletSessionTokenRef.current = null;
         }
       } catch (err) {
         if (cancelled) return;
         console.error("[BOTB Wallet Context] Wallet session registration error:", err);
-        setWalletSessionToken(null);
-        walletSessionTokenRef.current = null;
       }
     }
 
     registerSession();
     return () => { cancelled = true; };
-  }, [accountId, connected, session, walletProvider]);
+  }, [accountId, connected, session?.topic, walletProvider]);
 
   useEffect(() => {
+    accountIdRef.current = accountId;
     walletSessionTokenRef.current = walletSessionToken;
-  }, [walletSessionToken]);
+  }, [accountId, walletSessionToken]);
 
   const waitForWalletSession = useCallback(async (timeoutMs = 12_000): Promise<string | null> => {
     const existing = walletSessionTokenRef.current;
@@ -601,6 +597,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       clearConnectedState();
     }
 
+    preferHashpackRef.current = true;
     setIsConnecting(true);
     setError(null);
     connectCancelledRef.current = false;
@@ -765,16 +762,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           toast.success("Welcome back!", { duration: 3000 });
         }
 
-        try {
-          const enterRes = await api.contest.enter(reg.data.token);
-          if (!CONTEST_PUBLIC_HIDDEN && enterRes.success && enterRes.data) {
-            const d = enterRes.data as { alreadyEntered?: boolean; entryNumber?: number; message?: string };
-            if (!d.alreadyEntered && d.entryNumber) {
-              toast.success(d.message || `You're contest entry #${d.entryNumber}`, { duration: 6000 });
+        if (!CONTEST_PUBLIC_HIDDEN) {
+          try {
+            const enterRes = await api.contest.enter(reg.data.token);
+            if (enterRes.success && enterRes.data) {
+              const d = enterRes.data as { alreadyEntered?: boolean; entryNumber?: number; message?: string };
+              if (!d.alreadyEntered && d.entryNumber) {
+                toast.success(d.message || `You're contest entry #${d.entryNumber}`, { duration: 6000 });
+              }
             }
-          }
-          api.contest.loginPing(reg.data.token).catch(() => {});
-        } catch { /* non-blocking */ }
+            api.contest.loginPing(reg.data.token).catch(() => {});
+          } catch { /* non-blocking */ }
+        }
 
         return acctId;
       } catch (err: any) {

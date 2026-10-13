@@ -87,9 +87,9 @@ export function NotificationBell() {
 
   // ── Fetch notifications ──────────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
-    if (!accountId) return;
+    if (!accountId || !walletSessionToken) return;
     try {
-      const res = await api.getNotifications(accountId, walletSessionToken || undefined);
+      const res = await api.getNotifications(accountId, walletSessionToken);
       if (res.success && res.data) {
         setNotifications(res.data);
         // Toast for newly received notifications
@@ -109,7 +109,7 @@ export function NotificationBell() {
 
   // ── Poll on interval ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!connected || !accountId) {
+    if (!connected || !accountId || !walletSessionToken) {
       setNotifications([]);
       prevUnreadRef.current = 0;
       return;
