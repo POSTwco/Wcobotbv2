@@ -13,6 +13,34 @@ import { InlineFlag } from "./country-flag";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 
 const DISCIPLINES = ["freestyle", "statics", "freestyle_statics"];
+const PHOTO_BUCKET = "make-57fcb0ee-pfps";
+
+function AdminJudgeThumb({
+  id,
+  wallet,
+  sessionToken,
+}: {
+  id: string;
+  wallet: string;
+  sessionToken: string;
+}) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let cancel = false;
+    let url = "";
+    api.admin.fetchJudgePhoto(id, wallet, sessionToken).then((blob) => {
+      if (cancel || !blob) return;
+      url = URL.createObjectURL(blob);
+      setSrc(url);
+    });
+    return () => {
+      cancel = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [id, wallet, sessionToken]);
+  if (!src) return <div className="w-10 h-10 rounded-lg bg-[#162033] border border-[#4274B9]/20 shrink-0" />;
+  return <img src={src} alt="" className="w-10 h-10 rounded-lg object-contain bg-[#162033] border border-[#4274B9]/20 shrink-0" />;
+}
 
 export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; sessionToken: string }) {
   const [applications, setApplications] = useState<any[]>([]);
@@ -126,6 +154,37 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
     setBusy("");
   };
 
+  const downloadStoredPhoto = async (id: string, name: string) => {
+    try {
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-57fcb0ee/admin/judges/${encodeURIComponent(id)}/photo?download=1`,
+        {
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+            "X-Admin-Wallet": wallet,
+            "X-Admin-Session": sessionToken,
+          },
+        },
+      );
+      if (!res.ok) {
+        toast.error(`Download failed (${res.status})`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
+      a.download = `${(name || "judge").replace(/[^a-zA-Z0-9._-]/g, "_")}-${id}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Download failed");
+    }
+  };
+
   const downloadPhoto = async (id: string, name: string) => {
     try {
       const res = await fetch(
@@ -159,7 +218,7 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
   const openEdit = (judge: any) => {
     const flags = judge.publicFields || {};
     setPhotoFile(null);
-    setPhotoPreview(judge.photoSignedUrl || "");
+    setPhotoPreview("");
     setEditId(judge.id);
     setEdit({
       name: judge.name || "",
@@ -180,6 +239,25 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
   };
 
   const editing = approved.find((judge) => judge.id === editId) || null;
+  const storedPath = editing?.photoPath || "";
+
+  useEffect(() => {
+    if (photoFile || !editId || !storedPath) {
+      if (!photoFile && !storedPath) setPhotoPreview("");
+      return;
+    }
+    let cancel = false;
+    let url = "";
+    api.admin.fetchJudgePhoto(editId, wallet, sessionToken).then((blob) => {
+      if (cancel || !blob) return;
+      url = URL.createObjectURL(blob);
+      setPhotoPreview(url);
+    });
+    return () => {
+      cancel = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [editId, storedPath, photoFile, wallet, sessionToken]);
   const countryOptions = edit.country && !COUNTRY_OPTIONS.includes(edit.country)
     ? [edit.country, ...COUNTRY_OPTIONS]
     : COUNTRY_OPTIONS;
@@ -209,8 +287,8 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
           {approved.map((judge) => (
             <div key={judge.id} className="flex items-center justify-between p-3 rounded-xl bg-[#0B1120] border border-[#4274B9]/10 hover:border-[#4274B9]/30 transition-all">
               <div className="flex items-center gap-3 min-w-0">
-                {judge.photoSignedUrl ? (
-                  <img src={judge.photoSignedUrl} alt="" className="w-10 h-10 rounded-lg object-contain bg-[#162033] border border-[#4274B9]/20 shrink-0" />
+                {judge.photoPath ? (
+                  <AdminJudgeThumb id={judge.id} wallet={wallet} sessionToken={sessionToken} />
                 ) : (
                   <div className="w-10 h-10 rounded-lg bg-[#162033] border border-[#4274B9]/20 shrink-0" />
                 )}
@@ -287,25 +365,43 @@ export function JudgeAdminSection({ wallet, sessionToken }: { wallet: string; se
             </div>
 
             <div>
-              <p className="text-[0.6rem] text-[#6AA3E0] mb-2" style={{ fontFamily: "Orbitron, sans-serif" }}>PHOTO</p>
-              <p className="text-[#8494A7] text-[0.55rem] mb-2">Fans see this whole photo. It is not cropped.</p>
+              <p className="text-[0.6rem] text-[#6AA3E0] mb-2" style={{ fontFamily: "Orbitron, sans-serif" }}>PHOTO FILE</p>
+              <p className="text-[#8494A7] text-[0.55rem] mb-2">
+                The file sits in the private Supabase bucket <span className="font-mono text-[#C5D0DC]">{PHOTO_BUCKET}</span>.
+                Fans do not get a storage link. Meet the Judges receives the picture only while this judge is approved and Show photo is on.
+              </p>
+              <p className="text-[0.55rem] text-[#6AA3E0] font-mono break-all mb-2">
+                {storedPath || "No photo stored yet."}
+              </p>
               {photoPreview ? (
-                <img src={photoPreview} alt="" className="w-full max-h-80 object-contain bg-[#162033] rounded-lg border border-[#4274B9]/20" />
+                <img src={photoPreview} alt="" className="max-h-40 w-auto object-contain bg-[#162033] rounded-lg border border-[#4274B9]/20" />
               ) : (
                 <div className="h-24 rounded-lg border border-dashed border-[#4274B9]/30" />
               )}
-              <label className="mt-2 inline-flex items-center gap-2 text-[0.6rem] text-[#6AA3E0] cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="text-[0.6rem] text-[#8494A7]"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setPhotoFile(file);
-                    setPhotoPreview(file ? URL.createObjectURL(file) : (editing.photoSignedUrl || ""));
-                  }}
-                />
-              </label>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!storedPath}
+                  onClick={() => downloadStoredPhoto(editing.id, editing.name)}
+                  className="px-2 py-1 text-[0.55rem] rounded bg-[#4274B9]/10 text-[#6AA3E0] disabled:opacity-40"
+                >
+                  DOWNLOAD STORED PHOTO
+                </button>
+                <label className="text-[0.55rem] text-[#8494A7]">
+                  <span className="text-[#6AA3E0] mr-2">REPLACE PHOTO</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="text-[0.55rem]"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setPhotoFile(file);
+                      if (file) setPhotoPreview(URL.createObjectURL(file));
+                    }}
+                  />
+                </label>
+              </div>
+              <p className="text-[0.5rem] text-[#8494A7] mt-1">PNG, JPEG, or WEBP under 5 MB. Save writes the new file into the same private bucket and removes the previous file.</p>
               <label className="mt-2 flex items-center gap-2 text-[0.6rem] text-[#C5D0DC]">
                 <input type="checkbox" checked={edit.showPhoto} onChange={(e) => setEdit({ ...edit, showPhoto: e.target.checked })} />
                 Show photo on Meet the Judges

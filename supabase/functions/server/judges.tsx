@@ -416,7 +416,7 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
         success: true,
         data: {
           applications: await Promise.all(applications.map(withPhotos)),
-          judges: await Promise.all(judges.map(withPhotos)),
+          judges,
         },
       });
     } catch (error) {
@@ -555,6 +555,29 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
     } catch (error) {
       console.log(`[JUDGE] revoke error: ${error}`);
       return c.json({ success: false, error: "Failed to remove judge" }, 500);
+    }
+  });
+
+  app.get(`${PREFIX}/admin/judges/:id/photo`, requireAdminSession, async (c) => {
+    try {
+      const id = c.req.param("id");
+      if (id === "applications") return c.json({ success: false, error: "Not found" }, 404);
+      const row: any = await kv.get(`judge:${id}`);
+      if (!row?.photoPath) return c.json({ success: false, error: "No photo on file" }, 404);
+      const res = await streamPhoto(row.photoPath);
+      if (!res) return c.json({ success: false, error: "No photo on file" }, 404);
+      const headers = new Headers(res.headers);
+      headers.set("Cache-Control", "private, no-store");
+      headers.set("X-Content-Type-Options", "nosniff");
+      if (c.req.query("download") === "1") {
+        const ext = String(row.photoPath).split(".").pop() || "jpg";
+        const filename = `${row.name || "judge"}-${row.id}.${ext}`.replace(/[^a-zA-Z0-9._-]/g, "_");
+        headers.set("Content-Disposition", `attachment; filename="${filename}"`);
+      }
+      return new Response(res.body, { headers });
+    } catch (error) {
+      console.log(`[JUDGE] admin photo read error: ${error}`);
+      return c.json({ success: false, error: "Failed to read photo" }, 500);
     }
   });
 

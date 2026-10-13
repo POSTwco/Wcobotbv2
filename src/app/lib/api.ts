@@ -923,6 +923,26 @@ export const api = {
         method: "POST", body: {}, adminWallet, sessionToken,
       }),
 
+    fetchJudgePhoto: async (
+      id: string,
+      adminWallet: string,
+      sessionToken: string,
+    ): Promise<Blob | null> => {
+      try {
+        const res = await fetch(`${BASE_URL}/admin/judges/${encodeURIComponent(id)}/photo`, {
+          headers: {
+            Authorization: `Bearer ${publicAnonKey}`,
+            "X-Admin-Wallet": adminWallet,
+            "X-Admin-Session": sessionToken,
+          },
+        });
+        if (!res.ok) return null;
+        return await res.blob();
+      } catch {
+        return null;
+      }
+    },
+
     uploadJudgePhoto: async (
       id: string,
       file: File,
