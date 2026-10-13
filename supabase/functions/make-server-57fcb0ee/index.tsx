@@ -874,9 +874,12 @@ app.post(`${PREFIX}/wallet/register`, async (c) => {
     );
 
     // Permanent wallet registry. Contest state does not gate this.
-    touchWalletSeen(wallet, "hashpack").catch((err) => {
+    // Await so the key exists before this handler returns 200.
+    try {
+      await touchWalletSeen(wallet, "hashpack");
+    } catch (err) {
       console.log(`[WALLET-SEEN] register touch failed: ${err}`);
-    });
+    }
 
     console.log(`[WALLET-SESSION] Registered session for ${wallet} (topic: ${wcTopic.substring(0, 16)}…, TTL: 4h)`);
 

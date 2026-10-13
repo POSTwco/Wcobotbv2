@@ -6,7 +6,7 @@
  * Tactical command center theme: dark, precise, high-signal.
  * 
  * Data sources (current, to be consolidated later if needed):
- * - visitStats from /admin/visit-stats (traffic, wconn, wvoted, cali gen/user totals, breakdown for charts)
+ * - visitStats from /admin/visit-stats (traffic, wallet:seen, wvoted, cali gen/user totals, breakdown for charts)
  * - caliStats from /admin/cali/stats (activity scan: active, workouts, sets, PRs, anchored, profiles + signin/gen counters + top ex)
  * 
  * Master canonical display (no duplicates):
@@ -16,7 +16,7 @@
  * - Indicators: deltas, health, top exercises
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, Users, Dumbbell, Anchor, TrendingUp, TrendingDown, Target, Shield, Clock, RefreshCw, Loader2, Megaphone, ChevronDown, Gift } from "lucide-react";
 import { api } from "../lib/api";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
@@ -78,8 +78,11 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isInvestorOpen, setIsInvestorOpen] = useState(false);
+  const loadInFlight = useRef(false);
 
   const load = useCallback(async () => {
+    if (loadInFlight.current) return;
+    loadInFlight.current = true;
     setLoading(true);
     try {
       const [vRes, cRes, dashRes, sponsorsRes, contestRes] = await Promise.all([
@@ -161,8 +164,10 @@ export function AdminCommandCenter({ wallet, sessionToken }: Props) {
       setLastUpdated(new Date());
     } catch (e) {
       console.warn("[CommandCenter] load failed", e);
+    } finally {
+      loadInFlight.current = false;
+      setLoading(false);
     }
-    setLoading(false);
   }, [wallet, sessionToken]);
 
   useEffect(() => {

@@ -58,30 +58,21 @@ export async function touchWalletSeen(accountId: string, source: WalletSource): 
   });
 }
 
-async function seedWallet(accountId: string, source: WalletSource | null, seenAt: unknown): Promise<void> {
-  if (!isValidHederaAccountId(accountId)) return;
-  const key = seenKey(accountId);
+function mergeSeen(existing: any, sources: WalletSource[], seenAt: unknown) {
   const at = iso(seenAt);
-  const existing = await kv.get(key);
   if (!existing || typeof existing !== "object") {
-    await kv.set(key, {
-      firstSeenAt: at,
-      lastSeenAt: at,
-      sources: source ? [source] : [],
-      loginCount: 1,
-    });
-    return;
+    return { firstSeenAt: at, lastSeenAt: at, sources, loginCount: 1 };
   }
-  const sources = new Set<string>(Array.isArray(existing.sources) ? existing.sources : []);
-  if (source) sources.add(source);
+  const merged = new Set<string>(Array.isArray(existing.sources) ? existing.sources : []);
+  for (const source of sources) merged.add(source);
   const first = typeof existing.firstSeenAt === "string" ? earlier(existing.firstSeenAt, at) : at;
   const last = typeof existing.lastSeenAt === "string" ? later(existing.lastSeenAt, at) : at;
-  await kv.set(key, {
+  return {
     firstSeenAt: first,
     lastSeenAt: last,
-    sources: [...sources],
+    sources: [...merged],
     loginCount: Math.max(1, Number(existing.loginCount) || 1),
-  });
+  };
 }
 
 function idFromKey(key: string, prefix: string): string {
@@ -117,19 +108,28 @@ export async function backfillWalletSeen(): Promise<number> {
     add(String(row.value?.wallet || ""), source, row.value?.createdAt);
   }
 
-  const sessionWallets = await kv.getEntriesByPrefix("wsession-wallet:");
-  for (const row of sessionWallets) {
-    add(idFromKey(row.key, "wsession-wallet:"), "hashpack", null);
-  }
-
+  const magicIds = new Set<string>();
   const magicAccounts = await kv.getEntriesByPrefix("magic-account:");
   for (const row of magicAccounts) {
-    add(idFromKey(row.key, "magic-account:"), "magic", null);
+    const id = idFromKey(row.key, "magic-account:");
+    add(id, "magic", null);
+    if (isValidHederaAccountId(id)) magicIds.add(id);
   }
 
   const magicUsers = await kv.getEntriesByPrefix("magic-user:");
   for (const row of magicUsers) {
-    add(String(row.value?.accountId || ""), "magic", row.value?.createdAt);
+    const id = String(row.value?.accountId || "");
+    add(id, "magic", row.value?.createdAt);
+    if (isValidHederaAccountId(id)) magicIds.add(id);
+  }
+
+  // Magic register also writes wsession-wallet:<accountId>. That key is not
+  // proof of HashPack. Only tag hashpack when the account is not a Magic account.
+  const sessionWallets = await kv.getEntriesByPrefix("wsession-wallet:");
+  for (const row of sessionWallets) {
+    const id = idFromKey(row.key, "wsession-wallet:");
+    if (magicIds.has(id)) continue;
+    add(id, "hashpack", null);
   }
 
   const claims = await kv.getEntriesByPrefix("nft:early-supporter:claimed:");
@@ -137,13 +137,32 @@ export async function backfillWalletSeen(): Promise<number> {
     add(idFromKey(row.key, "nft:early-supporter:claimed:"), null, row.value?.claimedAt || row.value?.createdAt);
   }
 
+  // Contest entries and NFT claims do not store a provider. A wallet with no
+  // Magic record connected through HashPack / WalletConnect.
+  for (const info of found.values()) {
+    if (info.sources.size === 0) info.sources.add("hashpack");
+  }
+
+  const existingRows = await kv.getEntriesByPrefix(SEEN_PREFIX);
+  const existingByAccount = new Map<string, any>();
+  for (const row of existingRows) {
+    const id = idFromKey(row.key, SEEN_PREFIX);
+    if (isValidHederaAccountId(id)) existingByAccount.set(id, row.value);
+  }
+
+  if (found.size === 0) {
+    console.log("[WALLET-SEEN] Backfill found no historical wallets; will retry");
+    return 0;
+  }
+
+  const keys: string[] = [];
+  const values: any[] = [];
   for (const [accountId, info] of found) {
-    const sources = [...info.sources];
-    if (sources.length === 0) {
-      await seedWallet(accountId, null, info.at);
-    } else {
-      for (const source of sources) await seedWallet(accountId, source, info.at);
-    }
+    keys.push(seenKey(accountId));
+    values.push(mergeSeen(existingByAccount.get(accountId), [...info.sources], info.at));
+  }
+  for (let i = 0; i < keys.length; i += 100) {
+    await kv.mset(keys.slice(i, i + 100), values.slice(i, i + 100));
   }
 
   await kv.set(BACKFILL_KEY, {
