@@ -28,6 +28,7 @@ import {
   EARLY_SUPPORTER_LOCAL_MOCK,
   EARLY_SUPPORTER_UI_ENABLED,
 } from "../lib/early-supporter";
+import { CONTEST_PUBLIC_HIDDEN } from "../lib/contest-types";
 import { isMagicEnabled } from "../lib/wallet-types";
 
 /** Synthetic account for DEV local-mock claim QA (no real Hedera account). */
@@ -141,7 +142,7 @@ export function ManageAssetsPage() {
                 Sign in with email
               </button>
             )}
-            {EARLY_SUPPORTER_UI_ENABLED && EARLY_SUPPORTER_LOCAL_MOCK && (
+            {!CONTEST_PUBLIC_HIDDEN && EARLY_SUPPORTER_UI_ENABLED && EARLY_SUPPORTER_LOCAL_MOCK && (
               <button
                 type="button"
                 onClick={() => setLocalMockPreview(true)}
@@ -290,7 +291,7 @@ export function ManageAssetsPage() {
       )}
 
       {/* Early Supporter collectibles — gated by VITE_EARLY_SUPPORTER_ENABLED */}
-      {EARLY_SUPPORTER_UI_ENABLED && effectiveAccountId && (
+      {!CONTEST_PUBLIC_HIDDEN && EARLY_SUPPORTER_UI_ENABLED && effectiveAccountId && (
         <EarlySupporterClaimCard
           accountId={effectiveAccountId}
           walletSessionToken={isLocalPreview ? null : walletSessionToken}

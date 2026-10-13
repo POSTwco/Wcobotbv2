@@ -5,6 +5,9 @@
  * Public stats never include wallet IDs. Full wallets are admin-only.
  */
 
+/** Set false to show Connect-to-Enter and the Early Supporter claim again. */
+export const CONTEST_PUBLIC_HIDDEN = true;
+
 export type ContestStatus =
   | "draft"
   | "open"

@@ -56,6 +56,7 @@ import {
   type MirrorNFT,
 } from "../lib/hedera-mirror";
 import { api } from "../lib/api";
+import { CONTEST_PUBLIC_HIDDEN } from "../lib/contest-types";
 import { toast } from "sonner";
 import { ConnectWalletModal, type MagicEmailMode } from "./connect-wallet-modal";
 import {
@@ -531,10 +532,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
           console.log(`[BOTB Wallet Context] Wallet session registered ✓ (TTL: ${Math.round((res.data.ttlMs || 0) / 3600000)}h)`);
 
-          // Connect-to-Enter contest: auto-enter + login ping (non-blocking)
+          // Wallet still logs on the admin Contest list. Public contest copy stays off while hidden.
           try {
             const enterRes = await api.contest.enter(res.data.token);
-            if (enterRes.success && enterRes.data) {
+            if (!CONTEST_PUBLIC_HIDDEN && enterRes.success && enterRes.data) {
               const d = enterRes.data as {
                 alreadyEntered?: boolean;
                 entryNumber?: number;
@@ -545,12 +546,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                   duration: 6000,
                 });
               }
-            } else if (enterRes.code === "CONTEST_FULL") {
+            } else if (!CONTEST_PUBLIC_HIDDEN && enterRes.code === "CONTEST_FULL") {
               toast.message("Connect-to-Enter contest is full (5,000 wallets)", {
                 duration: 4000,
               });
             }
-            // Login ping for claim tracking (ignore errors)
             api.contest.loginPing(res.data.token).catch(() => {});
           } catch (contestErr) {
             console.log("[BOTB Wallet Context] Contest enter skipped:", contestErr);
@@ -765,10 +765,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           toast.success("Welcome back!", { duration: 3000 });
         }
 
-        // Contest enter (same as HashPack post-register)
         try {
           const enterRes = await api.contest.enter(reg.data.token);
-          if (enterRes.success && enterRes.data) {
+          if (!CONTEST_PUBLIC_HIDDEN && enterRes.success && enterRes.data) {
             const d = enterRes.data as { alreadyEntered?: boolean; entryNumber?: number; message?: string };
             if (!d.alreadyEntered && d.entryNumber) {
               toast.success(d.message || `You're contest entry #${d.entryNumber}`, { duration: 6000 });

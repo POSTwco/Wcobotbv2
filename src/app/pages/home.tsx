@@ -10,7 +10,7 @@ import { EarlySupporterHomeBanner } from "../components/early-supporter-home-ban
 import { SiteMapExploratorium } from "../components/site-map-exploratorium";
 import { useConfig } from "../lib/hooks";
 import { api } from "../lib/api";
-import type { ContestPublicStats } from "../lib/contest-types";
+import { CONTEST_PUBLIC_HIDDEN, type ContestPublicStats } from "../lib/contest-types";
 import { resolveHeroVideoUrl } from "../lib/site-media";
 import { isMagicEnabled } from "../lib/wallet-types";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
@@ -26,6 +26,7 @@ export function HomePage() {
 
   // Hide Hedera badge while Connect-to-Enter is running (open / full / drawing)
   const contestActive =
+    !CONTEST_PUBLIC_HIDDEN &&
     !!contestStats &&
     (contestStats.status === "open" ||
       contestStats.status === "full" ||
@@ -41,6 +42,7 @@ export function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (CONTEST_PUBLIC_HIDDEN) return;
     loadContest();
     const id = setInterval(() => {
       if (document.visibilityState === "visible") loadContest();
@@ -124,7 +126,7 @@ export function HomePage() {
                     style={{ fontFamily: "Orbitron, sans-serif", fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)" }}
                   >
                     <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="truncate">{isConnecting ? "CONNECTING..." : "CONNECT TO ENTER"}</span>
+                    <span className="truncate">{isConnecting ? "CONNECTING..." : CONTEST_PUBLIC_HIDDEN ? "CONNECT WALLET" : "CONNECT TO ENTER"}</span>
                   </button>
                 ) : (
                   <Link
@@ -170,10 +172,12 @@ export function HomePage() {
                 </Link>
               </div>
 
-              {/* Connect-to-Enter contest banner */}
-              <ContestBanner />
-              {/* Separate Early Supporter NFT claim strip */}
-              <EarlySupporterHomeBanner />
+              {!CONTEST_PUBLIC_HIDDEN && (
+                <>
+                  <ContestBanner />
+                  <EarlySupporterHomeBanner />
+                </>
+              )}
             </motion.div>
 
             {/* Video Player with Glowing Frame */}
