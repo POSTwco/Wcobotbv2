@@ -5,8 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { motion } from "motion/react";
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { api } from "../lib/api";
 import type { PublicOrgEvent, PublicOrganization } from "../lib/types";
 import { orgDisciplineLabel } from "../lib/org-sign";
@@ -37,7 +36,6 @@ export function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [query, setQuery] = useState("");
-  const [showAll, setShowAll] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
 
@@ -87,7 +85,6 @@ export function EventsPage() {
   }, [orgs]);
 
   function focusOrg(org: PublicOrganization) {
-    if (org.id !== featured?.id) setShowAll(true);
     setHighlight(org.id);
     setOpenId(org.id);
     window.setTimeout(() => {
@@ -163,33 +160,17 @@ export function EventsPage() {
             )}
 
             {rest.length > 0 && (
-              <div className="mt-8">
-                <button
-                  type="button"
-                  onClick={() => setShowAll((v) => !v)}
-                  className="w-full flex items-center justify-between rounded-2xl border border-[#4274B9]/25 bg-[#111827] px-4 py-3"
-                >
-                  <span className="text-xs text-[#E8ECF0] tracking-wide" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                    {showAll || q ? "HIDE ORGANIZATIONS" : `VIEW ALL ORGANIZATIONS (${rest.length})`}
-                  </span>
-                  <motion.span animate={{ rotate: showAll || q ? 180 : 0 }}>
-                    <ChevronDown className="w-4 h-4 text-[#4274B9]" />
-                  </motion.span>
-                </button>
-                {(showAll || q) && (
-                  <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
-                    {visibleRest.map((org) => (
-                      <CompactOrg
-                        key={org.id}
-                        org={org}
-                        highlighted={highlight === org.id}
-                        onOpen={() => setOpenId(org.id)}
-                      />
-                    ))}
-                    {q && visibleRest.length === 0 && (
-                      <p className="col-span-full text-sm text-[#8494A7]">No organization matches that name.</p>
-                    )}
-                  </div>
+              <div className="mt-8 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
+                {visibleRest.map((org) => (
+                  <CompactOrg
+                    key={org.id}
+                    org={org}
+                    highlighted={highlight === org.id}
+                    onOpen={() => setOpenId(org.id)}
+                  />
+                ))}
+                {q && visibleRest.length === 0 && (
+                  <p className="col-span-full text-sm text-[#8494A7]">No organization matches that name.</p>
                 )}
               </div>
             )}

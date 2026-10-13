@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { ChevronDown, Scale } from "lucide-react";
+import { Scale } from "lucide-react";
 import { InlineFlag } from "./country-flag";
 import { api } from "../lib/api";
 import { orgDisciplineLabel } from "../lib/org-sign";
@@ -97,7 +97,6 @@ function JudgeCard({
 }
 
 export function StaffSection() {
-  const [open, setOpen] = useState(false);
   const [judges, setJudges] = useState<PublicJudge[]>([]);
   const [judgesReady, setJudgesReady] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -121,28 +120,12 @@ export function StaffSection() {
   return (
     <section id="wco-staff" className="py-8 sm:py-12 scroll-mt-24">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="w-full flex items-center justify-between gap-3 rounded-2xl border border-[#4274B9]/25 bg-[#111827] px-4 py-3 text-left hover:border-[#6AA3E0]/50 transition-colors"
-          aria-expanded={open}
-        >
-          <span className="flex items-center gap-2 text-[#E8ECF0]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-            <Scale className="w-4 h-4 text-[#E8ECF0]" />
-            MEET THE JUDGES
-          </span>
-          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.3 }}>
-            <ChevronDown className="w-4 h-4 text-[#4274B9]" />
-          </motion.span>
-        </button>
+        <h2 className="flex items-center gap-2 text-[#E8ECF0]" style={{ fontFamily: "Orbitron, sans-serif" }}>
+          <Scale className="w-4 h-4 text-[#E8ECF0]" />
+          MEET THE JUDGES
+        </h2>
 
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            transition={{ duration: 0.35 }}
-            className="mt-4 space-y-6"
-          >
+        <div className="mt-4 space-y-6">
             {judges.length === 0 ? (
               <p className="text-sm text-[#8494A7] rounded-xl border border-dashed border-[#4274B9]/30 px-3 py-4">
                 {judgesReady
@@ -174,8 +157,7 @@ export function StaffSection() {
                 ))}
               </ol>
             </div>
-          </motion.div>
-        )}
+        </div>
       </div>
       {selected ? (
         <JudgeDossier
