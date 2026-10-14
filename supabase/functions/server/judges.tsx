@@ -289,7 +289,9 @@ export function mountJudgeRoutes(app: Hono, PREFIX: string) {
       const wallet = String(form.get("wallet") || "");
       const sessionErr = await assertWalletSession(c, wallet);
       if (sessionErr) return c.json({ success: false, error: sessionErr }, 401);
-      const ip = (c.req.header("x-forwarded-for") || "unknown").split(",")[0].trim().slice(0, 64);
+      const forwarded = c.req.header("x-forwarded-for") || "";
+      const parts = forwarded.split(",").map((s) => s.trim()).filter(Boolean);
+      const ip = (c.req.header("cf-connecting-ip") || parts[parts.length - 1] || "unknown").trim().slice(0, 64);
       const walletRl = await checkRateLimit(`jdgpho:${wallet}`, 8, 60 * 60 * 1000);
       const ipRl = await checkRateLimit(`jdgphoip:${ip}`, 30, 60 * 60 * 1000);
       if (walletRl.limited || ipRl.limited) {

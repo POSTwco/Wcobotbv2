@@ -199,12 +199,9 @@ app.use("*", logger(console.log));
 //   - Function-based checker reflects only the specific requesting origin (not "*")
 //   - Every allowed/rejected origin is individually logged for security audit trail
 //   - Three tiers:
-//       STRICT  — BOTB_ALLOWED_ORIGINS has valid URL(s) → allowlisted origins pass
-//                 silently; unlisted origins pass with WARNING audit log (dev-safe).
-//                 Set BOTB_CORS_ENFORCE=true for IRL events to hard-reject unlisted.
-//       WARN    — env var is empty/missing/"*" → origins are reflected with ERROR-level
-//                 logging on EVERY request (auditable, actionable, never silent)
-//       REJECT  — reserved for future hard-block scenarios (no current code path)
+//       ENFORCE — www.wcorg.io, wcorg.io, and local Vite ports are always allowed.
+//                 BOTB_ALLOWED_ORIGINS adds more. Every other browser origin is rejected.
+//                 There is no reflect-any-origin mode.
 //
 // The critical difference from the old code: the old fallback emitted a static
 // "Access-Control-Allow-Origin: *" header which silently allowed ANY website
@@ -286,51 +283,25 @@ const _corsConfig: { mode: CorsMode; validOrigins: string[] } = (() => {
 // ---- Step 2: Dynamic origin checker function ----
 // Hono calls this with the requesting origin; return the origin string to allow,
 // or return undefined/null to deny (no ACAO header → browser blocks response).
+const BUILTIN_CORS_ORIGINS = [
+  "https://www.wcorg.io",
+  "https://wcorg.io",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+];
+
 const _corsOriginChecker = (requestOrigin: string): string | undefined => {
-  const { mode, validOrigins } = _corsConfig;
-
-  // REJECT mode: hard block everything — wildcard or all-invalid config
-  if (mode === "REJECT") {
-    console.log(`[CORS] REJECTED (${mode}): ${requestOrigin}`);
-    return undefined;
-  }
-
-  // STRICT mode: configured origins pass silently, unlisted origins are
-  // allowed but flagged with a WARNING log for audit trail.
-  // To hard-reject unlisted origins at IRL events, set BOTB_CORS_ENFORCE=true.
-  if (mode === "STRICT") {
-    if (validOrigins.includes(requestOrigin)) {
-      return requestOrigin; // Reflect the specific allowed origin — no log noise
-    }
-    // Also allow the project's own Supabase URL for internal edge-function calls
-    const supabaseUrl = (typeof Deno !== "undefined" ? Deno.env.get("SUPABASE_URL") : "") || "";
-    if (requestOrigin && supabaseUrl && requestOrigin === supabaseUrl) {
-      return requestOrigin;
-    }
-    // Enforcement gate: hard-reject if BOTB_CORS_ENFORCE=true (for IRL lockdown)
-    const enforce = (typeof Deno !== "undefined" ? Deno.env.get("BOTB_CORS_ENFORCE") : "") || "";
-    if (enforce === "true") {
-      console.log(
-        `[CORS] REJECTED (STRICT+ENFORCE): ${requestOrigin} — not in allowed list: ${validOrigins.join(", ")}`
-      );
-      return undefined;
-    }
-    // Default: allow but log for audit trail (prevents dev/preview breakage)
-    console.log(
-      `[CORS] ALLOWED (STRICT-WARN): ${requestOrigin} — NOT in allowed list: ${validOrigins.join(", ")}. ` +
-      "Add this origin to BOTB_ALLOWED_ORIGINS, or set BOTB_CORS_ENFORCE=true to hard-reject."
-    );
+  if (!requestOrigin) return undefined;
+  const { validOrigins } = _corsConfig;
+  if (BUILTIN_CORS_ORIGINS.includes(requestOrigin) || validOrigins.includes(requestOrigin)) {
     return requestOrigin;
   }
-
-  // WARN mode: env var is empty/missing — reflect origin with per-request audit log
-  // This is NOT a silent wildcard: every single request is individually traced.
-  // For production IRL events, configure BOTB_ALLOWED_ORIGINS to enter STRICT mode.
-  console.log(
-    `[CORS] ALLOWED (WARN — no origins configured): ${requestOrigin} — ` +
-    "configure BOTB_ALLOWED_ORIGINS to lock down before mainnet events"
-  );
-  return requestOrigin;
+  const supabaseUrl = (typeof Deno !== "undefined" ? Deno.env.get("SUPABASE_URL") : "") || "";
+  if (supabaseUrl && requestOrigin === supabaseUrl) return requestOrigin;
+  console.log(`[CORS] REJECTED: ${requestOrigin}`);
+  return undefined;
 };
 
 app.use(
@@ -362,10 +333,7 @@ function safeErrorMsg(operation: string): string {
 const PREFIX = "/make-server-57fcb0ee";
 
 app.use(`/*`, rateLimit({
-  keyFn: (c) => {
-    const forwarded = c.req.header("x-forwarded-for");
-    return `global:${forwarded || c.req.header("x-real-ip") || "unknown"}`;
-  },
+  keyFn: (c) => `global:${extractClientIp(c)}`,
   max: 120,
   windowMs: 60 * 1000,
   message: "Too many requests from this IP. Please slow down.",
@@ -571,14 +539,21 @@ const IP_ANOMALY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const IP_ANOMALY_THRESHOLD = 5;               // >5 unique wallets = flag
 const ipVoteLog: Map<string, { wallet: string; timestamp: number }[]> = new Map();
 
-/** Extract client IP from Hono context (x-forwarded-for → x-real-ip → unknown) */
+/**
+ * Client IP for rate limits. Prefer Cloudflare's connecting IP.
+ * Otherwise take the last X-Forwarded-For hop. The first hop is client-supplied.
+ */
 function extractClientIp(c: any): string {
+  const cf = String(c.req.header("cf-connecting-ip") || "").trim();
+  if (cf) return cf.slice(0, 64);
   const forwarded = c.req.header("x-forwarded-for");
   if (forwarded) {
-    // x-forwarded-for can be comma-separated; take the first (client) IP
-    return forwarded.split(",")[0].trim();
+    const parts = String(forwarded).split(",").map((s: string) => s.trim()).filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last.slice(0, 64);
   }
-  return c.req.header("x-real-ip") || "unknown";
+  const real = String(c.req.header("x-real-ip") || "").trim();
+  return real ? real.slice(0, 64) : "unknown";
 }
 
 /** Sanitize IP for use as a KV key suffix (replace colons for IPv6) */
@@ -932,10 +907,8 @@ app.post(`${PREFIX}/wallet/disconnect`, async (c) => {
     const session = await kv.get(`wsession:${token}`);
 
     if (!session) {
-      // Token not in KV — already expired or never existed.
-      // Still try to clean up the reverse-lookup key (idempotent cleanup).
-      await kv.del(`wsession-wallet:${wallet}`).catch(() => {});
-      console.log(`[WALLET-SESSION] Disconnect for ${wallet} — token not in KV (already expired/cleaned). Idempotent cleanup done.`);
+      // Unknown token. Do not delete wsession-wallet for the body account.
+      console.log(`[WALLET-SESSION] Disconnect for ${wallet} — token not in KV. Reverse index left intact.`);
       return c.json({ success: true, data: { message: "Session already expired or destroyed" } });
     }
 
@@ -1914,6 +1887,10 @@ app.post(`${PREFIX}/admin/battles/batch-status`, requireAdminSession, async (c) 
 // GET /admin/check — Quick admin verification
 // ---------------------------------------------------------------------------
 app.get(`${PREFIX}/admin/check`, async (c) => {
+  const checkRl = await checkRateLimit(`admin-check:${extractClientIp(c)}`, 30, 60_000);
+  if (checkRl.limited) {
+    return c.json({ success: false, error: "Too many requests", code: "RATE_LIMITED" }, 429);
+  }
   const wallet = extractAdminWallet(c);
   if (!wallet) {
     return c.json({ success: true, data: { isAdmin: false } });
@@ -3587,9 +3564,7 @@ app.post(`${PREFIX}/admin/sponsors/:id/toggle`, requireAdminSession, async (c) =
 // ---------------------------------------------------------------------------
 
 function getClientIP(c: any): string {
-  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
-    || c.req.header("x-real-ip")
-    || "unknown";
+  return extractClientIp(c);
 }
 
 /**
@@ -5096,6 +5071,14 @@ app.post(`${PREFIX}/applications/upload-pfp`, async (c) => {
     if (!wallet || !isValidHederaAccountId(wallet)) {
       return c.json({ success: false, error: "Valid Hedera wallet ID required" }, 400);
     }
+    const uploadSession = await validateWalletSession(c, wallet);
+    if (!uploadSession) {
+      return c.json({
+        success: false,
+        error: "Wallet session required. Connect your wallet and try again.",
+        code: "SESSION_REQUIRED",
+      }, 401);
+    }
     if (!(file instanceof File)) {
       return c.json({ success: false, error: "No file provided" }, 400);
     }
@@ -5146,6 +5129,14 @@ app.post(`${PREFIX}/applications`, async (c) => {
     // Validate wallet
     if (!body.wallet || !isValidHederaAccountId(body.wallet)) {
       return c.json({ success: false, error: "Valid Hedera wallet ID required to apply" }, 400);
+    }
+    const applySession = await validateWalletSession(c, body.wallet);
+    if (!applySession) {
+      return c.json({
+        success: false,
+        error: "Wallet session required. Connect your wallet and try again.",
+        code: "SESSION_REQUIRED",
+      }, 401);
     }
 
     // Rate limit: 3 applications per wallet per hour
@@ -5708,8 +5699,16 @@ app.get(`${PREFIX}/chat/messages`, async (c) => {
     }
     const cleanWallet = wallet.trim();
 
+    const chatSession = await validateWalletSession(c, cleanWallet);
+    if (!chatSession) {
+      return c.json({
+        success: false,
+        error: "Wallet session required to access chat.",
+        code: "SESSION_REQUIRED",
+      }, 401);
+    }
+
     // Rate limit polling: 15 requests/min per wallet (prevents aggressive polling)
-    // C-1 FIX: Dual-layer (in-memory + KV) — persists across isolate restarts
     const chatPollRL = await checkRateLimit(`chat:poll:${cleanWallet}`, 15, 60_000);
     if (chatPollRL.limited) {
       return c.json({
@@ -5720,7 +5719,6 @@ app.get(`${PREFIX}/chat/messages`, async (c) => {
       }, { status: 429, headers: { "Retry-After": String(chatPollRL.retryAfter || 5) } });
     }
 
-    // Verify wallet exists on Hedera mainnet
     const walletExists = await verifyWalletOnMirrorNode(cleanWallet);
     if (!walletExists) {
       return c.json({ success: false, error: "Wallet not found on Hedera mainnet" }, 403);
@@ -6139,7 +6137,20 @@ app.get(`${PREFIX}/chat/emotes`, async (c) => {
 // When the platform goes fully live, delete this entire block.
 //
 // PREFIX: /admin/test/* (easy to grep + remove)
+// Off unless BOTB_TEST_ROUTES=true. Admin session is still required.
 // ===========================================================================
+
+app.use(`${PREFIX}/admin/test/*`, requireAdminSession, async (c, next) => {
+  const enabled = (typeof Deno !== "undefined" ? Deno.env.get("BOTB_TEST_ROUTES") : "") || "";
+  if (enabled !== "true") {
+    return c.json({
+      success: false,
+      error: "Test tools are disabled.",
+      code: "TEST_ROUTES_DISABLED",
+    }, 404);
+  }
+  await next();
+});
 
 // ---------------------------------------------------------------------------
 // 1. POST /admin/test/purge-battle-votes/:id

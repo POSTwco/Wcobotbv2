@@ -33,7 +33,7 @@ const DISCLAIMER_VERSION = "1.0.0";
 // Main Component
 // ---------------------------------------------------------------------------
 export function ApplyPage() {
-  const { connected, accountId } = useWallet();
+  const { connected, accountId, walletSessionToken } = useWallet();
   const [searchParams] = useSearchParams();
   const orgId = searchParams.get("orgId") || "";
 
@@ -82,7 +82,10 @@ export function ApplyPage() {
     disclaimerAccepted;
 
   const handleSubmit = useCallback(async () => {
-    if (!accountId || !isValid) return;
+    if (!accountId || !walletSessionToken || !isValid) {
+      if (!walletSessionToken) toast.error("Reconnect your wallet, then submit again.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -93,7 +96,7 @@ export function ApplyPage() {
         disclaimerAccepted: true,
         disclaimerVersion: DISCLAIMER_VERSION,
         disclaimerAcceptedAt: new Date().toISOString(),
-      });
+      }, walletSessionToken);
 
       if (res.success && res.data) {
         setSubmitted(true);
@@ -108,7 +111,7 @@ export function ApplyPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [accountId, form, isValid, orgId]);
+  }, [accountId, form, isValid, orgId, walletSessionToken]);
 
   // ── Not connected ──────────────────────────────────────────────────────
   if (!connected) {
@@ -272,6 +275,7 @@ export function ApplyPage() {
                 />
                 <PfpUploader
                   wallet={accountId || ""}
+                  walletSessionToken={walletSessionToken}
                   storagePath={form.pfpStoragePath}
                   previewUrl={form.pfpPreviewUrl}
                   onUploaded={(path, url) => {
@@ -555,9 +559,10 @@ export function ApplyPage() {
 // ---------------------------------------------------------------------------
 
 function PfpUploader({
-  wallet, storagePath, previewUrl, onUploaded, onClear,
+  wallet, walletSessionToken, storagePath, previewUrl, onUploaded, onClear,
 }: {
   wallet: string;
+  walletSessionToken: string | null;
   storagePath: string;
   previewUrl: string;
   onUploaded: (path: string, url: string) => void;
@@ -567,7 +572,7 @@ function PfpUploader({
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
-    if (!wallet) {
+    if (!wallet || !walletSessionToken) {
       toast.error("Connect your wallet before uploading");
       return;
     }
@@ -581,7 +586,7 @@ function PfpUploader({
     }
     setUploading(true);
     try {
-      const res = await api.uploadApplicationPfp(file, wallet);
+      const res = await api.uploadApplicationPfp(file, wallet, walletSessionToken);
       if (res.success && res.data) {
         onUploaded(res.data.path, res.data.previewUrl);
         toast.success("Profile picture uploaded securely");

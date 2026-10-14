@@ -355,6 +355,7 @@ function SelectButton({ value, onChange, options, label, onAction, actionLabel, 
 export function TestToolsTab({ wallet, sessionToken }: TestToolsTabProps) {
   const { signMessage } = useWallet();
   const [inventory, setInventory] = useState<Record<string, number> | null>(null);
+  const [toolsDisabled, setToolsDisabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [battles, setBattles] = useState<Battle[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -389,7 +390,12 @@ export function TestToolsTab({ wallet, sessionToken }: TestToolsTabProps) {
         api.getEvents(),
         api.testTools.getIpFlags(wallet, sessionToken),
       ]);
-      if (inv.success && inv.data) setInventory(inv.data);
+      if (!inv.success && inv.code === "TEST_ROUTES_DISABLED") {
+        setToolsDisabled(true);
+      } else if (inv.success && inv.data) {
+        setToolsDisabled(false);
+        setInventory(inv.data);
+      }
       if (btl.success && btl.data) setBattles(btl.data);
       if (prop.success && prop.data) setProposals(prop.data);
       if (ath.success && ath.data) setAthletes(ath.data);
@@ -447,6 +453,22 @@ export function TestToolsTab({ wallet, sessionToken }: TestToolsTabProps) {
     id: b.id,
     label: `${b.title || b.id}`,
   }));
+
+  if (toolsDisabled) {
+    return (
+      <div className="rounded-xl border border-[#4274B9]/20 bg-[#0C1824]/60 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Shield className="w-4 h-4 text-[#D4A843]" />
+          <h3 className="text-xs font-bold text-[#D4A843]" style={{ fontFamily: "Orbitron, sans-serif" }}>
+            TEST TOOLS ARE OFF
+          </h3>
+        </div>
+        <p className="text-[0.65rem] text-[#8494A7] leading-relaxed">
+          Purge, delete, and reset routes are disabled on the live function. Day-to-day admin actions are unchanged.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

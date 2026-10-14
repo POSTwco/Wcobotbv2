@@ -1097,18 +1097,28 @@ export const api = {
   },
 
   // Public application submission
-  submitApplication: (data: any) =>
-    request<{ id: string; message: string }>("/applications", { method: "POST", body: data }),
+  submitApplication: (data: any, walletSessionToken?: string) =>
+    request<{ id: string; message: string }>("/applications", {
+      method: "POST",
+      body: data,
+      walletSessionToken,
+    }),
 
   // Upload athlete application profile picture (multipart/form-data)
-  uploadApplicationPfp: async (file: File, wallet: string): Promise<ApiResponse<{ path: string; previewUrl: string }>> => {
+  uploadApplicationPfp: async (
+    file: File,
+    wallet: string,
+    walletSessionToken?: string,
+  ): Promise<ApiResponse<{ path: string; previewUrl: string }>> => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("wallet", wallet);
+    const headers: Record<string, string> = { Authorization: `Bearer ${publicAnonKey}` };
+    if (walletSessionToken) headers["X-Wallet-Session"] = walletSessionToken;
     try {
       const res = await fetch(`${BASE_URL}/applications/upload-pfp`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${publicAnonKey}` },
+        headers,
         body: fd,
       });
       const json = await res.json();
@@ -1256,8 +1266,10 @@ export const api = {
   // Arena Chat
   // ---------------------------------------------------------------------------
   chat: {
-    getMessages: (wallet: string) =>
-      request<ChatMessage[]>(`/chat/messages?wallet=${encodeURIComponent(wallet)}`),
+    getMessages: (wallet: string, walletSessionToken?: string) =>
+      request<ChatMessage[]>(`/chat/messages?wallet=${encodeURIComponent(wallet)}`, {
+        walletSessionToken,
+      }),
 
     sendMessage: (
       wallet: string,

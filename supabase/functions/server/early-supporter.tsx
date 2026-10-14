@@ -373,11 +373,16 @@ function nowIso(): string {
 }
 
 function extractClientIp(c: Context): string {
+  const cf = (c.req.header("cf-connecting-ip") || "").trim();
+  if (cf) return cf.slice(0, 64);
   const xf = c.req.header("x-forwarded-for");
-  if (xf) return xf.split(",")[0].trim().slice(0, 64);
-  const real = c.req.header("x-real-ip");
-  if (real) return real.slice(0, 64);
-  return "unknown";
+  if (xf) {
+    const parts = xf.split(",").map((s) => s.trim()).filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last.slice(0, 64);
+  }
+  const real = (c.req.header("x-real-ip") || "").trim();
+  return real ? real.slice(0, 64) : "unknown";
 }
 
 async function getWalletFromSession(c: Context): Promise<string | null> {

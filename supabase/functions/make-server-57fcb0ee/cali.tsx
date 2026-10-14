@@ -528,9 +528,11 @@ export async function requireCaliSession(c: Context, next: Next) {
 // ---------------------------------------------------------------------------
 
 function getClientIp(c: Context): string {
-  const xf = c.req.header("X-Forwarded-For") || "";
-  const ip = xf.split(",")[0].trim();
-  return ip || c.req.header("CF-Connecting-IP") || c.req.header("X-Real-IP") || "unknown";
+  const cf = (c.req.header("cf-connecting-ip") || "").trim();
+  if (cf) return cf.slice(0, 64);
+  const parts = (c.req.header("x-forwarded-for") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const last = parts[parts.length - 1];
+  return (last || c.req.header("x-real-ip") || "unknown").trim().slice(0, 64);
 }
 
 // ---------------------------------------------------------------------------

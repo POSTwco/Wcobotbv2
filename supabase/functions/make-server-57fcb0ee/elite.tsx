@@ -104,8 +104,10 @@ function generateNonce(): string {
 }
 
 function getClientIp(c: Context): string {
-  const xf = c.req.header("X-Forwarded-For") || "";
-  return xf.split(",")[0].trim() || c.req.header("CF-Connecting-IP") || "unknown";
+  const cf = (c.req.header("cf-connecting-ip") || "").trim();
+  if (cf) return cf.slice(0, 64);
+  const parts = (c.req.header("x-forwarded-for") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return (parts[parts.length - 1] || "unknown").slice(0, 64);
 }
 
 function getEliteHashSecret(): string {

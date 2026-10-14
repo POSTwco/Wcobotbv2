@@ -832,9 +832,9 @@ export function ArenaChat() {
 
   // ── Fetch messages ──────────────────────────────────────────────────
   const fetchMessages = useCallback(async () => {
-    if (!wallet) return;
+    if (!wallet || !walletSessionToken) return;
     try {
-      const res = await api.chat.getMessages(wallet);
+      const res = await api.chat.getMessages(wallet, walletSessionToken);
       if (res.success && res.data) {
         const prevCount = lastMessageCountRef.current;
         setMessages(res.data);
@@ -850,7 +850,7 @@ export function ArenaChat() {
     } finally {
       setLoading(false);
     }
-  }, [wallet, soundEnabled, isGovernor]);
+  }, [wallet, walletSessionToken, soundEnabled, isGovernor]);
 
   // ── Fetch athlete map ───────────────────────────────────────────────
   const fetchAthleteMap = useCallback(async () => {
@@ -866,12 +866,12 @@ export function ArenaChat() {
 
   // ── Init + polling ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!connected || !wallet) return;
+    if (!connected || !wallet || !walletSessionToken) return;
     fetchMessages();
     fetchAthleteMap();
     pollRef.current = setInterval(fetchMessages, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [connected, wallet, fetchMessages, fetchAthleteMap]);
+  }, [connected, wallet, walletSessionToken, fetchMessages, fetchAthleteMap]);
 
   // ── Emote polling — pick up live emotes from other Governors ───────
   useEffect(() => {

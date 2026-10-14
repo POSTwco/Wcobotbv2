@@ -91,7 +91,7 @@ const HEADCOUNT_MODE = !Deno.env.get("BOTB_TOKEN_ID");
  */
 const ADMIN_WALLETS: ReadonlySet<string> = (() => {
   const raw = (typeof Deno !== "undefined" ? Deno.env.get("BOTB_ADMIN_WALLETS") : "") || "";
-  console.log(`[ADMIN-AUTH] Raw BOTB_ADMIN_WALLETS env value: "${raw}" (length=${raw.length})`);
+  console.log(`[ADMIN-AUTH] BOTB_ADMIN_WALLETS is ${raw ? "set" : "empty"} (length=${raw.length})`);
 
   // Support both comma-separated AND space-separated (common user mistake)
   const wallets = raw
@@ -101,7 +101,7 @@ const ADMIN_WALLETS: ReadonlySet<string> = (() => {
   if (wallets.length === 0) {
     console.log("[ADMIN-AUTH] WARNING: BOTB_ADMIN_WALLETS env var not set or no valid wallets found — no admin wallets configured");
   } else {
-    console.log(`[ADMIN-AUTH] Loaded ${wallets.length} admin wallet(s) from env: ${wallets.join(", ")}`);
+    console.log(`[ADMIN-AUTH] Loaded ${wallets.length} admin wallet(s) from env`);
   }
   return new Set(wallets);
 })();
@@ -816,29 +816,14 @@ export async function requireAdminSession(c: Context, next: Next) {
 }
 
 /**
- * Lightweight middleware — just checks if wallet is in admin list.
- * Used for READ-ONLY admin checks (no session required).
- * NOT safe for write operations — use requireAdminSession for writes.
+ * Retired. Header-only admin checks are not a gate.
+ * Kept so an old import fails closed instead of trusting X-Admin-Wallet.
  */
-export async function requireAdmin(c: Context, next: Next) {
-  const wallet = extractAdminWallet(c);
-
-  if (!wallet) {
-    return c.json(
-      { success: false, error: "X-Admin-Wallet header missing or invalid." },
-      401
-    );
-  }
-
-  if (!isAdmin(wallet)) {
-    return c.json(
-      { success: false, error: `Wallet ${wallet} is not authorized.` },
-      403
-    );
-  }
-
-  c.set("adminWallet", wallet);
-  await next();
+export async function requireAdmin(c: Context, _next: Next) {
+  return c.json(
+    { success: false, error: "Admin session required.", code: "SESSION_REQUIRED" },
+    401
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -68,9 +68,16 @@ function generateWalletSessionToken(): string {
 }
 
 function extractClientIp(c: any): string {
+  const cf = String(c.req.header("cf-connecting-ip") || "").trim();
+  if (cf) return cf.slice(0, 64);
   const forwarded = c.req.header("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return c.req.header("x-real-ip") || "unknown";
+  if (forwarded) {
+    const parts = String(forwarded).split(",").map((s: string) => s.trim()).filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last.slice(0, 64);
+  }
+  const real = String(c.req.header("x-real-ip") || "").trim();
+  return real ? real.slice(0, 64) : "unknown";
 }
 
 /** Magic DID = base64(JSON.stringify([proof, claim])) — not a JWT. */
