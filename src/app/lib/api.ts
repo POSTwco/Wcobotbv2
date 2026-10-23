@@ -716,6 +716,7 @@ export const api = {
         votingStatus?: string;
         startDate?: string;
         endDate?: string;
+        eventDate?: string;
         complete?: boolean;
       },
       adminWallet: string,
@@ -741,6 +742,7 @@ export const api = {
       location?: string;
       startDate?: string;
       endDate?: string;
+      eventDate?: string;
       totalPrizePool?: number;
       bracket: { seat: number; athleteId: string }[];
       format?: "pvp" | "tournament" | "field";
@@ -757,7 +759,7 @@ export const api = {
       status: string,
       adminWallet: string,
       sessionToken?: string,
-      extras?: { startDate?: string; endDate?: string },
+      extras?: { startDate?: string; endDate?: string; eventDate?: string },
     ) =>
       request<BattleEvent>(`/admin/tournaments/${eventId}/status`, {
         method: "POST",

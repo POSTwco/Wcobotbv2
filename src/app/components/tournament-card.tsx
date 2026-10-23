@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import { generateSecureNonce } from "../lib/api";
 import { signatureCancelledMessage, signaturePromptMessage } from "../lib/magic-signing-guidance";
 import type { Athlete, BattleEvent, TournamentMatch, TournamentVote } from "../lib/types";
+import { liveEventWhen } from "../lib/event-admin";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { InlineFlag } from "./country-flag";
 
@@ -180,9 +181,15 @@ export function TournamentCard({
             <p className="text-xs text-[#8494A7] mt-0.5">
               {organizer}
               <span className="text-[#4274B9]"> · </span>
-              {eventDateLabel(event.startDate)}
+              {eventDateLabel(liveEventWhen(event))}
               {event.location ? ` · ${event.location}` : ""}
             </p>
+            {(event.endDate || (event.eventDate && event.startDate)) ? (
+              <p className="text-[0.65rem] text-[#8494A7] mt-0.5">
+                Voting {event.startDate ? eventDateLabel(event.startDate) : "open date TBA"}
+                {event.endDate ? ` – ${eventDateLabel(event.endDate)}` : ""}
+              </p>
+            ) : null}
             <p className="text-[0.65rem] text-[#8494A7] mt-0.5">
               {isField
                 ? `${entrantIds.length} individuals · no 1v1 fights · pick exactly one · ${event.performanceRounds || 1} judged round${(event.performanceRounds || 1) > 1 ? "s" : ""}`

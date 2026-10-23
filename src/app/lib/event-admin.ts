@@ -83,3 +83,31 @@ export function nextPowerOfTwo(n: number): number {
   while (p < n) p *= 2;
   return Math.max(p, 2);
 }
+
+/**
+ * Date fans should see for the live event.
+ * A voting window (open and close both set) must not stand in for the show.
+ * Older organization drafts stored the live date in startDate and left voting blank.
+ */
+export function liveEventWhen(event?: { eventDate?: string; startDate?: string; endDate?: string } | null): string {
+  if (!event) return "";
+  if (event.eventDate) return event.eventDate;
+  if (event.startDate && !event.endDate) return event.startDate;
+  return "";
+}
+
+/** Blank when close is at least 1 hour before the live start, or either value is empty. */
+export function voteCloseWarning(closesLocal: string, eventLocal: string): string {
+  if (!closesLocal || !eventLocal) return "";
+  const close = new Date(closesLocal).getTime();
+  const show = new Date(eventLocal).getTime();
+  if (!Number.isFinite(close) || !Number.isFinite(show)) return "";
+  const hour = 60 * 60 * 1000;
+  if (close > show) {
+    return "Vote close is after the live start. Set it at least 1 hour before the event.";
+  }
+  if (close > show - hour) {
+    return "Vote close is inside the last hour before the show. Leave at least 1 hour so the result is locked when the stream starts.";
+  }
+  return "";
+}

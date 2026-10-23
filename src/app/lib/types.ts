@@ -155,8 +155,10 @@ export interface BattleEvent {
   name: string;                  // e.g. "BOTB World Championship 2026"
   description: string;
   location: string;              // e.g. "Los Angeles, USA"
-  startDate: string;             // ISO date
-  endDate: string;               // ISO date
+  startDate: string;             // ISO — vote opens
+  endDate: string;               // ISO — vote closes
+  /** Live show. Fans see this, not the vote-open date. */
+  eventDate?: string;
   totalPrizePool: number;        // Total WCO/BOTB tokens in pool
   status: EventStatus;
   bracketSize: number;           // PvP duals: 2–32 even (Event Battles 1–16); Tournament/Field: 3–12
@@ -673,6 +675,7 @@ export interface EventFormData {
   location: string;
   startDate: string;
   endDate: string;
+  eventDate?: string;
   totalPrizePool: number;
   bracketSize: number;
   bracket: BracketSeat[];

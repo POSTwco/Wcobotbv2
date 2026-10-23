@@ -229,6 +229,7 @@ export async function createTournamentEvent(body: {
   location?: string;
   startDate?: string;
   endDate?: string;
+  eventDate?: string;
   totalPrizePool?: number;
   bracket: { seat: number; athleteId: string }[];
   elimination?: string;
@@ -262,6 +263,7 @@ export async function createTournamentEvent(body: {
       location: sanitizeString(body.location || "", 200),
       startDate: body.startDate || "",
       endDate: body.endDate || "",
+      eventDate: sanitizeString(body.eventDate || "", 40),
       totalPrizePool: sanitizeNumber(body.totalPrizePool, 0, 1e12, 0),
       status: "draft",
       format: "field" as const,
@@ -306,6 +308,7 @@ export async function createTournamentEvent(body: {
     location: sanitizeString(body.location || "", 200),
     startDate: body.startDate || "",
     endDate: body.endDate || "",
+    eventDate: sanitizeString(body.eventDate || "", 40),
     totalPrizePool: sanitizeNumber(body.totalPrizePool, 0, 1e12, 0),
     status: "draft",
     format: "tournament",
@@ -584,6 +587,7 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
       event.updatedAt = now();
       if (body.startDate) event.startDate = body.startDate;
       if (body.endDate) event.endDate = body.endDate;
+      if (body.eventDate !== undefined) event.eventDate = sanitizeString(String(body.eventDate || ""), 40);
       await kv.set(`event:${eventId}`, event);
 
       return c.json({ success: true, data: event });

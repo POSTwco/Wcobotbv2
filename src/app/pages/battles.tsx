@@ -30,6 +30,7 @@ import { api } from "../lib/api";
 import { generateSecureNonce } from "../lib/api";
 import { signatureCancelledMessage, signaturePromptMessage } from "../lib/magic-signing-guidance";
 import type { Battle, Athlete, BattleVote, PublicOrganization } from "../lib/types";
+import { liveEventWhen } from "../lib/event-admin";
 import { ErrorCard } from "../components/error-boundary";
 import { VoteCelebration, type CelebrationData } from "../components/vote-celebration";
 import { BattleLoader } from "../components/battle-loader";
@@ -116,8 +117,8 @@ function haptic(ms: number | number[] = 50) {
 // ─── Countdown helper ───────────────────────────────────────────────────────
 // votingClosesAt = competition morning (set by admin). Show the comp date
 // and how many days until showtime — giving fans a clear sense of urgency.
-function formatCountdown(battle: { votingClosesAt: string; votingOpensAt: string; status: string }): { compDateStr: string; daysLeft: number; urgent: boolean; isLive: boolean } | null {
-  const closeDate = battle.votingClosesAt;
+function formatCountdown(battle: { votingClosesAt: string; votingOpensAt: string; status: string }, liveAt?: string): { compDateStr: string; daysLeft: number; urgent: boolean; isLive: boolean } | null {
+  const closeDate = liveAt || battle.votingClosesAt;
   if (!closeDate) return null;
   const target = new Date(closeDate);
   if (isNaN(target.getTime())) return null;
@@ -655,7 +656,7 @@ export function BattlesPage() {
     return [...buckets.entries()].map(([eventId, list]) => {
       const event = eventId === "standalone" ? undefined : eventById.get(eventId);
       const rows = [...list].sort((a, b) => (a.bracketPosition || 0) - (b.bracketPosition || 0));
-      const when = event?.startDate || rows[0]?.votingClosesAt || rows[0]?.votingOpensAt || "";
+      const when = liveEventWhen(event);
       return {
         eventId,
         event,
@@ -807,6 +808,12 @@ export function BattlesPage() {
                     <h2 className="text-sm sm:text-base text-[#E8ECF0] font-semibold truncate" style={ORBITRON}>{group.name}</h2>
                     <p className="text-xs text-[#8494A7] truncate mt-0.5">{group.organizer}</p>
                     <p className="text-xs text-[#8494A7] truncate">{battleDateLabel(group.when)}{group.location ? ` · ${group.location}` : ""} · {group.battles.length} battle{group.battles.length === 1 ? "" : "s"}</p>
+                    {(group.event?.endDate || (group.event?.eventDate && group.event?.startDate)) ? (
+                      <p className="text-[0.65rem] text-[#8494A7] truncate">
+                        Voting {group.event?.startDate ? battleDateLabel(group.event.startDate) : "open date TBA"}
+                        {group.event?.endDate ? ` – ${battleDateLabel(group.event.endDate)}` : ""}
+                      </p>
+                    ) : null}
                     {group.description ? <p className="text-xs text-[#C5D0DC] mt-1 line-clamp-2">{group.description}</p> : null}
                     {group.prize > 0 ? <p className="text-[0.65rem] text-[#D4A843] mt-1" style={ORBITRON}>{group.prize.toLocaleString()} WCO prize pool</p> : null}
                   </div>
@@ -990,13 +997,13 @@ export function BattlesPage() {
                           <span className="text-[#4274B9]"> · </span>
                           {group.organizer}
                           <span className="text-[#4274B9]"> · </span>
-                          {battleDateLabel(battle.votingClosesAt || battle.votingOpensAt || group.when)}
+                          {battleDateLabel(group.when)}
                           {battle.location ? ` · ${battle.location}` : ""}
                         </p>
 
                         {/* ── Competition date + countdown ── */}
                         {(() => {
-                          const cd = formatCountdown(battle);
+                          const cd = formatCountdown(battle, group.when);
                           if (!cd) return null;
                           return (
                             <div className="flex items-center gap-2 mt-2">

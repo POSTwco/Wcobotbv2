@@ -414,12 +414,18 @@ function announced(raw: unknown): boolean {
   return day <= new Date().toISOString().slice(0, 10);
 }
 
+function publicLiveDate(e: any): string {
+  if (e?.eventDate) return String(e.eventDate);
+  if (e?.startDate && !e?.endDate) return String(e.startDate);
+  return "";
+}
+
 function scheduleDraftToPublic(e: any) {
   return {
     id: `scheduled-${e.id}`,
     orgId: e.orgId,
     name: e.name || "",
-    eventDate: e.startDate || "",
+    eventDate: publicLiveDate(e),
     location: e.location || "",
     livestream: "",
     registrationUrl: "",
@@ -435,7 +441,7 @@ function battleEventToPublic(e: any): any {
     id: `linked-${e.id}`,
     orgId: e.orgId,
     name: e.name || "",
-    eventDate: e.startDate || "",
+    eventDate: publicLiveDate(e),
     location: e.location || "",
     livestream: "",
     registrationUrl: "",
@@ -680,8 +686,9 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
       name: draft.name,
       description,
       location: draft.location || "",
-      startDate: draft.eventDate || "",
+      startDate: "",
       endDate: "",
+      eventDate: draft.eventDate || "",
       totalPrizePool: prizePool,
       bracket,
       format: draft.format,
@@ -692,6 +699,7 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
     event.gamified = true;
     event.source = "organization";
     event.organizationDraftId = draft.id;
+    event.eventDate = draft.eventDate || "";
     event.announcementDate = announcementDate;
     event.updatedAt = nowIso();
     await kv.set(`event:${event.id}`, event);
@@ -740,8 +748,9 @@ async function createGamifiedEvent(draft: any, org: any, adminWallet: string): P
     name: draft.name,
     description,
     location: draft.location || "",
-    startDate: draft.eventDate || "",
+    startDate: "",
     endDate: "",
+    eventDate: draft.eventDate || "",
     announcementDate,
     totalPrizePool: prizePool,
     status: "draft",

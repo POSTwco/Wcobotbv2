@@ -2273,6 +2273,7 @@ app.post(`${PREFIX}/admin/events`, requireAdminSession, async (c) => {
       location: sanitizeString(body.location || existing?.location, 200),
       startDate: body.startDate || existing?.startDate || "",
       endDate: body.endDate || existing?.endDate || "",
+      eventDate: body.eventDate !== undefined ? sanitizeString(body.eventDate, 40) : (existing?.eventDate || ""),
       totalPrizePool: sanitizeNumber(body.totalPrizePool ?? existing?.totalPrizePool, 0, 3_000_000_000, existing?.totalPrizePool ?? 0),
       status: (["draft", "active", "upcoming", "live", "completed", "cancelled"].includes(body.status))
         ? (body.status === "live" || body.status === "upcoming" ? "active" : body.status)
@@ -2321,6 +2322,7 @@ app.post(`${PREFIX}/admin/events/:id/lifecycle`, requireAdminSession, async (c) 
 
     if (body.startDate !== undefined) event.startDate = body.startDate;
     if (body.endDate !== undefined) event.endDate = body.endDate;
+    if (body.eventDate !== undefined) event.eventDate = sanitizeString(String(body.eventDate || ""), 40);
 
     // Champ-pick: optional votingStatus transitions (upcoming)
     if (typeof body.votingStatus === "string" && (event.format === "tournament" || event.format === "field")) {
@@ -2528,6 +2530,7 @@ app.post(`${PREFIX}/admin/events/generate`, requireAdminSession, async (c) => {
       location: body.location || "",
       startDate: body.startDate || "",
       endDate: body.endDate || "",
+      eventDate: sanitizeString(body.eventDate || "", 40),
       totalPrizePool: body.totalPrizePool ?? 0,
       status: "draft",
       format: "pvp",

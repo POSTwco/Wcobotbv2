@@ -27,7 +27,7 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { InlineFlag } from "./country-flag";
 import { TournamentAdminPanel } from "./tournament-admin-panel";
 import { EventConsoleList } from "./event-console-list";
-import { nextPowerOfTwo } from "../lib/event-admin";
+import { nextPowerOfTwo, voteCloseWarning } from "../lib/event-admin";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -84,6 +84,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
   const [eventLocation, setEventLocation] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [eventDate, setEventDate] = useState("");
   const [prizePool, setPrizePool] = useState(0);
 
   const isPvp = competitionFormat === "pvp";
@@ -260,6 +261,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
           location: eventLocation,
           startDate: toIso(startDate),
           endDate: toIso(endDate),
+          eventDate: toIso(eventDate),
           totalPrizePool: prizePool,
           format: competitionFormat,
           elimination:
@@ -308,6 +310,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
         setEventLocation("");
         setStartDate("");
         setEndDate("");
+        setEventDate("");
         setPrizePool(0);
         setCompetitionFormat("pvp");
         setElimination("single");
@@ -323,7 +326,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
       setSaving(false);
     }
   }, [
-    eventName, eventDescription, eventLocation, startDate, endDate,
+    eventName, eventDescription, eventLocation, startDate, endDate, eventDate,
     prizePool, seats, allSeatsAssigned, wallet, loadData, clearAll, sessionToken,
     competitionFormat, elimination, performanceRounds, isPvp, isField,
   ]);
@@ -576,7 +579,7 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         </div>
                       </div>
                       <div>
-                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Voting opens</label>
+                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Vote opens</label>
                         <input
                           type="datetime-local"
                           value={startDate}
@@ -585,13 +588,29 @@ export function BracketBuilder({ wallet, sessionToken }: { wallet: string; sessi
                         />
                       </div>
                       <div>
-                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Voting closes / end</label>
+                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Vote closes</label>
                         <input
                           type="datetime-local"
                           value={endDate}
                           onChange={(e) => setEndDate(e.target.value)}
                           className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
                         />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-[#8494A7] text-[0.6rem] block mb-1">Event date and time</label>
+                        <input
+                          type="datetime-local"
+                          value={eventDate}
+                          onChange={(e) => setEventDate(e.target.value)}
+                          className="w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-3 py-2 text-[#E8ECF0] text-xs outline-none focus:border-[#D4A843]/50"
+                        />
+                        <span className="block text-[0.55rem] text-[#8494A7]/80 mt-1">
+                          The live show fans see. Example: Saturday, October 31, 3:00 PM. This is not the vote-open date.
+                          Leave voting open until 1 hour before that start. Close it the day before if you want the card locked sooner.
+                        </span>
+                        {voteCloseWarning(endDate, eventDate) ? (
+                          <span className="block text-[0.55rem] text-[#f59e0b] mt-1">{voteCloseWarning(endDate, eventDate)}</span>
+                        ) : null}
                       </div>
                       <div className="sm:col-span-2">
                         <label className="text-[#8494A7] text-[0.6rem] block mb-1">Description</label>

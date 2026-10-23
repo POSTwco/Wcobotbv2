@@ -277,6 +277,7 @@ function EventSchedule({
                     <span className="block text-[0.6rem] uppercase tracking-wide text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>{when.month}</span>
                     <span className="block text-lg leading-none text-[#E8ECF0] font-semibold">{when.day}</span>
                     <span className="block text-[0.6rem] text-[#8494A7]">{when.year}</span>
+                    {when.time ? <span className="block text-[0.55rem] text-[#D4A843]">{when.time}</span> : null}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm text-[#E8ECF0] font-semibold truncate">{event.name}</span>
@@ -292,14 +293,16 @@ function EventSchedule({
   );
 }
 
-function scheduleDate(value: string): { month: string; day: string; year: string } {
+function scheduleDate(value: string): { month: string; day: string; year: string; time: string } {
   const parsed = Date.parse(value || "");
-  if (!Number.isFinite(parsed)) return { month: "Date", day: "TBA", year: "" };
+  if (!Number.isFinite(parsed)) return { month: "Date", day: "TBA", year: "", time: "" };
   const date = new Date(parsed);
+  const hasTime = String(value || "").includes("T");
   return {
     month: date.toLocaleDateString("en-US", { month: "short" }),
     day: String(date.getDate()),
     year: String(date.getFullYear()),
+    time: hasTime ? date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
   };
 }
 

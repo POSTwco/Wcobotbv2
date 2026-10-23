@@ -19,6 +19,7 @@ import {
   type EventFormatFilter,
   type EventListFilter,
   isChampPick,
+  voteCloseWarning,
 } from "../lib/event-admin";
 
 const ORBITRON = { fontFamily: "Orbitron, sans-serif" } as const;
@@ -45,7 +46,7 @@ export function EventConsoleList({
   const [formatFilter, setFormatFilter] = useState<EventFormatFilter>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [scheduleDraft, setScheduleDraft] = useState<Record<string, { opens: string; closes: string }>>({});
+  const [scheduleDraft, setScheduleDraft] = useState<Record<string, { opens: string; closes: string; eventAt: string }>>({});
 
   const athMap = useMemo(() => {
     const m = new Map<string, Athlete>();
@@ -156,10 +157,13 @@ export function EventConsoleList({
             const kids = eventBattles(evt.id);
             const draftKids = kids.filter((b) => b.status === "draft");
             const format = evt.format || "pvp";
+            const legacyLive = !evt.eventDate && !!evt.startDate && !evt.endDate;
             const sched = scheduleDraft[evt.id] || {
-              opens: toLocalInput(evt.startDate),
+              opens: toLocalInput(legacyLive ? "" : evt.startDate),
               closes: toLocalInput(evt.endDate),
+              eventAt: toLocalInput(evt.eventDate || (legacyLive ? evt.startDate : "")),
             };
+            const closeWarning = voteCloseWarning(sched.closes, sched.eventAt);
 
             return (
               <div
@@ -219,9 +223,9 @@ export function EventConsoleList({
                 {open && (
                   <div className="px-3 pb-3 space-y-3 border-t border-[#4274B9]/10 pt-3">
                     {/* Schedule */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <label className="text-[0.5rem] text-[#8494A7] block">
-                        Voting opens
+                        Vote opens
                         <input
                           type="datetime-local"
                           value={sched.opens}
@@ -235,7 +239,7 @@ export function EventConsoleList({
                         />
                       </label>
                       <label className="text-[0.5rem] text-[#8494A7] block">
-                        Voting closes / event end
+                        Vote closes
                         <input
                           type="datetime-local"
                           value={sched.closes}
@@ -248,7 +252,25 @@ export function EventConsoleList({
                           className="mt-1 w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-2 py-1.5 text-[#E8ECF0] text-[0.65rem]"
                         />
                       </label>
+                      <label className="text-[0.5rem] text-[#8494A7] block">
+                        Event date and time
+                        <input
+                          type="datetime-local"
+                          value={sched.eventAt}
+                          onChange={(e) =>
+                            setScheduleDraft((p) => ({
+                              ...p,
+                              [evt.id]: { ...sched, eventAt: e.target.value },
+                            }))
+                          }
+                          className="mt-1 w-full bg-[#162033] border border-[#4274B9]/20 rounded-lg px-2 py-1.5 text-[#E8ECF0] text-[0.65rem]"
+                        />
+                      </label>
                     </div>
+                    <p className="text-[0.55rem] text-[#8494A7]/80">
+                      Fans see the event date, not the day voting opens. Leave voting open until 1 hour before the live start. Close it the day before if the card should be locked sooner.
+                    </p>
+                    {closeWarning ? <p className="text-[0.55rem] text-[#f59e0b]">{closeWarning}</p> : null}
 
                     <div className="flex flex-wrap gap-1.5">
                       <ActionBtn
@@ -259,6 +281,7 @@ export function EventConsoleList({
                           run(evt.id, async () => {
                             const opens = fromLocalInput(sched.opens);
                             const closes = fromLocalInput(sched.closes);
+                            const eventDate = fromLocalInput(sched.eventAt);
                             if (format === "pvp" || !evt.format) {
                               const ids = kids.map((b) => b.id);
                               if (ids.length) {
@@ -274,7 +297,7 @@ export function EventConsoleList({
                             }
                             const res2 = await api.admin.eventLifecycle(
                               evt.id,
-                              { startDate: opens, endDate: closes },
+                              { startDate: opens, endDate: closes, eventDate },
                               wallet,
                               sessionToken,
                             );
@@ -374,6 +397,7 @@ export function EventConsoleList({
                                   {
                                     startDate: fromLocalInput(sched.opens),
                                     endDate: fromLocalInput(sched.closes),
+                                    eventDate: fromLocalInput(sched.eventAt),
                                   },
                                 );
                                 if (!res.success) throw new Error(res.error || "Failed");
@@ -396,6 +420,7 @@ export function EventConsoleList({
                                   {
                                     startDate: fromLocalInput(sched.opens),
                                     endDate: fromLocalInput(sched.closes),
+                                    eventDate: fromLocalInput(sched.eventAt),
                                   },
                                 );
                                 if (!res.success) throw new Error(res.error || "Failed");
