@@ -4,7 +4,6 @@ import { ArrowRight, Swords, Mail } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
 import { RateAthletesSection } from "../components/rate-athletes";
 import { SponsorShowcase, TitleSponsorBanner } from "../components/sponsor-showcase";
-import { SiteMapExploratorium } from "../components/site-map-exploratorium";
 import { useConfig } from "../lib/hooks";
 import { resolveHeroVideoUrl } from "../lib/site-media";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
@@ -180,10 +179,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Sponsor Showcase — between hero and site map */}
       <SponsorShowcase />
-
-      <SiteMapExploratorium />
 
       <section className="py-12 sm:py-20 relative">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#4274B9]/[0.03] rounded-full blur-[100px] pointer-events-none" />
