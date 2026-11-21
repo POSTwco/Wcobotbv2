@@ -411,8 +411,7 @@ export function ApplyPage() {
                         Battle of the Bars ("BOTB") competition series organized by the World Calisthenics Organization ("WCO").
                         Upon acceptance, you agree to compete in assigned matchups, adhere to competition rules and scheduling,
                         and represent yourself professionally within the BOTB ecosystem. <strong className="text-[#E8ECF0]">Failure to fulfill
-                        competition obligations after acceptance may result in removal from the roster, forfeiture of token
-                        rewards, and suspension from future events.</strong>
+                        competition obligations after acceptance may result in removal from the roster and suspension from future events.</strong>
                       </DisclaimerSection>
 
                       <DisclaimerSection title="2. Grant of Promotional Rights">
@@ -421,7 +420,7 @@ export function ApplyPage() {
                         application — including but not limited to your name, likeness, photographs, videos, biographical information,
                         social media handles, and YouTube routine footage — for promotional, marketing, editorial, and commercial
                         purposes across all media now known or hereafter developed. This includes use on the BOTB platform,
-                        WCO social media channels, NFT card artwork, broadcast materials, merchandise, and partner media.
+                        WCO social media channels, broadcast materials, merchandise, and partner media.
                       </DisclaimerSection>
 
                       <DisclaimerSection title="3. Data Collection & Processing">
@@ -436,10 +435,8 @@ export function ApplyPage() {
 
                       <DisclaimerSection title="4. Blockchain & Digital Asset Acknowledgment">
                         You acknowledge that the BOTB platform operates on the <strong className="text-[#E8ECF0]">Hedera Hashgraph</strong> mainnet.
-                        Your Hedera wallet address will be publicly associated with your athlete profile. If approved, an NFT
-                        card may be minted representing your athlete profile via the Hedera Token Service (HTS). You understand
-                        that blockchain data is immutable and publicly accessible. You further acknowledge that BOTB tokens and
-                        NFTs are utility items and do not constitute securities, investment contracts, or financial instruments.
+                        Your account may be publicly associated with your athlete profile. You understand
+                        that records of a call, once stored, stay on that bout.
                       </DisclaimerSection>
 
                       <DisclaimerSection title="5. Intellectual Property">

@@ -3,8 +3,6 @@ import { Layout } from "./components/layout";
 import { HomePage } from "./pages/home";
 import { BattlesPage } from "./pages/battles";
 import { AthletesPage } from "./pages/athletes";
-import { NFTsPage } from "./pages/nfts";
-import { GovernancePage } from "./pages/governance";
 import { LeaderboardPage } from "./pages/leaderboard";
 import { ApplyPage } from "./pages/apply";
 import { JudgeApplyPage } from "./pages/judge-apply";
@@ -22,9 +20,7 @@ import { CalisthenicsEliteCustomPage } from "./pages/calisthenics-elite-custom";
 
 import { PrivacyPage } from "./pages/privacy";
 import { TermsPage } from "./pages/terms";
-import { WhitepaperPage } from "./pages/whitepaper";
 import { ContactPage } from "./pages/contact";
-import { ManageAssetsPage } from "./pages/manage-assets";
 import { RouteErrorPage, NotFoundPage } from "./components/error-boundary";
 
 // Historical client pen-test UIs removed from the tree (2026-07 hygiene pass).
@@ -42,8 +38,8 @@ export const router = createBrowserRouter([
       { path: "events", Component: EventsPage },
       { path: "events/account", Component: OrgAccountPage },
       { path: "events/dashboard", Component: OrgDashboardPage },
-      { path: "nfts", Component: NFTsPage },
-      { path: "governance", Component: GovernancePage },
+      { path: "nfts", Component: HomePage },
+      { path: "governance", Component: HomePage },
       { path: "leaderboard", Component: LeaderboardPage },
       { path: "apply", Component: ApplyPage },
       { path: "judges/apply", Component: JudgeApplyPage },
@@ -56,10 +52,10 @@ export const router = createBrowserRouter([
       { path: "calisthenics/elite/workout/:id", Component: CalisthenicsEliteWorkoutPage },
       { path: "calisthenics/elite/custom", Component: CalisthenicsEliteCustomPage },
 
-      { path: "wallet/assets", Component: ManageAssetsPage },
+      { path: "wallet/assets", Component: HomePage },
       { path: "privacy", Component: PrivacyPage },
       { path: "terms", Component: TermsPage },
-      { path: "whitepaper", Component: WhitepaperPage },
+      { path: "whitepaper", Component: HomePage },
       { path: "contact", Component: ContactPage },
       { path: "*", Component: NotFoundPage },
     ],

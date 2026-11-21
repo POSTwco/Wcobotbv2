@@ -1,10 +1,10 @@
 /**
- * BOTB Battles Page — Production Token-Weighted Voting
+ * Battles page — one signed-in call per bout, weight 1
  * =====================================================
- * - Token-weighted: users allocate real BOTB tokens as vote weight
+ * - One member, one call, per bout
  * - Event-scoped: tokens can't be double-spent across battles in same event
  * - Signature-required: every vote (and change) needs a wallet signature
- * - Server-verified: backend checks mirror node balance + NFT holdings
+ * - The call is one row per member per bout
  * - Live vote percentages computed from actual KV vote records (12s poll)
  * - Optimistic local-state update: server returns authoritative tallies in
  *   the vote response → instant UI feedback, no read-after-write gap
@@ -191,8 +191,7 @@ export function BattlesPage() {
   // Inline picks: battleId → { athleteId, stakeAmount } — tracks ALL selections across open battles
   const [picks, setPicks] = useState<Map<string, { athleteId: string; stakeAmount: number }>>(new Map());
   const {
-    connected, connect, accountId, botbBalance, votingPower,
-    hasGovernorNFT, hasSigmaNFT, isConnecting, signMessage,
+    connected, accountId, signMessage, openMagicEmailSignIn,
     walletSessionToken, walletProvider,
   } = useWallet();
   const { vipActive } = useVIP();
@@ -200,7 +199,7 @@ export function BattlesPage() {
   const { data: battles, loading: battlesLoading, error: battlesError, hasError: battlesHasError, refresh: refreshBattles, patchData: patchBattles } = useLiveBattles(12000);
   const { map: athleteMap, loading: athletesLoading } = useAthleteMap();
   const { voteMap, refresh: refreshMyVotes } = useMyVotes(connected ? accountId : null);
-  const { allocations, refresh: refreshAllocations } = useAllocations(connected ? accountId : null);
+  const { refresh: refreshAllocations } = useAllocations(connected ? accountId : null);
   const { data: events, refresh: refreshEvents } = useEvents();
   const [orgs, setOrgs] = useState<PublicOrganization[]>([]);
   const [myTournamentVotes, setMyTournamentVotes] = useState<Map<string, TournamentVote>>(new Map());
@@ -347,65 +346,22 @@ export function BattlesPage() {
 
   const getAthlete = (id: string): Athlete | null => athleteMap.get(id) || null;
 
-  const tokenLive = botbBalance > 0;
-
-  // ─── Inline pick handlers ───────────────────────────────────────────────
   const togglePick = useCallback((battleId: string, athleteId: string) => {
-    if (!connected) { connect(); return; }
+    if (!connected) { openMagicEmailSignIn("signin"); return; }
     haptic(50);
     setPicks((prev) => {
       const next = new Map(prev);
       const existing = next.get(battleId);
       if (existing?.athleteId === athleteId) {
-        next.delete(battleId); // Deselect
+        next.delete(battleId);
       } else {
-        next.set(battleId, { athleteId, stakeAmount: existing?.stakeAmount || 0 });
+        next.set(battleId, { athleteId, stakeAmount: 0 });
       }
       return next;
     });
-  }, [connected, connect]);
+  }, [connected, openMagicEmailSignIn]);
 
-  const setPickStake = useCallback((battleId: string, amount: number) => {
-    setPicks((prev) => {
-      const next = new Map(prev);
-      const existing = next.get(battleId);
-      if (existing) {
-        next.set(battleId, { ...existing, stakeAmount: Math.max(0, Math.floor(amount)) });
-      }
-      return next;
-    });
-  }, []);
-
-  // ─── Max stake for a battle (accounts for other picks in same event) ────
-  const getMaxStake = useCallback((battleId: string, eventId: string) => {
-    if (!tokenLive) return 0;
-    let used = 0;
-    // Existing allocations for battles NOT in current picks
-    const eventAlloc = allocations[eventId];
-    if (eventAlloc) {
-      for (const entry of eventAlloc.battles || []) {
-        if (!picks.has(entry.battleId)) {
-          used += entry.stakeAmount || 0;
-        }
-      }
-    }
-    // Other picks in the same event
-    picks.forEach((p, bid) => {
-      if (bid !== battleId) {
-        const b = battles.find(x => x.id === bid);
-        if (b && (b.eventId || "standalone") === eventId) used += p.stakeAmount;
-      }
-    });
-    return Math.max(0, Math.floor(botbBalance - used));
-  }, [tokenLive, allocations, picks, battles, botbBalance]);
-
-  // ─── Summary stats ──────────────────────────────────────────────────────
   const totalPicks = picks.size;
-  const totalStake = useMemo(() => {
-    let sum = 0;
-    picks.forEach(p => { sum += p.stakeAmount; });
-    return sum;
-  }, [picks]);
 
   // Group picks by event for batch submission
   const picksByEvent = useMemo(() => {
@@ -442,9 +398,6 @@ export function BattlesPage() {
       for (const [eid] of eventEntries) eventNonces.set(eid, generateNonce());
 
       const allBattleCount = eventEntries.reduce((s, [, g]) => s + g.battlePicks.length, 0);
-      const totalStakeAmt = eventEntries.reduce(
-        (s, [, g]) => s + g.battlePicks.reduce((ss, bp) => ss + (tokenLive ? bp.stakeAmount : 0), 0), 0
-      );
       const hasUpdates = Array.from(picks.keys()).some(bid => voteMap.has(bid));
 
       // Build combined human-readable message
@@ -460,7 +413,7 @@ export function BattlesPage() {
         "",
         `Wallet: ${accountId}`,
         `Total Battles: ${allBattleCount}`,
-        `Total Stake: ${totalStakeAmt.toLocaleString('en-US')} BOTB`,
+        `Calls: ${allBattleCount}`,
         `Timestamp: ${new Date().toISOString()}`,
         "",
       ];
@@ -478,7 +431,6 @@ export function BattlesPage() {
           ml.push(
             `  Battle: ${battle?.title || bp.battleId}`,
             `  Pick: ${athlete?.name || bp.athleteId}`,
-            `  Stake: ${(tokenLive ? bp.stakeAmount : 0).toLocaleString('en-US')} BOTB`,
             `  BattleID: ${bp.battleId}`,
             `  AthleteID: ${bp.athleteId}`,
             "",
@@ -487,11 +439,8 @@ export function BattlesPage() {
       }
       ml.push(
         hasUpdates ? "NOTE: Some votes update previous picks." : "",
-        "This is a VOTE, not a transaction.",
-        "No tokens will be transferred.",
-        "Your BOTB balance is used as voting",
-        "weight only -- tokens remain in your",
-        "wallet at all times.",
+        "This is a call, not a transfer.",
+        "One signed-in member, one call, per bout.",
         "=======================================",
       );
       const combinedMsg = ml.filter(Boolean).join("\n");
@@ -523,7 +472,7 @@ export function BattlesPage() {
         const payload = battlePicks.map(bp => ({
           battleId: bp.battleId,
           athleteId: bp.athleteId,
-          stakeAmount: tokenLive ? bp.stakeAmount : 0,
+          stakeAmount: 0,
         }));
 
         if (payload.length === 1) {
@@ -581,12 +530,12 @@ export function BattlesPage() {
           id: Date.now(),
           voteCount: totalProcessed,
           athleteNames: allAthleteNames,
-          isGovernor: hasGovernorNFT,
-          isSigma: hasSigmaNFT,
-          votingPower,
-          totalWeighted: totalWeightedAll,
-          totalStake: totalStakeAmt,
-          tokenLive,
+          isGovernor: false,
+          isSigma: false,
+          votingPower: 1,
+          totalWeighted: totalProcessed,
+          totalStake: 0,
+          tokenLive: false,
         });
 
         toast.success(
@@ -595,13 +544,7 @@ export function BattlesPage() {
               {totalProcessed} vote{totalProcessed > 1 ? "s" : ""} confirmed!
               {anyFailed ? " (some failed)" : ""}
             </p>
-            {totalStakeAmt > 0 ? (
-              <p className="text-xs opacity-80">
-                {totalStakeAmt.toLocaleString()} BOTB &times; {votingPower}x = {totalWeightedAll.toLocaleString()} weighted
-              </p>
-            ) : (
-              <p className="text-xs opacity-80">Headcount vote{totalProcessed > 1 ? "s" : ""} recorded</p>
-            )}
+            <p className="text-xs opacity-80">One call recorded for each bout</p>
             <p className="text-xs opacity-60 flex items-center gap-1">
               <Fingerprint className="w-3 h-3" /> Signature verified
             </p>
@@ -625,7 +568,7 @@ export function BattlesPage() {
       setSubmitting(false);
       setSigningStep("idle");
     }
-  }, [connected, accountId, signMessage, picks, picksByEvent, battles, voteMap, tokenLive, patchBattles, refreshBattles, refreshMyVotes, refreshAllocations, votingPower, hasGovernorNFT, hasSigmaNFT, athleteMap, walletProvider]);
+  }, [connected, accountId, signMessage, picks, picksByEvent, battles, voteMap, patchBattles, refreshBattles, refreshMyVotes, refreshAllocations, athleteMap, walletProvider, walletSessionToken]);
 
   // ─── Filters ────────────────────────────────────────────────────────────
   const FILTERS: { key: BattleFilter; label: string; icon: typeof Swords }[] = [
@@ -715,9 +658,7 @@ export function BattlesPage() {
                   BATTLES
                 </h1>
                 <p className="text-[0.65rem] sm:text-xs text-[#8494A7] mt-0.5">
-                  {tokenLive
-                    ? "Token-weighted voting · signature verified"
-                    : "Free headcount votes · no token rewards yet · signature verified"}
+                  One call per bout
                 </p>
               </div>
             </div>
@@ -769,7 +710,7 @@ export function BattlesPage() {
                   myVote={myTournamentVotes.get(evt.id)}
                   connected={connected}
                   accountId={accountId}
-                  votingPower={votingPower}
+                  votingPower={1}
                   walletSessionToken={walletSessionToken}
                   walletProvider={walletProvider}
                   signMessage={signMessage}
@@ -919,73 +860,9 @@ export function BattlesPage() {
                               {battle.location && (
                                 <span className="text-[#8494A7]">{battle.location}</span>
                               )}
-                              {battle.totalPool > 0 && (
-                                <span className="text-[#D4A843] font-bold" style={ORBITRON}>
-                                  {battle.totalPool.toLocaleString()} WCO
-                                </span>
-                              )}
+
                             </div>
-                            {/* ── Compact Payout (mirrors server snapshot math EXACTLY) ── */}
-                            {/* Server: POST /admin/battles/:id/winner → snapshot generation
-                             *  Token mode: weight = stakeAmount × votingPower
-                             *  Headcount mode: weight = votingPower (NFT multiplier alone)
-                             *  NFT multipliers: Governor=2×, Sigma=1.5×, Both=3×, Base=1×
-                             *  Governor gets 2× share, Sigma 1.5×, Both 3× — even pre-launch */}
-                            {myVote && battle.totalPool > 0 && (
-                              battle.status === "voting_closed" ||
-                              battle.status === "winner_declared" ||
-                              battle.status === "rewards_distributed"
-                            ) && (() => {
-                              // ── Payout Math (mirrors server snapshot EXACTLY) ──
-                              // Token mode: weight = stakeAmount × votingPower
-                              // Headcount mode (pre-launch): weight = votingPower alone
-                              //   Governor=2×, Sigma=1.5×, Both=3×, Base=1×
-                              // votes1Weighted/votes2Weighted now track power-weighted
-                              // tallies in both modes, so the same formula works.
-                              const votedForA1 = myVote.athleteId === battle.athlete1Id;
-                              const mySideWeighted = votedForA1 ? battle.votes1Weighted : battle.votes2Weighted;
-                              const myVotingPower = myVote.votingPower || 1;
-                              // In headcount mode (stakeAmount=0), server uses votingPower alone as weight.
-                              // In token mode, weight = stakeAmount × votingPower.
-                              const myStake = myVote.stakeAmount || 0;
-                              const myWeightedVote = myStake > 0 ? myStake * myVotingPower : myVotingPower;
 
-                              let sharePercent: number;
-                              let potentialReward: number;
-
-                              if (mySideWeighted > 0 && myWeightedVote > 0) {
-                                sharePercent = (myWeightedVote / mySideWeighted) * 100;
-                                potentialReward = (myWeightedVote / mySideWeighted) * battle.totalPool;
-                              } else {
-                                // Safety fallback: shouldn't happen, but prevents NaN
-                                const mySideCount = votedForA1 ? battle.votes1Count : battle.votes2Count;
-                                sharePercent = mySideCount > 0 ? 100 / mySideCount : 0;
-                                potentialReward = mySideCount > 0 ? battle.totalPool / mySideCount : 0;
-                              }
-
-                              const isWinnerDeclared = !!battle.winnerId;
-                              const userWon = isWinnerDeclared && battle.winnerId === myVote.athleteId;
-                              const userLost = isWinnerDeclared && battle.winnerId !== myVote.athleteId;
-
-                              if (userLost) {
-                                return (
-                                  <span className="text-[0.55rem] text-[#EF4444]/70 font-semibold" style={ORBITRON}>
-                                    NO PAYOUT
-                                  </span>
-                                );
-                              }
-
-                              return (
-                                <>
-                                  <span className={`text-[0.6rem] font-bold ${userWon ? "text-[#D4A843]" : "text-[#6AA3E0]"}`} style={ORBITRON}>
-                                    {sharePercent.toFixed(2)}%
-                                  </span>
-                                  <span className={`text-[0.7rem] font-black ${userWon ? "text-[#D4A843]" : "text-[#E8ECF0]"}`} style={ORBITRON}>
-                                    {potentialReward.toLocaleString(undefined, { maximumFractionDigits: 2 })} WCO
-                                  </span>
-                                </>
-                              );
-                            })()}
                           </div>
                         </div>
 
@@ -1202,11 +1079,7 @@ export function BattlesPage() {
                               <div>
                                 <span className="text-[#10b981] font-semibold">Voted: </span>
                                 <span className="text-[#E8ECF0] font-bold">{getAthlete(myVote.athleteId)?.name || myVote.athleteId}</span>
-                                {myVote.stakeAmount > 0 && (
-                                  <span className="text-[#8494A7] ml-1.5">
-                                    ({myVote.stakeAmount.toLocaleString()} BOTB &times; {myVote.votingPower}x)
-                                  </span>
-                                )}
+
                               </div>
                             </div>
                             {canVote && (
@@ -1215,7 +1088,7 @@ export function BattlesPage() {
                           </motion.div>
                         )}
 
-                        {/* ── Inline Stake Input (appears when athlete is picked) ── */}
+                        {/* Call for this bout */}
                         <AnimatePresence>
                           {myPick && canVote && (
                             <motion.div
@@ -1246,44 +1119,9 @@ export function BattlesPage() {
                                   </button>
                                 </div>
 
-                                {tokenLive && (() => {
-                                  const eventId = battle.eventId || "standalone";
-                                  const maxForThis = getMaxStake(battle.id, eventId);
-                                  const cappedMax = maxForThis + myPick.stakeAmount; // Can re-allocate own stake
-
-                                  return (
-                                    <div className="space-y-1.5">
-                                      <div className="flex items-center justify-between text-[0.55rem]">
-                                        <span className="text-[#8494A7]">Token weight</span>
-                                        <span className="text-[#E8ECF0] font-bold" style={ORBITRON}>
-                                          {myPick.stakeAmount.toLocaleString()} BOTB
-                                        </span>
-                                      </div>
-                                      <input
-                                        type="range"
-                                        min={0}
-                                        max={cappedMax}
-                                        step={1}
-                                        value={myPick.stakeAmount}
-                                        onChange={(e) => {
-                                          const val = Math.min(Number(e.target.value), cappedMax);
-                                          setPickStake(battle.id, val);
-                                        }}
-                                        className="w-full accent-[#4274B9] h-1.5"
-                                      />
-                                      <div className="flex justify-between text-[0.45rem] text-[#8494A7]">
-                                        <span>0</span>
-                                        <span>{cappedMax.toLocaleString()} available</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {!tokenLive && (
-                                  <p className="text-[0.5rem] text-[#8494A7]">
-                                    Free headcount vote · no token rewards yet
-                                  </p>
-                                )}
+                                <p className="text-[0.5rem] text-[#8494A7]">
+                                  One call for this bout
+                                </p>
                               </div>
                             </motion.div>
                           )}
@@ -1294,7 +1132,7 @@ export function BattlesPage() {
                           <div className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-[#4274B9]/[0.03] border border-[#1e293b] mb-4">
                             <Target className="w-3.5 h-3.5 text-[#4274B9]/40" />
                             <span className="text-[0.55rem] text-[#8494A7]/60">
-                              {connected ? "Tap an athlete to cast your vote" : "Connect wallet to vote"}
+                              {connected ? "Tap an athlete to make your call" : "Sign in to make your call"}
                             </span>
                           </div>
                         )}
@@ -1340,17 +1178,7 @@ export function BattlesPage() {
                           {totalPicks} PICK{totalPicks > 1 ? "S" : ""} READY
                         </p>
                         <div className="flex items-center gap-2 text-[0.5rem] text-[#8494A7] mt-0.5">
-                          {tokenLive && totalStake > 0 && (
-                            <span>{totalStake.toLocaleString()} BOTB &times; {votingPower}x</span>
-                          )}
-                          {!tokenLive && <span>Headcount mode</span>}
-                          <span className="flex items-center gap-0.5">
-                            <Shield className="w-2.5 h-2.5 text-[#4274B9]" />
-                            {votingPower}x
-                          </span>
-                          {hasGovernorNFT && (
-                            <span className="text-[0.4rem] text-[#D4A843]" style={ORBITRON}>GOV</span>
-                          )}
+                          <span>One call each</span>
                         </div>
                       </div>
                     </div>
@@ -1400,9 +1228,6 @@ export function BattlesPage() {
                           >
                             <CheckCircle className="w-2 h-2" />
                             {athlete?.name?.split(" ")[0] || "?"}
-                            {tokenLive && p.stakeAmount > 0 && (
-                              <span className="text-[#8494A7]">{p.stakeAmount.toLocaleString()}</span>
-                            )}
                           </span>
                         );
                       })}

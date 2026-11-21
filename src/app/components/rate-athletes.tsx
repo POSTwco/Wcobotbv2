@@ -1,16 +1,7 @@
 /**
  * BOTB Rate Athletes — Live Data Centerpiece
  * ============================================
- * Sigma Series NFT cards with live Governor-voted skill ratings.
- *
- * Data flow:
- *   KV athlete:{id} → useAthletes() → AthleteNFTCard → animated skill bars
- *   Admin sets athlete.skills via Admin Panel → totalPowerRating = sum of 5 values
- *   Power rating = sum of 5 live skill values
- *   NFT cards link to HashScan via athlete.nftTokenId
- *
- * Fallback images are provided for the 3 original athletes when no
- * nftImageUrl or pfpUrl is set on the KV record.
+ * Roster cards with skill ratings from competition results.
  */
 
 import { useState, useCallback, useMemo } from "react";
@@ -29,12 +20,10 @@ import {
   Sparkles,
   Vote,
   ArrowUpRight,
-  ExternalLink,
   Loader2,
 } from "lucide-react";
 import { Link } from "react-router";
 import { useAthletes } from "../lib/hooks";
-import { getNetworkConfig } from "../lib/hedera-config";
 import type { Athlete, AthleteSkills } from "../lib/types";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { getCountryFlag } from "../lib/country-flags";
@@ -93,7 +82,7 @@ const SKILL_CATEGORIES = [
       "Maintaining form and amplitude across multiple reps",
       "Advanced power-dynamic movements and creative variations",
     ],
-    scoring: "Admin-set rating based on official WCO judging standards. Governors may propose changes via governance.",
+    scoring: "Rating based on official WCO judging standards and competition results.",
   },
   {
     id: "performance" as const,
@@ -113,7 +102,7 @@ const SKILL_CATEGORIES = [
       "Overall cohesion, rhythm, and aesthetic of the routine as a whole",
       "Creativity — original transitions, unconventional grips, and surprising sequences",
     ],
-    scoring: "Admin-set rating based on official WCO judging standards. Governors may propose changes via governance.",
+    scoring: "Rating based on official WCO judging standards and competition results.",
   },
   {
     id: "static" as const,
@@ -133,7 +122,7 @@ const SKILL_CATEGORIES = [
       "Grip and apparatus variation showcasing versatility",
       "Balance-based skills (handstands, one-arm holds) add value",
     ],
-    scoring: "Admin-set rating based on official WCO judging standards. Governors may propose changes via governance.",
+    scoring: "Rating based on official WCO judging standards and competition results.",
   },
   {
     id: "aggression" as const,
@@ -153,7 +142,7 @@ const SKILL_CATEGORIES = [
       "Strategic escalation and real-time adaptation to opponent's strengths",
       "Risk & improvisation — spontaneous creativity under competitive pressure",
     ],
-    scoring: "Admin-set rating based on official WCO judging standards. Governors may propose changes via governance.",
+    scoring: "Rating based on official WCO judging standards and competition results.",
   },
   {
     id: "dynamic" as const,
@@ -173,7 +162,7 @@ const SKILL_CATEGORIES = [
       "Rotation speed and aerial body control during releases and spins",
       "Clean catch technique with full bar control — no slips or regrips",
     ],
-    scoring: "Admin-set rating based on official WCO judging standards. Governors may propose changes via governance.",
+    scoring: "Rating based on official WCO judging standards and competition results.",
   },
 ];
 
@@ -255,18 +244,11 @@ function SkillPanel({ skill, isOpen, onToggle }: { skill: typeof SKILL_CATEGORIE
 // AthleteNFTCard — Live data, HashScan links, animated skill bars
 // ---------------------------------------------------------------------------
 
-function AthleteNFTCard({ athlete, index }: { athlete: Athlete; index: number }) {
+function AthleteRosterCard({ athlete, index }: { athlete: Athlete; index: number }) {
   const skills = athlete.skills || { energy: 0, performance: 0, static: 0, aggression: 0, dynamic: 0 };
   const totalPower = SKILL_CATEGORIES.reduce((sum, sk) => sum + (skills[sk.id as SkillId] || 0), 0);
   const cardBorder = athlete.nftCardBorderColor || "#4274B9";
   const image = resolveImage(athlete);
-  const explorerUrl = getNetworkConfig().explorerUrl;
-
-  // HashScan link: /token/{tokenId} if the athlete has a real minted NFT
-  const hashScanUrl = athlete.nftTokenId && /^0\.0\.\d+$/.test(athlete.nftTokenId) && athlete.nftTokenId !== "0.0.0"
-    ? `${explorerUrl}/token/${athlete.nftTokenId}`
-    : null;
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 40 }}
@@ -290,7 +272,7 @@ function AthleteNFTCard({ athlete, index }: { athlete: Athlete; index: number })
           {image ? (
             <ImageWithFallback
               src={image}
-              alt={`${athlete.name} Sigma Series NFT`}
+              alt={athlete.name}
               className="w-full h-full object-cover object-top"
             />
           ) : (
@@ -301,20 +283,7 @@ function AthleteNFTCard({ athlete, index }: { athlete: Athlete; index: number })
           {/* Gradient overlay at bottom */}
           <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#0B1120] to-transparent" />
 
-          {/* HashScan link badge */}
-          {hashScanUrl && (
-            <a
-              href={hashScanUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm border border-white/10 text-[7px] sm:text-[8px] text-[#6AA3E0] hover:text-white hover:border-[#6AA3E0]/40 transition-all"
-              style={{ fontFamily: "Orbitron, sans-serif" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ExternalLink className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
-              <span className="hidden sm:inline">HASHSCAN</span>
-            </a>
-          )}
+
         </div>
 
         {/* Info footer */}
@@ -322,7 +291,7 @@ function AthleteNFTCard({ athlete, index }: { athlete: Athlete; index: number })
           <div className="flex items-center justify-between mb-1 sm:mb-2">
             <div className="min-w-0">
               <p className="text-[8px] sm:text-xs text-[#8494A7]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                {athlete.nftSeriesName || "SIGMA SERIES"}
+                {athlete.country || "WCO"}
               </p>
               <p className="text-white font-bold text-xs sm:text-lg truncate" style={{ fontFamily: "Orbitron, sans-serif" }}>
                 {athlete.name.toUpperCase()}
@@ -436,7 +405,7 @@ export function RateAthletesSection() {
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FACC15]/10 border border-[#FACC15]/20 mb-4">
             <Crown className="w-3.5 h-3.5 text-[#FACC15]" />
             <span className="text-[#FACC15] text-[10px] tracking-widest font-semibold" style={{ fontFamily: "Orbitron, sans-serif" }}>
-              SIGMA SERIES NFT COLLECTION
+              THE ROSTER
             </span>
           </div>
           <h2 className="text-2xl sm:text-4xl lg:text-5xl mb-4" style={{ fontFamily: "Orbitron, sans-serif", lineHeight: 1.1 }}>
@@ -444,9 +413,7 @@ export function RateAthletesSection() {
             <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">ATHLETES</span>
           </h2>
           <p className="text-[#8494A7] max-w-3xl mx-auto text-sm sm:text-base lg:text-lg leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-            Every competing athlete gets a <span className="text-[#FACC15] font-semibold">Sigma Series NFT card</span> with live power ratings across 5 skill categories.{" "}
-            <span className="text-[#6AA3E0] font-semibold">Governors vote</span> to dynamically increase or decrease scores — affecting brackets, matchups, and future challenges.{" "}
-            Collect cards, back your athletes, and <span className="text-[#4274B9] font-semibold">WIN tokens</span> when they win.
+            Meet the athletes. Each card shows the roster photo and the skill ratings from competition. One call per bout.
           </p>
         </motion.div>
 
@@ -458,10 +425,10 @@ export function RateAthletesSection() {
           className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-8 sm:mb-12"
         >
           {[
-            { text: "Own the card", icon: "\uD83C\uDCCF", desc: "Collect athlete NFTs" },
-            { text: "Vote power levels", icon: "\u26A1", desc: "Governors shape scores" },
-            { text: "Athlete wins", icon: "\uD83C\uDFC6", desc: "Your card gets boosted" },
-            { text: "WIN tokens", icon: "💰", desc: "Only Gains rewards" },
+            { text: "The roster", icon: "\uD83C\uDCCF", desc: "Meet the athletes" },
+            { text: "The next card", icon: "\u26A1", desc: "One call per bout" },
+            { text: "Athlete wins", icon: "\uD83C\uDFC6", desc: "Results update the board" },
+            { text: "Equal weight", icon: "\u2696", desc: "Every member, one call" },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-2">
               {i > 0 && <div className="hidden sm:block w-6 h-[1px] bg-[#4274B9]/30" />}
@@ -504,7 +471,7 @@ export function RateAthletesSection() {
             ) : (
               <div className={`grid ${gridCols} gap-3 sm:gap-4`}>
                 {displayAthletes.map((athlete, i) => (
-                  <AthleteNFTCard key={athlete.id} athlete={athlete} index={i} />
+                  <AthleteRosterCard key={athlete.id} athlete={athlete} index={i} />
                 ))}
               </div>
             )}
@@ -526,9 +493,7 @@ export function RateAthletesSection() {
                   </p>
                   <p className="text-xs text-[#8494A7] leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                     Every athlete competes to become the undisputed <span className="text-[#FACC15] font-semibold">BOTB Champion</span>.
-                    As they battle through brackets, they release tokens to fans who vote for them along the way.
-                    The deeper an athlete goes, the more their NFT card holders <span className="text-[#6AA3E0] font-semibold">WIN</span>.
-                    It's a game — pick your competitors, collect their cards, and ride the journey.
+                    Fans make one call per bout. The board updates when a card closes.
                   </p>
                 </div>
               </div>
@@ -548,14 +513,11 @@ export function RateAthletesSection() {
                 </div>
                 <div>
                   <p className="text-sm text-[#E8ECF0] font-semibold mb-1" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                    ONLY GAINS BOOSTERS
+                    ONE CALL
                   </p>
                   <p className="text-xs text-[#8494A7] leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                    When your athlete <span className="text-[#10B981] font-semibold">wins a battle</span>, their Sigma Series NFT becomes a{" "}
-                    <span className="text-[#FACC15] font-semibold">booster</span> — multiplying your token rewards for future rounds.
-                    Collect cards based on athlete strengths and build a winning hand.
-                    <span className="text-[#6AA3E0] font-semibold"> Governors</span> &{" "}
-                    <span className="text-[#FACC15] font-semibold">Sigma Series</span> NFT holders get the highest multipliers.
+                    When an athlete <span className="text-[#10B981] font-semibold">wins a battle</span>, that result stands.
+                    A signed-in member made one call. Every call had the same weight.
                   </p>
                 </div>
               </div>
@@ -571,8 +533,7 @@ export function RateAthletesSection() {
               </h3>
             </div>
             <p className="text-xs text-[#8494A7] mb-5 leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-              Tap each skill category to learn the official WCO judging criteria. Athlete skills are set by WCO administrators based on real competition performance.
-              Governors who believe a rating should change can <span className="text-[#6AA3E0] font-semibold">submit a governance proposal</span> — if approved and voted through, the admin updates the athlete's rating accordingly.
+              Tap each skill category to learn the official WCO judging criteria. Athlete skills come from real competition performance.
             </p>
 
             <div className="space-y-2">
@@ -595,28 +556,25 @@ export function RateAthletesSection() {
             >
               <div className="flex items-center gap-2 mb-3">
                 <Shield className="w-4 h-4 text-[#4274B9]" />
-                <span className="text-xs text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>GOVERNORS SHAPE THE GAME</span>
+                <span className="text-xs text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>MAKE YOUR CALL</span>
               </div>
               <p className="text-xs text-[#8494A7] mb-4 leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                Governors don't just watch — they <span className="text-[#6AA3E0] font-semibold">shape the conversation</span>.
-                Think an athlete's rating doesn't reflect their true level? Submit a <span className="text-[#D4A843] font-semibold">governance proposal</span> to
-                adjust their skill scores. If the community votes it through, the WCO admin implements the change.
-                This keeps ratings grounded in real performance while giving the community a direct voice.
+                Sign in, open the next card, and make one call per bout.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link
-                  to="/governance"
+                  to="/battles"
                   className="inline-flex items-center gap-2 px-4 py-2 bg-[#4274B9] text-white rounded-lg text-xs hover:bg-[#3563A0] transition-all"
                   style={{ fontFamily: "Orbitron, sans-serif" }}
                 >
-                  <Shield className="w-3.5 h-3.5" /> GOVERNORS HUB
+                  <Shield className="w-3.5 h-3.5" /> BATTLES
                 </Link>
                 <Link
-                  to="/nfts"
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-[#FACC15]/30 text-[#FACC15] rounded-lg text-xs hover:bg-[#FACC15]/10 transition-all"
+                  to="/athletes"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-[#D4A843]/30 text-[#F0D078] rounded-lg text-xs hover:bg-[#D4A843]/10 transition-all"
                   style={{ fontFamily: "Orbitron, sans-serif" }}
                 >
-                  <Sparkles className="w-3.5 h-3.5" /> COLLECT NFTs
+                  <Sparkles className="w-3.5 h-3.5" /> ATHLETES
                 </Link>
               </div>
             </motion.div>

@@ -489,11 +489,11 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
           }, 400);
         }
 
-        const nftHoldings = await fetchNFTHoldings(wallet);
-        const power = computeServerVotingPower(nftHoldings.hasGovernor, nftHoldings.hasSigma);
-        let requestedStake = typeof stakeAmount === "number" ? Math.max(0, Math.floor(stakeAmount)) : 0;
-        if (!BOTB_TOKEN_ID) requestedStake = 0;
-        const weighted = BOTB_TOKEN_ID ? requestedStake * power : power;
+        const nftHoldings = { hasGovernor: false, hasSigma: false };
+        const power = 1;
+        const requestedStake = 0;
+        void stakeAmount;
+        const weighted = 1;
 
         const voteKey = `vote:tournament:${eventId}:${wallet}`;
         const existing = await kv.get(voteKey);
@@ -714,17 +714,13 @@ export function mountTournamentRoutes(app: Hono, PREFIX: string) {
 
         let totalWinningWeighted = 0;
         for (const v of winners) {
-          const w = BOTB_TOKEN_ID
-            ? (v.stakeAmount || 0) * (v.votingPower || 1)
-            : (v.votingPower || 1);
+          const w = 1;
           totalWinningWeighted += w;
         }
 
         const pool = event.totalPrizePool || 0;
         const recipients = winners.map((v) => {
-          const weightedVote = BOTB_TOKEN_ID
-            ? (v.stakeAmount || 0) * (v.votingPower || 1)
-            : (v.votingPower || 1);
+          const weightedVote = 1;
           const sharePercent = totalWinningWeighted > 0
             ? (weightedVote / totalWinningWeighted) * 100
             : 0;

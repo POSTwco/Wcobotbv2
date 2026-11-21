@@ -116,9 +116,6 @@ export function Layout() {
                   <Link to="/battles" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Battles</Link>
                   <Link to="/athletes" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Athletes</Link>
                   <Link to="/events" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Events</Link>
-                  <Link to="/nfts" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>NFT Collection</Link>
-                  <Link to="/governance" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Governors Hub</Link>
-                  <Link to="/calisthenics" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Workout</Link>
                   <Link to="/athletes#arena-chat" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Arena Chat</Link>
                   <button onClick={() => setShowSponsorModal(true)} className={`block cursor-pointer transition-colors text-left ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Become a Sponsor</button>
                   <Link to="/apply" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Become a Pro Athlete</Link>
@@ -128,8 +125,6 @@ export function Layout() {
                 <h4 className={`font-bold mb-3 ${vipActive ? "vip-gold-text" : "text-[#E8ECF0]"}`} style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.75rem", letterSpacing: "0.1em" }}>TECHNOLOGY</h4>
                 <div className="space-y-2 text-sm text-[#8494A7]">
                   <a href="https://hedera.com" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Hedera Hashgraph</a>
-                  <a href="https://docs.hedera.com" target="_blank" rel="noopener noreferrer" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>HTS Tokens</a>
-                  <Link to="/whitepaper" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Whitepaper</Link>
                   <Link to="/leaderboard" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Leaderboard</Link>
                   <Link to="/contact" className={`block cursor-pointer transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#4274B9]"}`}>Contact</Link>
                 </div>
@@ -146,7 +141,6 @@ export function Layout() {
               <div className="flex items-center gap-4 text-xs text-[#8494A7]">
                 <Link to="/privacy" className={`transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#6AA3E0]"}`}>Privacy</Link>
                 <Link to="/terms" className={`transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#6AA3E0]"}`}>Terms</Link>
-                <Link to="/whitepaper" className={`transition-colors ${vipActive ? "hover:text-[#D4A843]" : "hover:text-[#6AA3E0]"}`}>Whitepaper</Link>
                 <span className="text-[#4274B9]/20">|</span>
                 <span>Powered by</span>
                 <span className={`font-semibold ${vipActive ? "vip-gold-text" : "text-[#4274B9]"}`} style={{ fontFamily: "Orbitron, sans-serif" }}>Hedera Hashgraph</span>

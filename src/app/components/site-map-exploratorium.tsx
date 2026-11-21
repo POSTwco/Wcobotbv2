@@ -1,7 +1,5 @@
 /**
- * Site Map Exploratorium — replaces home Token Price / staking stats.
- * Coin360-style interactive destination map: tap a zone to explore.
- * Bottom row = remaining site functions (chat, assets, elite, etc.).
+ * Site map on Home. Tap a zone to open Battles, Athletes, Events, Ranks, Apply, or Chat.
  */
 
 import { useMemo, useState, type CSSProperties } from "react";
@@ -10,9 +8,6 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Swords,
   Users,
-  Dumbbell,
-  Layers,
-  Shield,
   Crown,
   FileText,
   Mail,
@@ -20,11 +15,7 @@ import {
   ArrowRight,
   Compass,
   MessageCircle,
-  Wallet,
-  Flame,
-  History,
   Trophy,
-  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import { useWallet } from "./wallet-context";
@@ -49,25 +40,14 @@ interface MapZone {
 
 const ZONES: MapZone[] = [
   {
-    id: "workout",
-    label: "Workout",
-    blurb: "Build routines, log sets, chase PRs. Open to every age — start easy, level up.",
-    to: "/calisthenics",
-    Icon: Dumbbell,
-    color: "#D4A843",
-    colorSoft: "rgba(212,168,67,0.18)",
-    badge: "NEW",
-    expect: "Play · train · prove",
-  },
-  {
     id: "battles",
     label: "Battles",
-    blurb: "Vote on live IRL matchups. Pick your athlete and win from the pool — no loss staking.",
+    blurb: "The next card. One call per bout. No stake.",
     to: "/battles",
     Icon: Swords,
     color: "#6AA3E0",
     colorSoft: "rgba(106,163,224,0.16)",
-    expect: "Watch · vote · win",
+    expect: "One call per bout",
   },
   {
     id: "athletes",
@@ -85,34 +65,14 @@ const ZONES: MapZone[] = [
     blurb: "Organizations and the competitions they run under WCO.",
     to: "/events",
     Icon: Trophy,
-    color: "#6AA3E0",
-    colorSoft: "rgba(106,163,224,0.16)",
+    color: "#D4A843",
+    colorSoft: "rgba(212,168,67,0.16)",
     expect: "Find an organization",
-  },
-  {
-    id: "nfts",
-    label: "NFTs",
-    blurb: "Governors, Sigma, and Meta series — boosts, status, and collector energy.",
-    to: "/nfts",
-    Icon: Layers,
-    color: "#a78bfa",
-    colorSoft: "rgba(167,139,250,0.16)",
-    expect: "Collect & boost",
-  },
-  {
-    id: "governors",
-    label: "Governors",
-    blurb: "Shape the protocol. Proposals, votes, and on-chain governance.",
-    to: "/governance",
-    Icon: Shield,
-    color: "#10b981",
-    colorSoft: "rgba(16,185,129,0.14)",
-    expect: "Steer the org",
   },
   {
     id: "leaderboard",
     label: "Ranks",
-    blurb: "Athletes, voters, and oracle standings — see who's climbing.",
+    blurb: "Athletes, and correct calls once a card closes.",
     to: "/leaderboard",
     Icon: Crown,
     color: "#f59e0b",
@@ -129,7 +89,6 @@ const ZONES: MapZone[] = [
     colorSoft: "rgba(132,148,167,0.14)",
     expect: "Join the roster",
   },
-  // ── Bottom utility row (6 square tiles) ──
   {
     id: "chat",
     label: "Chat",
@@ -138,57 +97,7 @@ const ZONES: MapZone[] = [
     Icon: MessageCircle,
     color: "#38bdf8",
     colorSoft: "rgba(56,189,248,0.14)",
-    mini: true,
-  },
-  {
-    id: "assets",
-    label: "Assets",
-    blurb: "Manage HBAR, WCO, USDC, and Magic key reveal.",
-    to: "/wallet/assets",
-    Icon: Wallet,
-    color: "#34d399",
-    colorSoft: "rgba(52,211,153,0.14)",
-    mini: true,
-  },
-  {
-    id: "elite",
-    label: "Elite",
-    blurb: "Elite calisthenics engine for advanced athletes.",
-    to: "/calisthenics/elite",
-    Icon: Flame,
-    color: "#f43f5e",
-    colorSoft: "rgba(244,63,94,0.14)",
-    mini: true,
-  },
-  {
-    id: "history",
-    label: "History",
-    blurb: "Your completed workouts and session log.",
-    to: "/calisthenics/history",
-    Icon: History,
-    color: "#818cf8",
-    colorSoft: "rgba(129,140,248,0.14)",
-    mini: true,
-  },
-  {
-    id: "prs",
-    label: "PRs",
-    blurb: "Personal records across every movement.",
-    to: "/calisthenics/prs",
-    Icon: Trophy,
-    color: "#eab308",
-    colorSoft: "rgba(234,179,8,0.14)",
-    mini: true,
-  },
-  {
-    id: "analytics",
-    label: "Stats",
-    blurb: "Progress charts, heatmaps, and training analytics.",
-    to: "/calisthenics/analytics",
-    Icon: BarChart3,
-    color: "#22d3ee",
-    colorSoft: "rgba(34,211,238,0.14)",
-    mini: true,
+    expect: "Arena chat",
   },
 ];
 
@@ -197,20 +106,12 @@ const ZONES: MapZone[] = [
  * Upper block = primary destinations; bottom strip = 6 equal utility tiles.
  */
 const LAYOUT: Record<string, { x: number; y: number; w: number; h: number }> = {
-  workout: { x: 0, y: 0, w: 48, h: 76 },
-  battles: { x: 48, y: 0, w: 52, h: 28 },
-  athletes: { x: 48, y: 28, w: 26, h: 24 },
-  nfts: { x: 74, y: 28, w: 26, h: 24 },
-  governors: { x: 48, y: 52, w: 20, h: 24 },
-  leaderboard: { x: 68, y: 52, w: 16, h: 24 },
-  apply: { x: 84, y: 52, w: 16, h: 24 },
-  // Bottom row — 6 equal squares across full width
-  chat: { x: 0, y: 76, w: 100 / 6, h: 24 },
-  assets: { x: 100 / 6, y: 76, w: 100 / 6, h: 24 },
-  elite: { x: (100 / 6) * 2, y: 76, w: 100 / 6, h: 24 },
-  history: { x: (100 / 6) * 3, y: 76, w: 100 / 6, h: 24 },
-  prs: { x: (100 / 6) * 4, y: 76, w: 100 / 6, h: 24 },
-  analytics: { x: (100 / 6) * 5, y: 76, w: 100 / 6, h: 24 },
+  battles: { x: 0, y: 0, w: 52, h: 62 },
+  athletes: { x: 52, y: 0, w: 48, h: 32 },
+  events: { x: 52, y: 32, w: 24, h: 30 },
+  leaderboard: { x: 76, y: 32, w: 24, h: 30 },
+  apply: { x: 0, y: 62, w: 52, h: 38 },
+  chat: { x: 52, y: 62, w: 48, h: 38 },
 };
 
 function GoldTitle({
@@ -275,7 +176,6 @@ function GoldTitle({
 }
 
 const PRIMARY_ZONES = ZONES.filter((z) => !z.mini);
-const UTILITY_ZONES = ZONES.filter((z) => z.mini);
 
 function tileSurface(zone: MapZone, active: boolean): CSSProperties {
   return {
@@ -532,7 +432,7 @@ function ZoneTile({
 }
 
 export function SiteMapExploratorium() {
-  const { connected, connect, openMagicEmailSignIn, isConnecting } = useWallet();
+  const { connected, openMagicEmailSignIn, isConnecting } = useWallet();
   const magicOn = isMagicEnabled();
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -600,23 +500,15 @@ export function SiteMapExploratorium() {
                 ) : (
                   <button
                     type="button"
-                    onClick={connect}
+                    onClick={() => openMagicEmailSignIn("signin")}
                     disabled={isConnecting}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#4274B9] text-white text-xs hover:bg-[#3563A0] transition-colors disabled:opacity-60"
                     style={orbitron}
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    {isConnecting ? "CONNECTING…" : "CONNECT TO PLAY"}
+                    <Mail className="w-3.5 h-3.5" />
+                    {isConnecting ? "SIGNING IN…" : "SIGN IN"}
                   </button>
                 )}
-                <Link
-                  to="/calisthenics"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#D4A843]/40 text-[#D4A843] text-xs hover:bg-[#D4A843]/10 transition-colors"
-                  style={orbitron}
-                >
-                  <Dumbbell className="w-3.5 h-3.5" />
-                  TRY WORKOUT
-                </Link>
               </div>
             </motion.div>
           )}
@@ -641,18 +533,8 @@ export function SiteMapExploratorium() {
                 <MobileZoneCard
                   key={zone.id}
                   zone={zone}
-                  featured={zone.id === "workout"}
-                  active={hovered === zone.id || (!hovered && zone.id === "workout")}
-                  onHover={setHovered}
-                />
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {UTILITY_ZONES.map((zone) => (
-                <MobileZoneCard
-                  key={zone.id}
-                  zone={zone}
-                  active={hovered === zone.id}
+                  featured={zone.id === "battles"}
+                  active={hovered === zone.id || (!hovered && zone.id === "battles")}
                   onHover={setHovered}
                 />
               ))}
@@ -689,7 +571,7 @@ export function SiteMapExploratorium() {
               <ZoneTile
                 key={zone.id}
                 zone={zone}
-                active={hovered === zone.id || (!hovered && zone.id === "workout")}
+                active={hovered === zone.id || (!hovered && zone.id === "battles")}
                 onHover={setHovered}
               />
             ))}

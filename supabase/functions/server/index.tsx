@@ -4186,14 +4186,13 @@ app.post(`${PREFIX}/vote/battle`, async (c) => {
       return c.json({ success: false, error: "Invalid athleteId for this battle" }, 400);
     }
 
-    // Server-side NFT verification → voting power
-    const nftHoldings = await fetchNFTHoldings(wallet);
-    const power = computeServerVotingPower(nftHoldings.hasGovernor, nftHoldings.hasSigma);
-
-    // Token balance verification + event-scoped allocation tracking
+    // One signed-in member, one call. Weight is 1. Do not read a balance.
+    const nftHoldings = { hasGovernor: false, hasSigma: false };
+    const power = 1;
     const eventId = battle.eventId || "standalone";
-    const mirrorBalance = await fetchBotbBalance(wallet);
-    let requestedStake = Math.max(0, Math.floor(stakeAmount));
+    const mirrorBalance = 0;
+    const requestedStake = 0;
+    void stakeAmount;
 
     // ── PRE-LAUNCH HARD CAP ──
     // When BOTB_TOKEN_ID is null, the token hasn't launched yet.
@@ -4201,7 +4200,7 @@ app.post(`${PREFIX}/vote/battle`, async (c) => {
     // headcount tallies (votes1Count/votes2Count), but token-weighted values
     // are genuinely 0.00 until the token goes live on Hedera.
     if (!BOTB_TOKEN_ID) {
-      requestedStake = 0;
+      // requestedStake is already 0. Weight stays 1.
     }
 
     // ── ALLOCATION RACE FIX: per-(wallet, event) outer lock ──
@@ -4253,10 +4252,7 @@ app.post(`${PREFIX}/vote/battle`, async (c) => {
           code: "INSUFFICIENT_BALANCE",
         }, 400);
       } else {
-        // ── WEIGHTED VOTE CALCULATION ──
-        // Token mode: tokens × NFT multiplier (e.g. 1000 BOTB × 2x Governor = 2000)
-        // Headcount mode (pre-launch): NFT multiplier alone IS the weight.
-        weighted = BOTB_TOKEN_ID ? requestedStake * power : power;
+        weighted = 1;
         isUpdate = !!existingVoteInThisBattle;
         oldStake = isUpdate ? (existingVoteInThisBattle.stakeAmount || 0) : 0;
 
@@ -4532,19 +4528,16 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
       battleMap.set(v.battleId, battle);
     }
 
-    // ── 8. NFT VERIFICATION (once) ──
-    const nftHoldings = await fetchNFTHoldings(wallet);
-    const power = computeServerVotingPower(nftHoldings.hasGovernor, nftHoldings.hasSigma);
+    const nftHoldings = { hasGovernor: false, hasSigma: false };
+    const power = 1;
 
-    // ── 9. BALANCE + ALLOCATION CHECK ──
-    // PRE-LAUNCH: force all stakes to 0
     const processedVotes = votes.map((v: any) => ({
       ...v,
-      stakeAmount: !BOTB_TOKEN_ID ? 0 : Math.max(0, Math.floor(v.stakeAmount)),
+      stakeAmount: 0,
     }));
 
-    const totalBatchStake = processedVotes.reduce((s: number, v: any) => s + v.stakeAmount, 0);
-    const mirrorBalance = await fetchBotbBalance(wallet);
+    const totalBatchStake = 0;
+    const mirrorBalance = 0;
 
     // ── ALLOCATION RACE FIX: per-(wallet, event) outer lock ──
     // Same rationale as POST /vote/battle: the alloc index read, balance check,
@@ -4598,8 +4591,7 @@ app.post(`${PREFIX}/vote/battles/batch`, async (c) => {
       const existingVote = existingVoteRecords.get(pv.battleId);
       const isUpdate = !!existingVote;
       const oldStake = isUpdate ? (existingVote.stakeAmount || 0) : 0;
-      // Token mode: tokens × power. Headcount mode: power alone (NFT multiplier IS the weight).
-      const weighted = BOTB_TOKEN_ID ? pv.stakeAmount * power : power;
+      const weighted = 1;
 
       const voteRecord = {
         battleId: pv.battleId, wallet, athleteId: pv.athleteId, eventId,

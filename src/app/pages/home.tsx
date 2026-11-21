@@ -1,57 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
-import { Zap, ArrowRight, Swords, Flame, Sparkles, ExternalLink, Dumbbell, Mail } from "lucide-react";
+import { ArrowRight, Swords, Mail } from "lucide-react";
 import { useWallet } from "../components/wallet-context";
 import { RateAthletesSection } from "../components/rate-athletes";
 import { SponsorShowcase, TitleSponsorBanner } from "../components/sponsor-showcase";
-import { ContestBanner } from "../components/contest/contest-banner";
-import { EarlySupporterHomeBanner } from "../components/early-supporter-home-banner";
 import { SiteMapExploratorium } from "../components/site-map-exploratorium";
 import { useConfig } from "../lib/hooks";
-import { api } from "../lib/api";
-import { CONTEST_PUBLIC_HIDDEN, type ContestPublicStats } from "../lib/contest-types";
 import { resolveHeroVideoUrl } from "../lib/site-media";
-import { isMagicEnabled } from "../lib/wallet-types";
 import wcoLogoWhite from "figma:asset/22c05ec446c8158ec65d140d4aaa2c8dc2532079.png";
 import botbShield from "figma:asset/2d6e7a2459a1a0d372fe2cf8a444eed0da642b5f.png";
 
 const ATHLETE_BG = "https://wotsoauebnoyvegcvouo.supabase.co/storage/v1/object/public/Branding%20KIT%20WCO/athlete1.jpg";
 
 export function HomePage() {
-  const { connect, connected, isConnecting, openMagicEmailSignIn } = useWallet();
+  const { connected, isConnecting, openMagicEmailSignIn } = useWallet();
   const { data: config } = useConfig();
-  const [contestStats, setContestStats] = useState<ContestPublicStats | null>(null);
-  const magicOn = isMagicEnabled();
-
-  // Hide Hedera badge while Connect-to-Enter is running (open / full / drawing)
-  const contestActive =
-    !CONTEST_PUBLIC_HIDDEN &&
-    !!contestStats &&
-    (contestStats.status === "open" ||
-      contestStats.status === "full" ||
-      contestStats.status === "drawing");
-
-  const loadContest = useCallback(async () => {
-    try {
-      const res = await api.contest.publicStats();
-      if (res.success && res.data) setContestStats(res.data);
-    } catch {
-      /* non-fatal */
-    }
-  }, []);
-
-  useEffect(() => {
-    if (CONTEST_PUBLIC_HIDDEN) return;
-    loadContest();
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") loadContest();
-    }, 60_000);
-    return () => clearInterval(id);
-  }, [loadContest]);
-
-  const tokenStats = config.tokenStats;
-  // Admin-editable hero video (Supabase Storage URL) with safe default fallback
   const heroVideoSrc = resolveHeroVideoUrl(config.heroVideoUrl);
 
   return (
@@ -86,18 +49,15 @@ export function HomePage() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
             >
-              {/* WCO Badge — hidden during Connect-to-Enter competition to free space for title sponsor */}
-              {!contestActive && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#4274B9]/10 border border-[#4274B9]/20 mb-6">
-                  <img src={wcoLogoWhite} alt="WCO" className="h-4 w-auto" />
-                  <span className="text-[#4274B9] text-xs tracking-wider font-semibold" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                    LIVE ON HEDERA HASHGRAPH
-                  </span>
-                </div>
-              )}
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#4274B9]/10 border border-[#4274B9]/20 mb-6">
+                <img src={wcoLogoWhite} alt="WCO" className="h-4 w-auto" />
+                <span className="text-[#4274B9] text-xs tracking-wider font-semibold" style={{ fontFamily: "Orbitron, sans-serif" }}>
+                  LIVE ON HEDERA HASHGRAPH
+                </span>
+              </div>
 
               <h1
-                className={`text-2xl sm:text-5xl lg:text-6xl mb-4 sm:mb-6 ${contestActive ? "mt-1 sm:mt-0" : ""}`}
+                className="text-2xl sm:text-5xl lg:text-6xl mb-4 sm:mb-6"
                 style={{ fontFamily: "Orbitron, sans-serif", lineHeight: 1.1 }}
               >
                 <span className="text-white">BATTLE</span>
@@ -108,15 +68,14 @@ export function HomePage() {
               </h1>
 
               <p className="text-[#8494A7] text-sm sm:text-lg mb-5 sm:mb-6 max-w-xl" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                The world's first decentralized calisthenics competition platform. 
-                Vote on IRL battles, stake tokens, earn rewards. 
-                <span className="text-[#4274B9] font-semibold"> No loss. Only Gains.</span>
+                The next card. The athletes. One call per bout. No stake.
               </p>
 
               <div className="flex flex-row gap-2 sm:gap-3 max-w-xl">
                 {!connected ? (
                   <button
-                    onClick={connect}
+                    type="button"
+                    onClick={() => openMagicEmailSignIn("signin")}
                     disabled={isConnecting}
                     className={`relative flex flex-1 items-center justify-center gap-1.5 min-h-[44px] px-2 sm:px-4 py-2.5 rounded-xl transition-all ${
                       isConnecting
@@ -125,8 +84,8 @@ export function HomePage() {
                     }`}
                     style={{ fontFamily: "Orbitron, sans-serif", fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)" }}
                   >
-                    <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="truncate">{isConnecting ? "CONNECTING..." : CONTEST_PUBLIC_HIDDEN ? "CONNECT WALLET" : "CONNECT TO ENTER"}</span>
+                    <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="truncate">{isConnecting ? "SIGNING IN..." : "SIGN IN"}</span>
                   </button>
                 ) : (
                   <Link
@@ -143,41 +102,10 @@ export function HomePage() {
                   className="relative flex flex-1 items-center justify-center gap-1.5 min-h-[44px] px-2 sm:px-4 py-2.5 border border-[#4274B9]/30 text-[#4274B9] rounded-xl hover:bg-[#4274B9]/10 transition-all"
                   style={{ fontFamily: "Orbitron, sans-serif", fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)" }}
                 >
-                  <span className="truncate">EXPLORE</span>
+                  <span className="truncate">THE ATHLETES</span>
                   <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                 </Link>
-                <Link
-                  to="/calisthenics"
-                  className="relative flex flex-1 items-center justify-center gap-1.5 min-h-[44px] px-2 sm:px-4 py-2.5 rounded-xl transition-all hover:brightness-110 hover:shadow-lg hover:shadow-[#D4A843]/30"
-                  style={{
-                    fontFamily: "Orbitron, sans-serif",
-                    fontSize: "clamp(0.6rem, 2.5vw, 0.8rem)",
-                    background: "linear-gradient(135deg, #E8C468, #D4A843 45%, #B8860B)",
-                    color: "#1a1208",
-                    boxShadow: "0 4px 20px rgba(212,168,67,0.35)",
-                  }}
-                >
-                  <Dumbbell className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="truncate">WORKOUT</span>
-                  <span
-                    className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded-full text-[0.45rem] sm:text-[0.5rem] font-bold tracking-wider text-white shadow-md leading-none"
-                    style={{
-                      fontFamily: "Orbitron, sans-serif",
-                      background: "linear-gradient(135deg, #4274B9, #3563A0)",
-                      boxShadow: "0 2px 8px rgba(66,116,185,0.45)",
-                    }}
-                  >
-                    NEW
-                  </span>
-                </Link>
               </div>
-
-              {!CONTEST_PUBLIC_HIDDEN && (
-                <>
-                  <ContestBanner />
-                  <EarlySupporterHomeBanner />
-                </>
-              )}
             </motion.div>
 
             {/* Video Player with Glowing Frame */}
@@ -255,184 +183,24 @@ export function HomePage() {
       {/* Sponsor Showcase — between hero and site map */}
       <SponsorShowcase />
 
-      {/* Interactive site map — replaces Token Price / staking stats */}
       <SiteMapExploratorium />
 
-      {/* How It Works */}
       <section className="py-12 sm:py-20 relative">
-        {/* Subtle background glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#4274B9]/[0.03] rounded-full blur-[100px] pointer-events-none" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-8 sm:mb-16"
+            className="text-center"
           >
             <h2 className="text-2xl sm:text-3xl md:text-4xl mb-4" style={{ fontFamily: "Orbitron, sans-serif" }}>
-              <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">HOW TO PLAY</span>
+              <span className="bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] bg-clip-text text-transparent">ONE CALL</span>
             </h2>
-            <p className="text-[#8494A7] max-w-2xl mx-auto text-sm sm:text-lg" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-              <span className="text-[#6AA3E0] font-semibold">Email in, explore the map, play</span> — workouts, battles, and ranks.
-              No seed phrase required to start. <span className="text-[#4274B9] font-semibold">ONLY GAINS</span>.
+            <p className="text-[#8494A7] text-sm sm:text-lg" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+              The next card. The athletes. One call per bout. No stake.
             </p>
           </motion.div>
-
-          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-            {/* Step 1: Create account (email or HashPack) */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0 }}
-              className="bg-[#111827] border border-[#4274B9]/10 rounded-2xl p-4 sm:p-6 relative group hover:border-[#4274B9]/30 transition-all hover:shadow-lg hover:shadow-[#4274B9]/5"
-            >
-              <span
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-2xl sm:text-4xl opacity-10"
-                style={{ fontFamily: "Orbitron, sans-serif", color: "#4274B9" }}
-              >
-                01
-              </span>
-              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#4274B915" }}>
-                <Mail className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: "#4274B9" }} />
-              </div>
-              <h3 className="text-[#E8ECF0] mb-1 sm:mb-2" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                CREATE ACCOUNT
-              </h3>
-              <p className="text-[#8494A7] text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-4 sm:line-clamp-none" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                {magicOn ? (
-                  <>Sign up with <span className="text-[#6AA3E0] font-semibold">email OTP</span> — we create your Hedera account. Or connect <span className="text-[#8B5CF6] font-semibold">HashPack</span> if you already have one.</>
-                ) : (
-                  <>Connect <span className="text-[#8B5CF6] font-semibold">HashPack</span> — the #1 Hedera wallet. Browser extension or mobile. Your gateway to the arena.</>
-                )}
-              </p>
-              {magicOn ? (
-                <button
-                  type="button"
-                  onClick={() => openMagicEmailSignIn("signup")}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#6AA3E0] hover:text-[#8BB8E8] transition-colors"
-                  style={{ fontFamily: "Orbitron, sans-serif" }}
-                >
-                  EMAIL SIGN UP <ArrowRight className="w-3 h-3" />
-                </button>
-              ) : (
-                <a
-                  href="https://www.hashpack.app/download"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-[#8B5CF6] hover:text-[#A78BFA] transition-colors"
-                  style={{ fontFamily: "Orbitron, sans-serif" }}
-                >
-                  DOWNLOAD <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-            </motion.div>
-
-            {/* Step 2: Explore & train */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="bg-[#111827] border border-[#4274B9]/10 rounded-2xl p-4 sm:p-6 relative group hover:border-[#D4A843]/30 transition-all hover:shadow-lg hover:shadow-[#D4A843]/5"
-            >
-              <span
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-2xl sm:text-4xl opacity-10"
-                style={{ fontFamily: "Orbitron, sans-serif", color: "#D4A843" }}
-              >
-                02
-              </span>
-              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#D4A84315" }}>
-                <Dumbbell className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: "#D4A843" }} />
-              </div>
-              <h3 className="text-[#E8ECF0] mb-1 sm:mb-2" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                TRAIN OR EXPLORE
-              </h3>
-              <p className="text-[#8494A7] text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-4 sm:line-clamp-none" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                Tap the <span className="text-[#D4A843] font-semibold">site map</span> — workouts for every level, athlete chats, battles, and ranks. Kids and parents can both jump in.
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="px-2 py-1 rounded bg-[#D4A843]/10 text-[10px] text-[#D4A843]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  FAMILY FRIENDLY
-                </div>
-                <div className="px-2 py-1 rounded bg-[#4274B9]/10 text-[10px] text-[#4274B9]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  ONE TAP
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Step 3: Stake & Vote */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="bg-[#111827] border border-[#4274B9]/10 rounded-2xl p-4 sm:p-6 relative group hover:border-[#6AA3E0]/30 transition-all hover:shadow-lg hover:shadow-[#6AA3E0]/5"
-            >
-              <span
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-2xl sm:text-4xl opacity-10"
-                style={{ fontFamily: "Orbitron, sans-serif", color: "#6AA3E0" }}
-              >
-                03
-              </span>
-              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#6AA3E015" }}>
-                <Swords className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: "#6AA3E0" }} />
-              </div>
-              <h3 className="text-[#E8ECF0] mb-1 sm:mb-2" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                VOTE & WIN
-              </h3>
-              <p className="text-[#8494A7] text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-4 sm:line-clamp-none" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                Stake your WCO on <span className="text-[#6AA3E0] font-semibold">upcoming battles</span> by voting for your favorite athletes. Pick the winner and <span className="text-[#6AA3E0] font-semibold">WIN bonus tokens</span> from the community pool. Your stake is always safe.
-              </p>
-              <div className="flex items-center gap-1.5 text-xs text-[#6AA3E0]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                <Flame className="w-3.5 h-3.5" /> NO RISK STAKING
-              </div>
-            </motion.div>
-
-            {/* Step 4: NFT Boosters */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.3 }}
-              className="bg-[#111827] border border-[#4274B9]/10 rounded-2xl p-4 sm:p-6 relative group hover:border-[#f59e0b]/30 transition-all hover:shadow-lg hover:shadow-[#f59e0b]/5"
-            >
-              <span
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-2xl sm:text-4xl opacity-10"
-                style={{ fontFamily: "Orbitron, sans-serif", color: "#f59e0b" }}
-              >
-                04
-              </span>
-              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center mb-3 sm:mb-5" style={{ background: "#f59e0b15" }}>
-                <Sparkles className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: "#f59e0b" }} />
-              </div>
-              <h3 className="text-[#E8ECF0] mb-1 sm:mb-2" style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}>
-                BOOST WITH NFTs
-              </h3>
-              <p className="text-[#8494A7] text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-4 sm:line-clamp-none" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                Supercharge your voting power with <span className="text-[#f59e0b] font-semibold">Governors NFTs</span> and the <span className="text-[#f59e0b] font-semibold">Sigma Series</span>. Holders get multiplied rewards, exclusive access, and VIP status in the arena.
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="px-2 py-1 rounded bg-[#f59e0b]/10 text-[10px] text-[#f59e0b]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  GOVERNORS
-                </div>
-                <div className="px-2 py-1 rounded bg-[#f59e0b]/10 text-[10px] text-[#f59e0b]" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                  SIGMA SERIES
-                </div>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Bottom connector line */}
-          <div className="hidden lg:flex items-center justify-center mt-10 gap-2">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gradient-to-r from-[#4274B9] to-[#6AA3E0] opacity-60" />
-                {i < 3 && <div className="w-20 h-[1px] bg-gradient-to-r from-[#4274B9]/40 to-[#6AA3E0]/40" />}
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -485,13 +253,6 @@ export function HomePage() {
                 style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
               >
                 VIEW BATTLES <ArrowRight className="w-5 h-5" />
-              </Link>
-              <Link
-                to="/calisthenics"
-                className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-4 border border-[#4274B9]/30 text-[#4274B9] rounded-xl hover:bg-[#4274B9]/10 transition-all"
-                style={{ fontFamily: "Orbitron, sans-serif", fontSize: "0.8rem" }}
-              >
-                <Dumbbell className="w-5 h-5" /> Workout routine
               </Link>
             </div>
           </motion.div>

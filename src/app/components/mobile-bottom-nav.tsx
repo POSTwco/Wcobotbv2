@@ -3,21 +3,20 @@
  * =============================================================
  * Persistent thumb-friendly bottom bar on < md screens.
  *
- * Tabs: Home · Battles · NFTs · Workout · Chat
+ * Tabs: Home · Battles · Athletes · Events
  *   - Bright white labels + glassmorphic bar
  *   - Gold reflective glass-morphic animated icons
- *   - Chat → /athletes#arena-chat (scrolls to Arena Chat)
- *   - "More" sheet: wallet + secondary pages (Athletes, Governors, etc.)
+ *   - More sheet: Leaderboard, Chat, and email sign-in
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Home, Swords, Layers, MessageCircle, MoreHorizontal,
-  Users, Shield, FileText, Wallet, Dumbbell, Calendar,
-  X, RefreshCw, Crown, ExternalLink, LogOut,
-  Loader2, LayoutGrid,
+  Home, Swords, MessageCircle, MoreHorizontal,
+  Users, Calendar,
+  X, Crown, LogOut,
+  Loader2,
 } from "lucide-react";
 import { useWallet } from "./wallet-context";
 import { useVIP } from "./vip/vip-context";
@@ -39,17 +38,13 @@ interface NavTab {
 const TABS: NavTab[] = [
   { to: "/", label: "Home", Icon: Home },
   { to: "/battles", label: "Battles", Icon: Swords },
-  { to: "/nfts", label: "NFTs", Icon: Layers },
-  { to: "/calisthenics", label: "Workout", Icon: Dumbbell },
-  { to: "/athletes", label: "Chat", hash: "#arena-chat", Icon: MessageCircle },
+  { to: "/athletes", label: "Athletes", Icon: Users },
+  { to: "/events", label: "Events", Icon: Calendar },
 ];
 
 const MORE_LINKS = [
-  { to: "/athletes", label: "Athletes", icon: <Users className="w-5 h-5" /> },
-  { to: "/events", label: "Events", icon: <Calendar className="w-5 h-5" /> },
   { to: "/leaderboard", label: "Leaderboard", icon: <Crown className="w-5 h-5" /> },
-  { to: "/governance", label: "Governors Hub", icon: <Shield className="w-5 h-5" /> },
-  { to: "/whitepaper", label: "Whitepaper", icon: <FileText className="w-5 h-5" /> },
+  { to: "/athletes#arena-chat", label: "Chat", icon: <MessageCircle className="w-5 h-5" /> },
 ];
 
 const orbitron: React.CSSProperties = { fontFamily: "Orbitron, sans-serif" };
@@ -121,23 +116,14 @@ function GoldGlassIcon({
 function MoreSheet({
   open,
   onClose,
-  accent,
-  accentLight,
-  vipActive,
 }: {
   open: boolean;
   onClose: () => void;
-  accent: string;
-  accentLight: string;
-  vipActive: boolean;
 }) {
   const location = useLocation();
   const {
-    connected, address, balance, botbBalance, nftsOwned, governorNftsOwned,
-    hasGovernorNFT, connect, openMagicEmailSignIn, disconnect, isConnecting, isLoadingBalances,
-    refreshBalances, network,
+    connected, openMagicEmailSignIn, disconnect, isConnecting,
   } = useWallet();
-  const { tierName } = useVIP();
 
   return (
     <AnimatePresence>
@@ -183,154 +169,44 @@ function MoreSheet({
 
             <div className="px-5 pb-4">
               {connected ? (
-                <div
-                  className="rounded-2xl p-4 border"
-                  style={{
-                    background: vipActive
-                      ? "linear-gradient(135deg, rgba(212,168,67,0.08), rgba(11,17,32,0.75))"
-                      : "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(11,17,32,0.75))",
-                    borderColor: "rgba(212,168,67,0.2)",
-                  }}
-                >
-                  {vipActive && (
-                    <div className="flex items-center gap-2 mb-3 px-2 py-1.5 rounded-lg bg-[#D4A843]/10 border border-[#D4A843]/2">
-                      <Crown className="w-3.5 h-3.5 text-[#D4A843]" />
-                      <span className="text-[0.6rem] font-bold tracking-widest text-[#D4A843]" style={orbitron}>
-                        {tierName.toUpperCase()}
-                      </span>
-                      <span className="ml-auto text-[0.5rem] text-[#D4A843]/50">
-                        x{governorNftsOwned} NFT{governorNftsOwned !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${network === "mainnet" ? "bg-[#10b981]" : "bg-[#f59e0b]"} animate-pulse`} />
-                      <span className="text-[0.7rem] font-mono text-[#F0D078]">
-                        {address}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={refreshBalances}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-white/60 active:bg-white/10"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBalances ? "animate-spin" : ""}`} />
-                      </button>
-                      <a
-                        href={`https://hashscan.io/${network ?? "testnet"}/account/${address}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-white/60 active:bg-white/10"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="rounded-xl p-2.5 text-center bg-white/[0.04] border border-white/[0.08]">
-                      <p className="text-[0.5rem] text-white/50 tracking-wider mb-0.5" style={orbitron}>HBAR</p>
-                      {isLoadingBalances ? (
-                        <div className="h-4 w-12 mx-auto rounded animate-pulse bg-white/10" />
-                      ) : (
-                        <p className="text-sm font-bold text-white" style={orbitron}>
-                          {balance >= 1000 ? `${(balance / 1000).toFixed(1)}K` : balance.toFixed(1)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="rounded-xl p-2.5 text-center bg-white/[0.04] border border-white/[0.08]">
-                      <p className="text-[0.5rem] text-white/50 tracking-wider mb-0.5" style={orbitron}>BOTB</p>
-                      {isLoadingBalances ? (
-                        <div className="h-4 w-12 mx-auto rounded animate-pulse bg-white/10" />
-                      ) : (
-                        <p className="text-sm font-bold text-[#F0D078]" style={orbitron}>
-                          {botbBalance > 0 ? (botbBalance >= 1000 ? `${(botbBalance / 1000).toFixed(1)}K` : botbBalance.toString()) : (
-                            <span className="text-[0.55rem] text-white/40 italic" style={dmSans}>Soon</span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                    <div className="rounded-xl p-2.5 text-center bg-white/[0.04] border border-white/[0.08]">
-                      <p className="text-[0.5rem] text-white/50 tracking-wider mb-0.5" style={orbitron}>NFTs</p>
-                      {isLoadingBalances ? (
-                        <div className="h-4 w-12 mx-auto rounded animate-pulse bg-white/10" />
-                      ) : (
-                        <p className="text-sm font-bold text-[#F0D078]" style={orbitron}>
-                          {nftsOwned}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {hasGovernorNFT && !vipActive && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#f59e0b]/10 border border-[#f59e0b]/2 mb-3">
-                      <Shield className="w-3.5 h-3.5 text-[#f59e0b]" />
-                      <span className="text-[0.6rem] font-bold tracking-widest text-[#f59e0b]" style={orbitron}>
-                        WCO GOVERNOR
-                      </span>
-                    </div>
-                  )}
-
-                  <Link
-                    to="/wallet/assets"
-                    onClick={onClose}
-                    className="w-full mb-2 py-2.5 rounded-xl text-sm text-[#E8ECF0] bg-[#4274B9]/10 border border-[#4274B9]/25 active:bg-[#4274B9]/18 transition-colors flex items-center justify-center gap-2"
-                    style={dmSans}
-                  >
-                    <LayoutGrid className="w-4 h-4" />
-                    Manage Assets
-                  </Link>
-
+                <div className="rounded-2xl p-4 border border-[#4274B9]/25 bg-[#4274B9]/10">
+                  <p className="text-sm text-white mb-3" style={dmSans}>Signed in</p>
                   <button
+                    type="button"
                     onClick={() => { disconnect(); onClose(); }}
                     className="w-full py-2.5 rounded-xl text-sm text-red-300 bg-red-400/10 border border-red-400/15 active:bg-red-400/15 transition-colors flex items-center justify-center gap-2"
                     style={dmSans}
                   >
                     <LogOut className="w-4 h-4" />
-                    Disconnect Wallet
+                    Sign out
                   </button>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <button
-                    onClick={() => { connect(); onClose(); }}
+                    type="button"
+                    onClick={() => { openMagicEmailSignIn("signin"); onClose(); }}
                     disabled={isConnecting}
-                    className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-[0.98] text-white"
+                    className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-[0.98] text-white disabled:opacity-60"
                     style={{
                       ...dmSans,
-                      background: "linear-gradient(135deg, #D4A843, #a07520)",
-                      boxShadow: "0 4px 20px rgba(212,168,67,0.35)",
+                      background: "linear-gradient(135deg, #4274B9, #3563A0)",
+                      boxShadow: "0 4px 20px rgba(66,116,185,0.35)",
                     }}
                   >
-                    {isConnecting ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Wallet className="w-5 h-5" />
-                    )}
-                    {isConnecting ? "Connecting..." : "Connect HashPack"}
+                    {isConnecting && <Loader2 className="w-5 h-5 animate-spin" />}
+                    {isConnecting ? "Signing in..." : "Sign in"}
                   </button>
                   {isMagicEnabled() && (
-                    <div className="flex items-center justify-center gap-2 py-1 text-xs" style={dmSans}>
-                      <button
-                        type="button"
-                        onClick={() => { openMagicEmailSignIn("signin"); onClose(); }}
-                        disabled={isConnecting}
-                        className="text-[#8494A7] hover:text-[#6AA3E0] underline-offset-2 hover:underline"
-                      >
-                        Sign in with email
-                      </button>
-                      <span className="text-[#8494A7]/40">·</span>
-                      <button
-                        type="button"
-                        onClick={() => { openMagicEmailSignIn("signup"); onClose(); }}
-                        disabled={isConnecting}
-                        className="text-[#8494A7] hover:text-[#F0D078] underline-offset-2 hover:underline"
-                      >
-                        Create account
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { openMagicEmailSignIn("signup"); onClose(); }}
+                      disabled={isConnecting}
+                      className="w-full py-2 text-xs text-[#8494A7] hover:text-[#F0D078] disabled:opacity-50"
+                      style={dmSans}
+                    >
+                      Create account
+                    </button>
                   )}
                 </div>
               )}
@@ -340,7 +216,10 @@ function MoreSheet({
 
             <div className="px-5 py-4 space-y-1">
               {MORE_LINKS.map((link) => {
-                const active = location.pathname.startsWith(link.to);
+                const [path, fragment] = link.to.split("#");
+                const active = fragment
+                  ? location.pathname.startsWith(path) && location.hash === `#${fragment}`
+                  : location.pathname.startsWith(path);
                 return (
                   <Link
                     key={link.to}
@@ -389,12 +268,13 @@ export function MobileBottomNav() {
   const { connected } = useWallet();
   const { vipActive, sound } = useVIP();
 
-  const accent = "#D4A843";
-  const accentLight = "#F0D078";
   const hash = location.hash || "";
 
-  const moreActive = MORE_LINKS.some((l) => location.pathname.startsWith(l.to)
-    && !(l.to === "/athletes" && hash === "#arena-chat"));
+  const moreActive = MORE_LINKS.some((l) => {
+    const [path, fragment] = l.to.split("#");
+    if (fragment) return location.pathname.startsWith(path) && hash === `#${fragment}`;
+    return location.pathname.startsWith(path);
+  });
 
   const handleScroll = useCallback(() => {
     const y = window.scrollY;
@@ -426,9 +306,6 @@ export function MobileBottomNav() {
       <MoreSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
-        accent={accent}
-        accentLight={accentLight}
-        vipActive={vipActive}
       />
 
       <motion.div
@@ -477,12 +354,9 @@ export function MobileBottomNav() {
           <div className="relative flex items-center justify-around px-1.5 pt-2 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
             {TABS.map((tab) => {
               const active =
-                tab.hash === "#arena-chat"
-                  ? location.pathname.startsWith("/athletes") && hash === "#arena-chat"
-                  : tab.to === "/"
-                    ? location.pathname === "/"
-                    : location.pathname.startsWith(tab.to) &&
-                      !(tab.to === "/athletes" && hash === "#arena-chat");
+                tab.to === "/"
+                  ? location.pathname === "/"
+                  : location.pathname.startsWith(tab.to);
 
               const href = tab.hash ? `${tab.to}${tab.hash}` : tab.to;
 

@@ -102,7 +102,7 @@ export function TournamentCard({
         `Champion Pick: ${picked}`,
         `Wallet: ${accountId}`,
         `Nonce: ${nonce}`,
-        "Stake: 0 BOTB (headcount / pre-token)",
+        "One call",
       ].join("\n");
 
       toast.info(
@@ -311,19 +311,17 @@ export function TournamentCard({
                 : myVote
                   ? "UPDATE CHAMPION PICK"
                   : "CONFIRM CHAMPION PICK"}
-              {votingPower > 1 ? ` · ${votingPower}x` : ""}
+
             </button>
             <p className="text-[0.5rem] text-[#8494A7] text-center sm:text-left sm:max-w-[12rem]">
-              {isField
-                ? "One pick from the whole field · free headcount vote"
-                : "Free headcount vote · no token rewards yet"}
+              One call. The card keeps every bout.
             </p>
           </div>
         )}
 
         {!connected && status === "voting_open" && (
           <p className="text-center text-[0.65rem] text-[#8494A7]">
-            {isField ? "Connect wallet to pick one athlete from the field" : "Connect wallet to pick a champion"}
+            Sign in to make your call
           </p>
         )}
 

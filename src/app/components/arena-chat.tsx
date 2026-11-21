@@ -35,7 +35,7 @@ import type { ChatMessage, ChatMediaAttachment, VerifiedAthleteChatInfo } from "
 import { ChatRoleBadges, JudgeBadge } from "./judge-badge";
 import {
   playSendSound, playReceiveSound, playReactionSound,
-  playEmotionSound, playGovernorEntrance, playErrorSound,
+  playEmotionSound, playErrorSound,
 } from "../lib/chat-sounds";
 import {
   parseChatMediaUrl,
@@ -262,7 +262,7 @@ function GovernorBadge({ small = false }: { small?: boolean }) {
         className={`${small ? "text-[0.4rem]" : "text-[0.5rem]"} font-bold text-[#D4A843] tracking-wider`}
         style={{ fontFamily: "Orbitron, sans-serif" }}
       >
-        GOVERNOR
+        CHAT
       </span>
     </motion.div>
   );
@@ -730,8 +730,8 @@ export function ArenaChat() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
-  const [isGovernor, setIsGovernor] = useState(false);
-  const [governorChecked, setGovernorChecked] = useState(false);
+  const [isGovernor] = useState(false);
+  const [governorChecked] = useState(false);
   const [isSelfJudge, setIsSelfJudge] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
@@ -804,31 +804,7 @@ export function ArenaChat() {
     persistCooldown(wallet, cooldownEnd);
   }, [cooldownEnd, wallet]);
 
-  // ── Governor NFT check (mirror node verified) ──────────────────────
-  useEffect(() => {
-    if (!connected || !wallet) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api.chat.checkGovernor(wallet);
-        if (!cancelled && res.success && res.data) {
-          setIsGovernor(res.data.isGovernor);
-          // Play entrance fanfare on first Governor login
-          if (res.data.isGovernor && !governorEntrancePlayed.current) {
-            governorEntrancePlayed.current = true;
-            setTimeout(() => {
-              if (soundEnabled) playGovernorEntrance();
-            }, 600);
-          }
-        }
-      } catch (err) {
-        console.error("[ArenaChat] Governor check failed:", err);
-      } finally {
-        if (!cancelled) setGovernorChecked(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [connected, wallet]);
+
 
   // ── Fetch messages ──────────────────────────────────────────────────
   const fetchMessages = useCallback(async () => {
@@ -1190,7 +1166,7 @@ export function ArenaChat() {
               }`}
               style={{ fontFamily: "Orbitron, sans-serif" }}
             >
-              {isGovernor ? "GOVERNOR-ENHANCED COMMUNITY" : "WALLET-VERIFIED COMMUNITY"}
+              ARENA CHAT
             </span>
           </div>
 
@@ -1208,13 +1184,7 @@ export function ArenaChat() {
           </h2>
 
           <p className="text-[#8494A7] text-sm max-w-lg mx-auto" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-            {isGovernor ? (
-              <>Governor-enhanced experience active. Premium sound, visuals & live emotions unlocked.{" "}
-              <span className="text-[#D4A843]">Your NFT speaks.</span></>
-            ) : (
-              <>Talk directly with verified BOTB athletes and the community.{" "}
-              <span className="text-[#6AA3E0]">Your wallet is your identity.</span></>
-            )}
+            <>Talk directly with the athletes and the community.</>
           </p>
 
           {/* Governor status indicator */}
@@ -1616,7 +1586,7 @@ export function ArenaChat() {
                     </div>
                     <span>COOLDOWN {cooldownSeconds}s</span>
                     <span className="opacity-40">
-                      {isGovernor ? "(Governor: 10s)" : "(Standard: 2m)"}
+                      (2m)
                     </span>
                   </motion.div>
                 )}
@@ -1643,7 +1613,7 @@ export function ArenaChat() {
                       canShareMedia
                         ? "Share a tip, Reel, or fight clip…"
                         : isGovernor
-                          ? "Speak with authority, Governor..."
+                          ? "Write a message..."
                           : "Drop a message in the arena..."
                     }
                     rows={1}
@@ -1694,7 +1664,7 @@ export function ArenaChat() {
         }`} style={{ fontFamily: "Orbitron, sans-serif" }}>
           <span className="flex items-center gap-1">
             {isGovernor ? <Crown className="w-2.5 h-2.5" /> : <Shield className="w-2.5 h-2.5" />}
-            {isGovernor ? "GOVERNOR TIER" : "HEDERA VERIFIED"}
+            HEDERA VERIFIED
           </span>
           <span className="flex items-center gap-1"><MessageSquare className="w-2.5 h-2.5" /> 200 MSG LIMIT</span>
           <span className="flex items-center gap-1"><Zap className="w-2.5 h-2.5" /> 250 CHAR MAX</span>
