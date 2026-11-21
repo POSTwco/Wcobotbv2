@@ -102,8 +102,8 @@ function decodeMagicDidIssuer(didToken: string): string | null {
   return null;
 }
 
-/** Validate Magic DID token; returns issuer (user id) or null */
-async function validateMagicDidToken(didToken: string): Promise<{ issuer: string } | null> {
+/** Validate Magic DID token. Email is kept for the staff allowlist, never logged. */
+async function validateMagicDidToken(didToken: string): Promise<{ issuer: string; email?: string } | null> {
   const secret = env("MAGIC_SECRET_KEY");
   if (!secret || !didToken) return null;
 
@@ -138,13 +138,17 @@ async function validateMagicDidToken(didToken: string): Promise<{ issuer: string
       const v = await validateRes.json();
       const issuer = v?.data?.issuer || v?.issuer || decodeMagicDidIssuer(didToken);
       if (!issuer || typeof issuer !== "string") return null;
-      return { issuer };
+      const emailRaw = v?.data?.email || v?.email;
+      const email = typeof emailRaw === "string" ? emailRaw.trim().toLowerCase() : "";
+      return { issuer, email: email.includes("@") ? email : undefined };
     }
 
     const data = await res.json();
     const issuer = data?.data?.issuer || data?.issuer || decodeMagicDidIssuer(didToken);
     if (!issuer || typeof issuer !== "string") return null;
-    return { issuer };
+    const emailRaw = data?.data?.email || data?.email;
+    const email = typeof emailRaw === "string" ? emailRaw.trim().toLowerCase() : "";
+    return { issuer, email: email.includes("@") ? email : undefined };
   } catch (err) {
     console.log(`[MAGIC] DID validation error: ${err}`);
     return null;
@@ -541,11 +545,19 @@ export function mountMagicRoutes(app: Hono, PREFIX: string) {
         await kv.del(`wsession:${(existingRef as any).token}`).catch(() => {});
       }
 
+      const email = identity.email || "";
+      if (email) {
+        const rec: any = mapping && typeof mapping === "object" ? { ...(mapping as any) } : {};
+        rec.email = email;
+        await kv.set(`magic-user:${identity.issuer}`, rec);
+      }
+
       const token = generateWalletSessionToken();
       const sessionData = {
         wallet,
         authProvider: "magic",
         issuer: identity.issuer,
+        email,
         wcTopic: `magic:${identity.issuer}`.slice(0, 200),
         createdAt: Date.now(),
         expiresAt: Date.now() + WALLET_SESSION_TTL_MS,

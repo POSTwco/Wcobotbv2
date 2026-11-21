@@ -21,6 +21,7 @@ import { CalisthenicsEliteCustomPage } from "./pages/calisthenics-elite-custom";
 import { PrivacyPage } from "./pages/privacy";
 import { TermsPage } from "./pages/terms";
 import { ContactPage } from "./pages/contact";
+import { StaffPage } from "./pages/staff";
 import { RouteErrorPage, NotFoundPage } from "./components/error-boundary";
 
 // Historical client pen-test UIs removed from the tree (2026-07 hygiene pass).
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
       { path: "terms", Component: TermsPage },
       { path: "whitepaper", Component: HomePage },
       { path: "contact", Component: ContactPage },
+      { path: "staff", Component: StaffPage },
       { path: "*", Component: NotFoundPage },
     ],
   },

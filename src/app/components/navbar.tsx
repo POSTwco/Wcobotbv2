@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useWallet } from "./wallet-context";
+import { api } from "../lib/api";
 import { NotificationBell } from "./notification-bell";
 import { isMagicEnabled } from "../lib/wallet-types";
 
@@ -24,13 +25,29 @@ export function Navbar() {
 
   const {
     connected,
+    walletSessionToken,
     openMagicEmailSignIn,
     disconnect,
     isConnecting,
     error,
   } = useWallet();
+  const [isStaff, setIsStaff] = useState(false);
   const vipActive = false;
   const location = useLocation();
+
+  useEffect(() => {
+    if (!connected || !walletSessionToken) {
+      setIsStaff(false);
+      return;
+    }
+    let cancel = false;
+    api.staff.me(walletSessionToken).then((res) => {
+      if (!cancel) setIsStaff(!!(res.success && res.data?.staff));
+    }).catch(() => {
+      if (!cancel) setIsStaff(false);
+    });
+    return () => { cancel = true; };
+  }, [connected, walletSessionToken]);
 
   const accent = "#4274B9";
 
@@ -164,9 +181,19 @@ export function Navbar() {
               {connected ? (
                 <div
                   ref={walletBtnRef}
+                  className="flex items-center gap-2"
                   onMouseEnter={openDropdown}
                   onMouseLeave={scheduleClose}
                 >
+                  {isStaff && (
+                    <Link
+                      to="/staff"
+                      className="text-[0.65rem] sm:text-sm text-[#D4A843] hover:text-[#F0D078]"
+                      style={{ fontFamily: "'DM Sans', sans-serif" }}
+                    >
+                      Staff
+                    </Link>
+                  )}
                   <button
                     onClick={() => {
                       // Desktop: hover handles it. Mobile: handled by bottom nav More sheet
@@ -267,6 +294,16 @@ export function Navbar() {
             <p className="text-sm text-[#E8ECF0]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
               Signed in
             </p>
+            {isStaff && (
+              <Link
+                to="/staff"
+                onClick={() => setWalletDropdown(false)}
+                className="block w-full py-2 text-sm text-center text-[#D4A843] hover:bg-[#D4A843]/10 rounded-lg"
+                style={{ fontFamily: "'DM Sans', sans-serif" }}
+              >
+                Staff
+              </Link>
+            )}
             <button
               type="button"
               onClick={() => {

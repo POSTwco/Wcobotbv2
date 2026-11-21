@@ -182,6 +182,7 @@ import { mountContestRoutes } from "./contest.tsx";
 import { createTournamentEvent, mountTournamentRoutes } from "./tournament.tsx";
 import { validateChatMedia } from "./chat-media.tsx";
 import { mountMagicRoutes } from "./magic-accounts.tsx";
+import { mountStaffRoutes } from "./staff.tsx";
 import { mountEarlySupporterRoutes } from "./early-supporter.tsx";
 import { mountOrganizationRoutes } from "./organizations.tsx";
 import { mountJudgeRoutes, judgeNameForWallet, applyJudgeChatFlags } from "./judges.tsx";
@@ -6593,6 +6594,7 @@ app.post(`${PREFIX}/admin/test/clear-ip-flags`, requireAdminSession, async (c) =
 
 // Magic Create Account routes (additive — HashPack /wallet/register unchanged)
 mountMagicRoutes(app, PREFIX);
+mountStaffRoutes(app, PREFIX);
 
 // Mount cali / elite / contest routes LAST so core functionality (admin auth, etc.)
 // is not affected if a satellite module has a startup error.

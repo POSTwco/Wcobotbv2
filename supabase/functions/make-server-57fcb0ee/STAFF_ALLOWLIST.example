@@ -1,0 +1,6 @@
+# Edge secret name: STAFF_ALLOWLIST
+# Comma or newline. Emails or Hedera account ids (0.0.123).
+# Leave the secret empty until real staff are added.
+# Do not commit live addresses in this file.
+# example@worldcalisthenics.org
+# 0.0.1000

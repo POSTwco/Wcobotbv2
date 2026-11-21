@@ -1720,6 +1720,48 @@ export const api = {
         { method: "POST", body: {}, walletSessionToken },
       ),
   },
+
+  staff: {
+    me: (walletSessionToken: string) =>
+      request<{ staff: boolean }>("/staff/me", { walletSessionToken }),
+
+    cards: (walletSessionToken: string) =>
+      request<Array<{
+        id: string;
+        title: string;
+        eventDate: string;
+        status: string;
+        athlete1Id: string;
+        athlete2Id: string;
+      }>>("/staff/cards", { walletSessionToken }),
+
+    openCard: (
+      walletSessionToken: string,
+      body: { name: string; date: string; athlete1Id: string; athlete2Id: string },
+    ) =>
+      request<{ event: { id: string }; battle: { id: string } }>("/staff/cards", {
+        method: "POST",
+        body,
+        walletSessionToken,
+      }),
+
+    closeCard: (walletSessionToken: string, battleId: string, winnerId: string) =>
+      request<{ battle: { id: string; status: string; winnerId: string } }>(
+        `/staff/cards/${encodeURIComponent(battleId)}/close`,
+        { method: "POST", body: { winnerId }, walletSessionToken },
+      ),
+
+    saveAthlete: (
+      walletSessionToken: string,
+      id: string,
+      body: { name: string; pfpUrl: string; socials: { instagram: string; twitter: string; youtube: string; website: string } },
+    ) =>
+      request<Athlete>(`/staff/athletes/${encodeURIComponent(id)}`, {
+        method: "POST",
+        body,
+        walletSessionToken,
+      }),
+  },
 };
 
 // Runtime bridge: ensure cali admin methods are directly on api.admin
